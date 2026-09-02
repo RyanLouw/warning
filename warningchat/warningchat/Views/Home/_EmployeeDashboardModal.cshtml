@@ -1,0 +1,250 @@
+﻿@model WarningSystems.Core.ViewModels.EmployeeDashboardVm
+
+@{
+    string ValText(string? s) => string.IsNullOrWhiteSpace(s) ? "—" : s.Trim();
+    string ValDate(DateTime? d) => d.HasValue ? d.Value.ToString("yyyy/MM/dd") : "—";
+    var noteCount = Model.Notes?.Count ?? 0;
+}
+
+<div class="empdash-wrap">
+
+    <div class="empdash-grid">
+
+        <section class="empdash-card empdash-card-employee">
+            <div class="empdash-card-head">Employee</div>
+            <div class="empdash-card-body">
+                <div class="empdash-row">
+                    <div class="empdash-label">Employee Name</div>
+                    <div class="empdash-value">@ValText(Model.EmployeeName)</div>
+                </div>
+
+                <div class="empdash-row">
+                    <div class="empdash-label">Department</div>
+                    <div class="empdash-value">@ValText(Model.Department)</div>
+                </div>
+
+                <div class="empdash-row">
+                    <div class="empdash-label">Team Leader</div>
+                    <div class="empdash-value">@ValText(Model.TeamLeader)</div>
+                </div>
+
+                <div class="empdash-row">
+                    <div class="empdash-label">Manager</div>
+                    <div class="empdash-value">@ValText(Model.Manager)</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="empdash-card empdash-card-state">
+            <div class="empdash-card-head">Current State</div>
+            <div class="empdash-card-body">
+                <div class="empdash-row">
+                    <div class="empdash-label">Current State</div>
+                    <div class="empdash-value empdash-badge">@ValText(Model.CurrentState)</div>
+                </div>
+
+                <div class="empdash-row">
+                    <div class="empdash-label">Last Actioned</div>
+                    <div class="empdash-value">@ValDate(Model.LastActionedDate)</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="empdash-card empdash-card-summary">
+            <div class="empdash-card-head">Issue Summary</div>
+            <div class="empdash-card-body empdash-stats">
+                <div class="empdash-stat">
+                    <span class="empdash-stat-label">Total</span>
+                    <span class="empdash-stat-value">@Model.TotalWarnings</span>
+                </div>
+                <div class="empdash-stat">
+                    <span class="empdash-stat-label">Draft</span>
+                    <span class="empdash-stat-value">@Model.DraftCount</span>
+                </div>
+                <div class="empdash-stat">
+                    <span class="empdash-stat-label">New</span>
+                    <span class="empdash-stat-value">@Model.NewCount</span>
+                </div>
+                <div class="empdash-stat">
+                    <span class="empdash-stat-label">In Progress</span>
+                    <span class="empdash-stat-value">@Model.InProgressCount</span>
+                </div>
+                <div class="empdash-stat">
+                    <span class="empdash-stat-label">Due</span>
+                    <span class="empdash-stat-value">@Model.DueCount</span>
+                </div>
+                <div class="empdash-stat">
+                    <span class="empdash-stat-label">Overdue</span>
+                    <span class="empdash-stat-value">@Model.OverdueCount</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="empdash-card empdash-card-latest">
+            <div class="empdash-card-head">Latest Activity</div>
+            <div class="empdash-card-body">
+                @if (Model.Warnings == null || !Model.Warnings.Any())
+                {
+                    <div class="empdash-empty">—</div>
+                }
+                else
+                {
+                    var latest = Model.Warnings
+                    .OrderByDescending(x => x.LastActionedDate ?? x.CreatedOn)
+                    .First();
+
+                    <div class="empdash-row">
+                        <div class="empdash-label">Latest Category</div>
+                        <div class="empdash-value">@ValText(latest.CategoryName)</div>
+                    </div>
+
+                    <div class="empdash-row">
+                        <div class="empdash-label">Latest Status</div>
+                        <div class="empdash-value empdash-badge">@ValText(latest.Status)</div>
+                    </div>
+
+                    <div class="empdash-row">
+                        <div class="empdash-label">Created</div>
+                        <div class="empdash-value">@latest.CreatedOn.ToString("yyyy/MM/dd")</div>
+                    </div>
+
+                    <div class="empdash-row">
+                        <div class="empdash-label">Last Actioned</div>
+                        <div class="empdash-value">@ValDate(latest.LastActionedDate)</div>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="empdash-card empdash-card-notes">
+            <div class="empdash-card-head">Notes Summary</div>
+            <div class="empdash-card-body">
+                <div class="empdash-row">
+                    <div class="empdash-label">Total Notes</div>
+                    <div class="empdash-value">@noteCount</div>
+                </div>
+
+                @if (Model.Notes != null && Model.Notes.Any())
+                {
+                    var latestNote = Model.Notes.OrderByDescending(x => x.CreatedOn).First();
+
+                    <div class="empdash-row">
+                        <div class="empdash-label">Latest Note Type</div>
+                        <div class="empdash-value">@ValText(latestNote.NoteType)</div>
+                    </div>
+
+                    <div class="empdash-row">
+                        <div class="empdash-label">Latest Note Date</div>
+                        <div class="empdash-value">@latestNote.CreatedOn.ToString("yyyy/MM/dd HH:mm")</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="empdash-empty">—</div>
+                }
+            </div>
+        </section>
+
+    </div>
+
+    <section class="empdash-section">
+        <div class="empdash-section-head">Issues</div>
+        <div class="table-responsive">
+            <table class="table empdash-table empdash-table-warnings">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Category</th>
+                        <th>Created By</th>
+                        <th>Created</th>
+                        <th>Due</th>
+                        <th>Last Actioned</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Warnings == null || !Model.Warnings.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">No warnings found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var warning in Model.Warnings.OrderByDescending(x => x.LastActionedDate ?? x.CreatedOn))
+                        {
+                            <tr>
+                                <td>@warning.Status</td>
+                                <td>@warning.CategoryName</td>
+                                <td>@warning.CreatedByDisplayName</td>
+                                <td>@warning.CreatedOn.ToString("yyyy/MM/dd")</td>
+                                <td>@(warning.DueDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                <td>@(warning.LastActionedDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                <td class="empdash-desc-cell">
+                                    @if (string.IsNullOrWhiteSpace(warning.DescriptionSummary))
+                                    {
+                                        <span>-</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="empdash-desc-html">
+                                            @Html.Raw(warning.DescriptionSummary)
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="empdash-section">
+        <div class="empdash-section-head">Notes</div>
+        <div class="table-responsive">
+            <table class="table empdash-table empdash-table-notes">
+                <thead>
+                    <tr>
+                        <th>Issue Id</th>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Notes == null || !Model.Notes.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No notes found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var note in Model.Notes.OrderByDescending(x => x.CreatedOn))
+                        {
+                            <tr>
+                                <td>@note.WarningId</td>
+                                <td>@note.CreatedOn.ToString("yyyy/MM/dd HH:mm")</td>
+                                <td>@note.NoteType</td>
+                                <td class="empdash-desc-cell">
+                                    @if (string.IsNullOrWhiteSpace(note.NoteText))
+                                    {
+                                        <span>-</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="empdash-desc-html">
+                                            @Html.Raw(note.NoteText)
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>

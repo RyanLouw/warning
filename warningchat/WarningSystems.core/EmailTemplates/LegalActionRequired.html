@@ -1,0 +1,96 @@
+﻿<div style="font-family: Arial, sans-serif; color:#333; line-height:1.5;">
+
+    <h2 style="color:#014678; margin-bottom:8px;">
+        Issue Issued to Employee
+    </h2>
+
+    <p>Hi {{LegalUsername}},</p>
+
+    <p>
+        The team lead has confirmed that warning
+        <strong>#{{WarningId}}</strong>
+        has been issued to the employee.
+    </p>
+
+    <p>
+        The team lead has completed their part of the transgression process.
+        Please review the employee record in <strong>PaySpace</strong>
+        and complete the issue in the Warning System.
+    </p>
+
+    <table style="border-collapse:collapse; margin-top:15px; margin-bottom:15px; width:100%; max-width:650px;">
+        <tr>
+            <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                Warning ID
+            </td>
+            <td style="padding:8px; border:1px solid #ddd;">
+                #{{WarningId}}
+            </td>
+        </tr>
+
+        <tr>
+            <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                Employee
+            </td>
+            <td style="padding:8px; border:1px solid #ddd;">
+                {{EmployeeDisplayName}}
+            </td>
+        </tr>
+
+        <tr>
+            <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                Submitted By
+            </td>
+            <td style="padding:8px; border:1px solid #ddd;">
+                {{SubmittedByDisplayName}}
+            </td>
+        </tr>
+
+        <tr>
+            <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                Category
+            </td>
+            <td style="padding:8px; border:1px solid #ddd;">
+                {{Category}}
+            </td>
+        </tr>
+
+        <tr>
+            <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                Current Status
+            </td>
+            <td style="padding:8px; border:1px solid #ddd;">
+                {{Status}}
+            </td>
+        </tr>
+    </table>
+
+    <p>
+        Please open the link below to review and complete the issue:
+    </p>
+
+    <p>
+        <a href="{{LegalUrl}}"
+           style="
+               display:inline-block;
+               padding:10px 18px;
+               background:#014678;
+               color:#ffffff;
+               text-decoration:none;
+               border-radius:999px;
+               font-weight:bold;">
+            Review Warning
+        </a>
+    </p>
+
+    <p style="font-size:12px; color:#666; margin-top:20px;">
+        If the button does not work, copy and paste this link into your browser:<br />
+        <span>{{LegalUrl}}</span>
+    </p>
+
+    <p style="margin-top:20px;">
+        Kind regards,<br />
+        Warning System
+    </p>
+
+</div>

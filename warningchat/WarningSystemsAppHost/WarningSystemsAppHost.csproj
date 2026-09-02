@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsAspireHost>true</IsAspireHost>
+		<UserSecretsId>2ab72721-713a-4cba-b478-adaeb7232978</UserSecretsId>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Aspire.Hosting.AppHost" Version="9.2.1" />
+		<PackageReference Include="Aspire.Hosting.SqlServer" Version="9.2.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Database.Migrations\Database.Migrations.csproj" />
+		<ProjectReference Include="..\Warning.System.ServiceDefaults\Warning.System.ServiceDefaults.csproj" />
+		<ProjectReference Include="..\WarningSystems\WarningSystems.csproj" />
+	</ItemGroup>
+
+
+
+
+</Project>

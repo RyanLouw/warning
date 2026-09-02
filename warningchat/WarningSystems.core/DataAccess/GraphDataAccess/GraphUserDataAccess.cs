@@ -1,0 +1,203 @@
+﻿using Microsoft.Graph;
+using Microsoft.Graph.Models;
+using Microsoft.Identity.Web;
+using WarningSystems.Core.DataAccess.GraphDataAccess.Context;
+using WarningSystems.Core.ViewModels;
+
+namespace WarningSystems.Core.DataAccess.GraphDataAccess;
+
+public class GraphUserDataAccess : IGraphUserDataAccess
+{
+    private readonly GraphServiceClient _graph;
+    private readonly ITokenAcquisition _tokenAcquisition;
+
+    public GraphUserDataAccess(IUserGraphClient userGraph, ITokenAcquisition tokenAcquisition)
+    {
+        _graph = userGraph.Client;
+        _tokenAcquisition = tokenAcquisition;
+    }
+
+    public async Task<IReadOnlyList<string>> GetMatchedGroupIdsAsync(string userObjectId, IEnumerable<string> groupIdsToCheck)
+    {
+        var groupsToCheck = groupIdsToCheck
+            .Where(g => !string.IsNullOrWhiteSpace(g))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (groupsToCheck.Length == 0)
+            return Array.Empty<string>();
+
+        var cacheKey = $"grpcheck:{userObjectId}:{string.Join("|", groupsToCheck)}";
+
+        var body = new Microsoft.Graph.Users.Item.CheckMemberGroups.CheckMemberGroupsPostRequestBody
+        {
+            GroupIds = groupsToCheck.ToList()
+        };
+
+        var result = await _graph.Users[userObjectId].CheckMemberGroups.PostAsync(body);
+
+        var matched = result?.Value ?? new List<string>();
+        return matched;
+    }
+
+    public async Task<User?> GetMeAsync()
+    {
+        return await _graph.Me.GetAsync(cfg =>
+        {
+            cfg.QueryParameters.Select = new[]
+            {
+                "id",
+                "displayName",
+                "mail",
+                "userPrincipalName",
+                "jobTitle",
+                "department"
+            };
+        });
+    }
+
+    public async Task<List<User>> GetUsersUnderMeAsync()
+    {
+        var me = await GetMeAsync();
+        if (me?.Id is null) return new List<User>();
+
+        var users = new Dictionary<string, User>(StringComparer.OrdinalIgnoreCase);
+        var visitedManagers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        await AddReportsRecursiveAsync(me.Id, users, visitedManagers);
+
+        return users.Values
+            .OrderBy(u => u.DisplayName)
+            .ThenBy(u => u.UserPrincipalName)
+            .ToList();
+    }
+
+    private async Task AddReportsRecursiveAsync(
+        string managerId,
+        Dictionary<string, User> users,
+        HashSet<string> visitedManagers)
+    {
+        if (!visitedManagers.Add(managerId))
+            return;
+
+        var directReports = await GetDirectReportsUsersAsync(managerId);
+
+        foreach (var u in directReports)
+        {
+            if (u.Id is null) continue;
+
+            users[u.Id] = u;
+
+            await AddReportsRecursiveAsync(u.Id, users, visitedManagers);
+        }
+    }
+
+    private async Task<List<User>> GetDirectReportsUsersAsync(string userId)
+    {
+        var response = await _graph.Users[userId].DirectReports.GetAsync(cfg =>
+        {
+            cfg.QueryParameters.Select = new[]
+            {
+                "id", 
+                "displayName", 
+                "mail", 
+                "userPrincipalName", 
+                "jobTitle", 
+                "department"
+            };
+
+            cfg.QueryParameters.Top = 999;
+        });
+
+        var results = new List<User>();
+
+        if (response?.Value is null)
+            return results;
+
+        var pageIterator =
+            PageIterator<DirectoryObject, DirectoryObjectCollectionResponse>.CreatePageIterator(
+                _graph,
+                response,
+                (obj) =>
+                {
+                    if (obj is User user && user.Id is not null)
+                        results.Add(user);
+
+                    return true;
+                });
+
+        await pageIterator.IterateAsync();
+
+        return results;
+    }
+
+    public async Task<User?> GetUserAsync(string userIdOrUpn)
+    {
+        if (string.IsNullOrWhiteSpace(userIdOrUpn))
+            return null;
+
+        return await _graph.Users[userIdOrUpn].GetAsync(cfg =>
+        {
+            cfg.QueryParameters.Select = new[]
+            {
+            "id",
+            "displayName",
+            "mail",
+            "userPrincipalName",
+            "jobTitle",
+            "department"
+        };
+        });
+    }
+
+    public async Task SendEmailAsync(SendEmailRequest request)
+    {
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+
+        var message = new Message
+        {
+            Subject = request.Subject,
+
+            Body = new ItemBody
+            {
+                ContentType = BodyType.Html,
+                Content = request.BodyHtml
+            },
+
+            ToRecipients = request.ToRecipients
+                .Where(email => !string.IsNullOrWhiteSpace(email))
+                .Select(email => new Recipient
+                {
+                    EmailAddress = new EmailAddress
+                    {
+                        Address = email.Trim()
+                    }
+                })
+                .ToList(),
+
+            Attachments = request.Attachments
+                .Select(attachment => (Attachment)new FileAttachment
+                {
+                    OdataType = "#microsoft.graph.fileAttachment",
+                    Name = attachment.FileName,
+                    ContentType = string.IsNullOrWhiteSpace(attachment.ContentType)
+                        ? "application/octet-stream"
+                        : attachment.ContentType,
+                    ContentBytes = attachment.ContentBytes
+                })
+                .ToList()
+        };
+
+        await SendEmailAsync(message,request.SaveToSentItems);
+    }
+
+    public async Task SendEmailAsync(Message message, bool saveToSentItems = true)
+    {
+        await _graph.Me.SendMail.PostAsync(new Microsoft.Graph.Me.SendMail.SendMailPostRequestBody
+        {
+            Message = message,
+            SaveToSentItems = saveToSentItems
+        });
+    }
+}

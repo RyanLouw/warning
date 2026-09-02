@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Database.Migrations/Database.Migrations.csproj" />
+  <Project Path="Warning.System.ServiceDefaults/Warning.System.ServiceDefaults.csproj" />
+  <Project Path="warningchat/WarningSystems.csproj" />
+  <Project Path="WarningSystems.core/WarningSystems.core.csproj" />
+  <Project Path="WarningSystemsAppHost/WarningSystemsAppHost.csproj" />
+</Solution>

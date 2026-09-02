@@ -1,0 +1,36 @@
+﻿@{
+    ViewData["Title"] = "Access Denied";
+    var returnUrl = ViewBag.ReturnUrl as string;
+}
+
+<div class="access-denied-wrapper">
+    <div class="access-denied-card">
+        <div class="icon-circle">
+            <span>!</span>
+        </div>
+
+        <h1>Access Denied</h1>
+        <p class="message">
+            You do not have permission to view this page.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            <p class="return-url">
+                Requested page:
+                <span>@returnUrl</span>
+            </p>
+        }
+
+        <div class="actions">
+            <a asp-controller="Home" asp-action="Index" class="btn btn-primary">
+                Go to Home
+            </a>
+
+            @* <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+                Go Back
+            </button> *@
+        </div>
+    </div>
+</div>
+

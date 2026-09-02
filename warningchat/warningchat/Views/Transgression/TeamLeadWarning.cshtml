@@ -1,0 +1,718 @@
+﻿@using WarningSystems.Core.Services
+@using WarningSystems.Core.ViewModels
+@model LegalWizardVm
+
+@{
+
+    var normalizedStatus = (Model.Status ?? "").Trim().ToLowerInvariant();
+
+    var canNotifyLegalCompleted =
+        normalizedStatus != "draft" &&
+        normalizedStatus != "new" &&
+        normalizedStatus != "in progress" &&
+        normalizedStatus != "completed";
+    ViewData["Title"] = "Add More Information";
+
+    string ValOrDash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
+    }
+    string StripHtml(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "—";
+
+        var text = System.Text.RegularExpressions.Regex.Replace(value, "<.*?>", " ");
+
+        text = System.Net.WebUtility.HtmlDecode(text);
+
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+
+        return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
+    }
+    var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
+    var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
+    var issueCategory = ValOrDash(Model.CategoryName);
+    var issueStatus = ValOrDash(Model.Status);
+
+    var issueCreatedOn = Model.CreatedOn == default
+        ? "—"
+        : Model.CreatedOn.ToString("yyyy/MM/dd HH:mm");
+
+    var issueSubmittedOn = Model.SubmittedOn.HasValue
+        ? Model.SubmittedOn.Value.ToString("yyyy/MM/dd HH:mm")
+        : "—";
+
+    var issueDueDate = Model.LegalExpiryDate.HasValue
+        ? Model.LegalExpiryDate.Value.ToString("yyyy/MM/dd")
+        : "—";
+
+    var descriptionQuestion = Model.Questions?
+        .FirstOrDefault(q => q.QuestionId == 2);
+
+    var issueDescriptionRaw = !string.IsNullOrWhiteSpace(descriptionQuestion?.AnswerText)
+        ? descriptionQuestion.AnswerText
+        : !string.IsNullOrWhiteSpace(descriptionQuestion?.AnswerJson)
+            ? descriptionQuestion.AnswerJson
+            : "—";
+
+    var issueDescription = StripHtml(issueDescriptionRaw);
+
+    var docsCount = Model.Evidence?
+        .Count(x => !string.IsNullOrWhiteSpace(x.FileName)) ?? 0;
+
+    var generalNotesCount = Model.Notes?.Count ?? 0;
+
+    var documentNotesCount = (Model.Evidence ?? new List<LegalEvidenceVm>())
+        .Where(e => e.Notes != null && e.Notes.Any())
+        .SelectMany(e => e.Notes)
+        .Count();
+}
+
+<div class="ws-page">
+    <div class="ws-page-inner">
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h3 class="mb-1">Add More Information</h3>
+                <div class="text-muted">
+                    Legal requested more information for this issue. You can upload additional evidence and add notes.
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap justify-content-end">
+
+                @if (canNotifyLegalCompleted)
+                {
+                    <button type="button"
+                            class="btn btn-success"
+                            style="border-radius:999px;"
+                            id="btnNotifyLegalComplete"
+                            onclick="notifyLegalIssueCompleted(this)">
+                        Notify Legal Completed
+                    </button>
+                }
+
+                <button type="button"
+                        class="ws-btn-primary-pill"
+                        style="border-radius:999px;"
+                        data-bs-toggle="modal"
+                        data-bs-target="#uploadDocsModal">
+                    Add Evidence
+                </button>
+
+            </div>
+        </div>
+
+
+        <div class="mb-4">
+            <h5 class="mb-2">Issue Recap</h5>
+
+            <div class="row g-3">
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-trans h-100">
+                        <div class="ws-ov-card-head">1. Issue</div>
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Warning ID:</div>
+                                <div class="ws-ov-value">#@Model.WarningId</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Employee:</div>
+                                <div class="ws-ov-value text-truncate" title="@issueEmployee">
+                                    @issueEmployee
+                                </div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Category:</div>
+                                <div class="ws-ov-value text-truncate" title="@issueCategory">
+                                    @issueCategory
+                                </div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Status:</div>
+                                <div class="ws-ov-value">@issueStatus</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-dates h-100">
+                        <div class="ws-ov-card-head">2. Dates</div>
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Created:</div>
+                                <div class="ws-ov-value">@issueCreatedOn</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Submitted:</div>
+                                <div class="ws-ov-value">@issueSubmittedOn</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Due Date:</div>
+                                <div class="ws-ov-value">@issueDueDate</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-desc h-100">
+                        <div class="ws-ov-card-head">3. Description</div>
+
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Description:</div>
+
+                                <div class="ws-ov-value description-text"
+                                     title="@issueDescription">
+                                    @issueDescription
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-att h-100">
+                        <div class="ws-ov-card-head">4. Evidence / Notes</div>
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Documents:</div>
+                                <div class="ws-ov-value">@docsCount</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">General:</div>
+                                <div class="ws-ov-value">@generalNotesCount</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Document:</div>
+                                <div class="ws-ov-value">@documentNotesCount</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Created By:</div>
+                                <div class="ws-ov-value text-truncate" title="@issueCreatedBy">
+                                    @issueCreatedBy
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
+        <div class="main-panel">
+
+            <ul class="nav nav-tabs hw-tabs" id="teamLeadTabs" role="tablist">
+   
+
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active"
+                            id="docs-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#docs"
+                            type="button"
+                            role="tab"
+                            aria-controls="docs"
+                            aria-selected="true">
+                        Documents
+                    </button>
+                </li>
+
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link"
+                            id="notes-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#notes"
+                            type="button"
+                            role="tab"
+                            aria-controls="notes"
+                            aria-selected="false">
+                        Interactions
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+
+              
+
+                <!-- DOCUMENTS TAB -->
+                <div class="tab-pane fade show active"
+                     id="docs"
+                     role="tabpanel"
+                     aria-labelledby="docs-tab">
+
+                    <div class="panel-body">
+
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">Documents</h5>
+                                <div class="text-muted">
+                                    Existing and newly uploaded evidence documents.
+                                </div>
+                            </div>
+
+                            @* <button type="button"
+                                    class="ws-btn-primary-pill"
+                                    style="border-radius:999px;"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#uploadDocsModal">
+                                Upload Document
+                            </button> *@
+                        </div>
+
+                        @{
+                            var docs = (Model.Evidence ?? new List<LegalEvidenceVm>())
+                            .Where(x => !string.IsNullOrWhiteSpace(x.FileName))
+                            .GroupBy(x => x.FileName)
+                            .Select(g => g.OrderByDescending(x => x.UploadedOn).First())
+                            .OrderByDescending(x => x.UploadedOn)
+                            .ToList();
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle" id="documentsTable">
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Type</th>
+                                        <th>Size</th>
+                                        <th>Uploaded By</th>
+                                        <th>Uploaded On</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @if (!docs.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-4">
+                                                No documents found.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var d in docs)
+                                        {
+                                            <tr>
+                                                <td class="fw-semibold">
+                                                    @FileNameHelper.GetDisplayFileName(d.FileName)
+                                                </td>
+                                                <td>@d.FileType</td>
+                                                <td>@d.FileSizeBytes.ToString("N0") bytes</td>
+                                                <td>
+                                                    @(string.IsNullOrWhiteSpace(d.UploadedByDisplayName)
+                                                                                                ? d.UploadedBy
+                                                                                                : d.UploadedByDisplayName)
+                                                </td>
+                                                <td>@d.UploadedOn.ToString("yyyy/MM/dd HH:mm")</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+ 
+                <!-- INTERACTIONS TAB -->
+                <div class="tab-pane fade"
+                     id="notes"
+                     role="tabpanel"
+                     aria-labelledby="notes-tab">
+
+                    <div class="panel-body">
+
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">Interactions</h5>
+                                <div class="text-muted">
+                                    General interactions and interactions linked to uploaded evidence.
+                                </div>
+                            </div>
+
+                          @*   <button type="button"
+                                    class="ws-btn-primary-pill"
+                                    style="border-radius:999px;"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#uploadDocsModal">
+                                Add Evidence
+                            </button> *@
+                        </div>
+
+                        @{
+                            var allInteractions = new List<dynamic>();
+
+                            if (Model.Notes != null && Model.Notes.Any())
+                            {
+                                allInteractions.AddRange(Model.Notes.Select(n => new
+                                {
+                                    NoteText = n.NoteText,
+                                    CreatedOnUtc = n.CreatedOnUtc,
+                                    CreatedBy = string.IsNullOrWhiteSpace(n.CreatedByDisplayName)
+                                ? n.CreatedBy
+                                : n.CreatedByDisplayName,
+                                    DocumentName = "",
+                                    DocumentType = "",
+                                    DocumentSize = ""
+                                }));
+                            }
+
+                            var evidenceWithNotes = (Model.Evidence ?? new List<LegalEvidenceVm>())
+                            .Where(e => e.Notes != null && e.Notes.Any())
+                            .ToList();
+
+                            foreach (var evidence in evidenceWithNotes)
+                            {
+                                foreach (var note in evidence.Notes)
+                                {
+                                    allInteractions.Add(new
+                                    {
+                                        NoteText = note.NoteText,
+                                        CreatedOnUtc = note.CreatedOnUtc,
+                                        CreatedBy = string.IsNullOrWhiteSpace(note.CreatedByDisplayName)
+                                    ? note.CreatedBy
+                                    : note.CreatedByDisplayName,
+                                        DocumentName = FileNameHelper.GetDisplayFileName(evidence.FileName),
+                                        DocumentType = evidence.FileType ?? "",
+                                        DocumentSize = $"{evidence.FileSizeBytes:N0} bytes"
+                                    });
+                                }
+                            }
+
+                            var orderedInteractions = allInteractions
+                            .OrderByDescending(x => x.CreatedOnUtc)
+                            .ToList();
+                        }
+
+                        <div>
+                            <h5 class="mb-2">All Interactions</h5>
+
+                           <div class="table-responsive">
+                                <table class="table table-hover align-middle" id="interactionsTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:45%;">Interaction</th>
+                                            <th style="width:18%;">Added On</th>
+                                            <th style="width:18%;">Added By</th>
+                                            <th style="width:19%;">Document</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        @if (!orderedInteractions.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted py-4">
+                                                    No interactions yet.
+                                                </td>
+                                            </tr>
+                                        }
+                                        else
+                                        {
+                                            foreach (var interaction in orderedInteractions)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        @interaction.NoteText
+                                                    </td>
+
+                                                    <td>
+                                                        @interaction.CreatedOnUtc.ToString("yyyy/MM/dd HH:mm")
+                                                    </td>
+
+                                                    <td>
+                                                        @interaction.CreatedBy
+                                                    </td>
+
+                                                    <td>
+                                                        @if (string.IsNullOrWhiteSpace(interaction.DocumentName))
+                                                        {
+                                                            <span class="text-muted">General</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="fw-semibold">
+                                                                @interaction.DocumentName
+                                                            </div>
+
+                                                            <div class="text-muted small">
+                                                                @interaction.DocumentType • @interaction.DocumentSize
+                                                            </div>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="table-footer mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div class="text-muted small" id="interactionsPageInfo"></div>
+
+                                <div class="pager-buttons btn-group" role="group" aria-label="Interactions pagination">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            id="interactionsPrevBtn">
+                                        Previous
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            id="interactionsNextBtn">
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        
+                        
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+
+<div class="modal fade" id="uploadDocsModal" tabindex="-1" aria-labelledby="uploadDocsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <form asp-controller="Transgression"
+                  asp-action="AddTeamLeadEvidence"
+                  method="post"
+                  enctype="multipart/form-data">
+
+                @Html.AntiForgeryToken()
+
+                <input type="hidden" name="WarningId" value="@Model.WarningId" />
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadDocsModalLabel">Add Evidence / Notes</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Upload Documents</label>
+                        <input type="file"
+                               name="Files"
+                               class="form-control"
+                               multiple />
+
+                        <div class="form-text">
+                            You can upload screenshots, PDFs, Word documents, emails, or other supporting evidence.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Notes</label>
+                        <textarea name="NoteText"
+                                  class="form-control"
+                                  rows="5"
+                                  placeholder="Add any notes for Legal..."></textarea>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        You can add only notes, only documents, or both.
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+
+                    <button type="submit"
+                            class="ws-btn-primary-pill"
+                            style="border-radius:999px;">
+                        Save Information
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<script>
+
+        async function notifyLegalIssueCompleted(btn) {
+        const warningId = @Model.WarningId;
+
+        if (!warningId) {
+            alert("Missing WarningId.");
+            return;
+        }
+
+        const confirmed = confirm(
+            "Are you sure you want to notify Legal that this issue was issued to the employee?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Sending...";
+
+        try {
+            const res = await fetch("/Transgression/NotifyLegalIssueCompleted", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "RequestVerificationToken": getAntiForgeryToken()
+                },
+                body: JSON.stringify({
+                    warningId: warningId
+                })
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || "Failed to notify Legal.");
+            }
+
+            alert("Legal has been notified.");
+            location.reload();
+
+        } catch (err) {
+            alert("Failed to notify Legal: " + (err?.message || err));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    function getAntiForgeryToken() {
+        const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+        return tokenInput ? tokenInput.value : "";
+    }
+
+
+    function createTablePagination(config) {
+        const table = document.getElementById(config.tableId);
+        const prevBtn = document.getElementById(config.prevBtnId);
+        const nextBtn = document.getElementById(config.nextBtnId);
+        const pageInfo = document.getElementById(config.pageInfoId);
+
+        if (!table || !prevBtn || !nextBtn || !pageInfo) {
+            return;
+        }
+
+        const tbody = table.querySelector("tbody");
+
+        if (!tbody) {
+            return;
+        }
+
+        const allRows = Array.from(tbody.querySelectorAll("tr"));
+
+        const dataRows = allRows.filter(row => {
+            const firstCell = row.querySelector("td");
+
+            if (!firstCell) {
+                return false;
+            }
+
+            // Ignore empty-state rows like "No interactions yet."
+            return firstCell.colSpan <= 1;
+        });
+
+        const pageSize = config.pageSize || 5;
+        let currentPage = 1;
+
+        const totalRows = dataRows.length;
+        const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+
+        function renderPage() {
+            if (totalRows === 0) {
+                allRows.forEach(row => {
+                    row.style.display = "";
+                });
+
+                pageInfo.textContent = "No records";
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+
+            dataRows.forEach((row, index) => {
+                row.style.display =
+                    index >= startIndex && index < endIndex
+                        ? ""
+                        : "none";
+            });
+
+            const showingFrom = startIndex + 1;
+            const showingTo = Math.min(endIndex, totalRows);
+
+            pageInfo.textContent = `Showing ${showingFrom} - ${showingTo} of ${totalRows}`;
+
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage >= totalPages;
+        }
+
+        prevBtn.addEventListener("click", function () {
+            if (currentPage <= 1) {
+                return;
+            }
+
+            currentPage--;
+            renderPage();
+        });
+
+        nextBtn.addEventListener("click", function () {
+            if (currentPage >= totalPages) {
+                return;
+            }
+
+            currentPage++;
+            renderPage();
+        });
+
+        renderPage();
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        createTablePagination({
+            tableId: "interactionsTable",
+            prevBtnId: "interactionsPrevBtn",
+            nextBtnId: "interactionsNextBtn",
+            pageInfoId: "interactionsPageInfo",
+            pageSize: 5
+        });
+    });
+</script>

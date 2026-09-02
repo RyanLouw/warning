@@ -1,0 +1,335 @@
+﻿@using WarningSystems.Core.ViewModels
+@using System.Text.Json
+@using System.Net
+@using System.Text.RegularExpressions
+@model WarningWizardVm
+@{
+
+    var questions = Model.Questions ?? new List<WarningQuestionVm>();
+
+    WarningQuestionVm? Q(int id) => questions.FirstOrDefault(x => x.QuestionId == id);
+
+    string ValOrDash(string? s) => string.IsNullOrWhiteSpace(s) ? "—" : s!.Trim();
+
+    string GetDatesDisplayFromQuestion(int questionId)
+    {
+        var q = Q(questionId);
+        if (q == null) return "";
+
+
+        var text = (q.AnswerText ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(text))
+            return text;
+
+        var json = (q.AnswerJson ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(json))
+            return "";
+
+     
+        using var doc = JsonDocument.Parse(json);
+
+        if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+            doc.RootElement.TryGetProperty("dates", out var datesEl) &&
+            datesEl.ValueKind == JsonValueKind.Array)
+        {
+            var dates = datesEl.EnumerateArray()
+                .Select(x => x.GetString())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
+
+            return dates.Count > 0 ? string.Join(", ", dates) : "";
+        }
+ 
+
+        return "";
+    }
+
+
+    string StripHtml(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+
+        var cleaned = Regex.Replace(
+            value,
+            @"<\s*br\s*/?\s*>|</\s*p\s*>|</\s*div\s*>|</\s*li\s*>",
+            Environment.NewLine,
+            RegexOptions.IgnoreCase);
+
+        cleaned = Regex.Replace(
+            cleaned,
+            @"<[^>]*>",
+            "",
+            RegexOptions.IgnoreCase);
+
+        cleaned = WebUtility.HtmlDecode(cleaned);
+        var lines = cleaned
+            .Replace('\u00A0', ' ')
+            .Split(
+                new[] { "\r\n", "\r", "\n" },
+                StringSplitOptions.None)
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line));
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    string GetPrettyAnswer(WarningQuestionVm q)
+    {
+
+        if (!string.IsNullOrWhiteSpace(q.AnswerText))
+            return q.AnswerText!.Trim();
+
+
+        if (!string.IsNullOrWhiteSpace(q.AnswerJson))
+        {
+            var json = q.AnswerJson!.Trim();
+
+         
+            using var doc = JsonDocument.Parse(json);
+
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+
+                if (doc.RootElement.TryGetProperty("values", out var valuesEl) &&
+                    valuesEl.ValueKind == JsonValueKind.Array)
+                {
+                    var vals = valuesEl.EnumerateArray()
+                        .Select(x => x.GetString())
+                        .Where(x => !string.IsNullOrWhiteSpace(x))
+                        .ToList();
+
+                    if (vals.Count > 0) return string.Join(", ", vals);
+                }
+
+                if (doc.RootElement.TryGetProperty("selected", out var selEl) &&
+                    selEl.ValueKind == JsonValueKind.Array)
+                {
+                    var vals = selEl.EnumerateArray()
+                        .Select(x => x.GetString())
+                        .Where(x => !string.IsNullOrWhiteSpace(x))
+                        .ToList();
+
+                    if (vals.Count > 0) return string.Join(", ", vals);
+                }
+
+                if (doc.RootElement.TryGetProperty("text", out var textEl) &&
+                    textEl.ValueKind == JsonValueKind.String)
+                {
+                    var t = textEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(t)) return t!;
+                }
+            }
+        
+            return json;
+        }
+
+        return "";
+    }
+
+
+    var employeeDisplay = !string.IsNullOrWhiteSpace(Model.EmployeeId) ? Model.EmployeeId : "";
+    var employeeDisplyName = !string.IsNullOrWhiteSpace(Model.EmployeeName) ? Model.EmployeeName : "";
+    var categoryDisplay = Model.CategoryNames != null && Model.CategoryNames.Any()
+    ? string.Join(", ", Model.CategoryNames)
+    : "";
+
+    var datesDisplay = GetDatesDisplayFromQuestion(1);
+
+
+    var q2 = Q(2);
+
+    var descriptionOtherQs = questions
+        .Where(q => q.QuestionId != 1 && q.QuestionId != 2 && q.QuestionId != 3)
+        .Where(q => q.IsVisible)
+        .OrderBy(q => q.DisplayOrder)
+        .ToList();
+
+    var descriptionLines = new List<(string Label, string Value)>();
+
+    if (q2 != null)
+    {
+        var mainDesc = StripHtml(GetPrettyAnswer(q2));
+
+        if (!string.IsNullOrWhiteSpace(mainDesc))
+        {
+            descriptionLines.Add((
+                StripHtml(q2.QuestionText ?? "Description"),
+                mainDesc));
+        }
+    }
+
+    foreach (var q in descriptionOtherQs)
+    {
+        var ans = StripHtml(GetPrettyAnswer(q));
+
+        if (!string.IsNullOrWhiteSpace(ans))
+        {
+            descriptionLines.Add((
+                StripHtml(q.QuestionText),
+                ans));
+        }
+    }
+
+    bool hasDescription = descriptionLines.Any();
+
+
+    var sopQ = Q(3);
+    string sopDisplay = "";
+
+    if (sopQ != null)
+    {
+        if (!string.IsNullOrWhiteSpace(sopQ.AnswerJson))
+        {
+            using var doc = JsonDocument.Parse(sopQ.AnswerJson);
+
+            if (doc.RootElement.TryGetProperty("notApplicable", out var na) && na.GetBoolean())
+            {
+                sopDisplay = "SOP Not Applicable";
+            }
+            else if (doc.RootElement.TryGetProperty("sopDocumentName", out var name))
+            {
+                sopDisplay = name.GetString();
+            }
+        }
+    }
+
+    var allFiles = (Model.EvidenceStored ?? new List<string>())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Select(x => x.Trim())
+        .ToList();
+
+
+
+    var attachmentNames = allFiles
+        .Select(fileName =>
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+                return fileName;
+
+            var firstSpaceIndex = fileName.IndexOf(' ');
+
+            return firstSpaceIndex >= 0
+                ? fileName[(firstSpaceIndex + 1)..]
+                : fileName;
+        })
+        .ToList();
+
+
+
+
+
+    bool hasEmployee = !string.IsNullOrWhiteSpace(employeeDisplay);
+    bool hasCategory = !string.IsNullOrWhiteSpace(categoryDisplay);
+    bool hasDates = !string.IsNullOrWhiteSpace(datesDisplay);
+    bool hasSop = !string.IsNullOrWhiteSpace(sopDisplay);
+    bool hasAttachments = attachmentNames.Any();
+}
+
+<input type="hidden" id="reqHasEmployee" value="@(hasEmployee ? "1" : "0")" />
+<input type="hidden" id="reqHasCategory" value="@(hasCategory ? "1" : "0")" />
+<input type="hidden" id="reqHasDates" value="@(hasDates ? "1" : "0")" />
+<input type="hidden" id="reqHasDescription" value="@(hasDescription ? "1" : "0")" />
+<input type="hidden" id="reqHasSop" value="@(hasSop ? "1" : "0")" />
+
+
+<div class="ws-overview-grid">
+    <input type="hidden" id="WarningId" value="@Model.WarningId" />
+    <div class="ws-overview-actions">
+        <button type="button"
+                class="btn ws-btn-primary-pill"
+                id="btnMarkNew"
+                data-warning-id="@Model.WarningId">
+            Submit to Legal
+        </button>
+      
+        <a class="btn ws-btn-primary-pill"
+           href="@Url.Action("ExportOverviewPdf", "Transgression", new { warningId = Model.WarningId })"
+           target="_blank">
+            Export PDF
+        </a>
+
+        <div id="statusSaveMsg" class="mt-2" style="display:none;"></div>
+    </div>
+
+    <div class="ws-ov-card ws-ov-trans">
+        <div class="ws-ov-card-head">1. Issue</div>
+        <div class="ws-ov-card-body">
+            <div class="ws-ov-row">
+                <div class="ws-ov-label">Employee Name:</div>
+                <div class="ws-ov-value">@ValOrDash(employeeDisplyName)</div>
+            </div>
+
+            <div class="ws-ov-row">
+                <div class="ws-ov-label">Issue Type:</div>
+                <div class="ws-ov-value">@ValOrDash(categoryDisplay)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ws-ov-card ws-ov-dates">
+        <div class="ws-ov-card-head">2. Dates</div>
+        <div class="ws-ov-card-body">
+            <div class="ws-ov-row">
+                <div class="ws-ov-label">Date:</div>
+                <div class="ws-ov-value">@ValOrDash(datesDisplay)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ws-ov-card ws-ov-desc">
+        <div class="ws-ov-card-head">3. Description</div>
+        <div class="ws-ov-card-body">
+            @if (!hasDescription)
+            {
+                <div class="ws-ov-empty">—</div>
+            }
+            else
+            {
+                <div class="ws-ov-desc-block">
+                    @foreach (var item in descriptionLines)
+                    {
+                        <div class="ws-ov-row ws-ov-row-tight">
+                            <div class="ws-ov-label">@item.Label</div>
+                            <div class="ws-ov-value ws-ov-pre">@item.Value</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="ws-ov-card ws-ov-sop">
+        <div class="ws-ov-card-head">4. SOP Compliance</div>
+        <div class="ws-ov-card-body">
+            <div class="ws-ov-row">
+                <div class="ws-ov-label">SOP Name:</div>
+                <div class="ws-ov-value">@ValOrDash(sopDisplay)</div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <div class="ws-ov-card ws-ov-att">
+        <div class="ws-ov-card-head">5. Attachments</div>
+        <div class="ws-ov-card-body">
+            @if (attachmentNames.Count == 0)
+            {
+                <div class="ws-ov-empty">—</div>
+            }
+            else
+            {
+                <ul class="ws-ov-list">
+                    @foreach (var f in attachmentNames)
+                    {
+                        <li>@f.Split('/').Last()</li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+
+
+</div>

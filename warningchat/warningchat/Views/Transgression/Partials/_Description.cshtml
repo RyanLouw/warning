@@ -1,0 +1,1446 @@
+﻿@using System.Text.Json
+@using WarningSystems.Core.ViewModels
+@using System.Globalization
+
+@model WarningWizardVm
+
+@{
+    var q2 = Model.Questions?.FirstOrDefault(q => q.QuestionId == 2);
+    var otherQs = (Model.Questions ?? new List<WarningQuestionVm>())
+        .Where(q => q.QuestionId != 1 && q.QuestionId != 2 && q.QuestionId != 3)
+        .Where(q => q.IsVisible)
+        .OrderBy(q => q.DisplayOrder)
+        .ToList();
+
+    bool IsControl(string? ct, string name) =>
+        string.Equals(ct?.Trim(), name, StringComparison.OrdinalIgnoreCase);
+
+
+
+
+
+
+
+    JsonElement? FindRule(string? json, params string[] ruleNames)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+
+            if (!document.RootElement.TryGetProperty("rules", out var rules) ||
+                rules.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var rule in rules.EnumerateArray())
+            {
+                if (!rule.TryGetProperty("op", out var operation) ||
+                    operation.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                var operationName = operation.GetString();
+
+                if (!ruleNames.Any(name =>
+                        string.Equals(
+                            name,
+                            operationName,
+                            StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                if (rule.TryGetProperty("value", out var value))
+                    return value.Clone();
+            }
+        }
+        catch (JsonException)
+        {
+            // Invalid configuration JSON.
+        }
+
+        return null;
+    }
+
+    JsonElement? GetRule(
+        string? categoryConfigJson,
+        string? defaultConfigJson,
+        params string[] ruleNames)
+    {
+        // Category-specific rules override the question defaults.
+        return FindRule(categoryConfigJson, ruleNames)
+               ?? FindRule(defaultConfigJson, ruleNames);
+    }
+
+    bool GetBoolRule(
+        string? categoryConfigJson,
+        string? defaultConfigJson,
+        bool fallback,
+        params string[] ruleNames)
+    {
+        var rule = GetRule(
+            categoryConfigJson,
+            defaultConfigJson,
+            ruleNames);
+
+        if (!rule.HasValue)
+            return fallback;
+
+        var value = rule.Value;
+
+        if (value.ValueKind == JsonValueKind.True)
+            return true;
+
+        if (value.ValueKind == JsonValueKind.False)
+            return false;
+
+        if (value.ValueKind == JsonValueKind.Number &&
+            value.TryGetInt32(out var number))
+        {
+            return number != 0;
+        }
+
+        if (value.ValueKind == JsonValueKind.String &&
+            bool.TryParse(value.GetString(), out var boolean))
+        {
+            return boolean;
+        }
+
+        return fallback;
+    }
+
+    int? GetIntRule(
+        string? categoryConfigJson,
+        string? defaultConfigJson,
+        params string[] ruleNames)
+    {
+        var rule = GetRule(
+            categoryConfigJson,
+            defaultConfigJson,
+            ruleNames);
+
+        if (!rule.HasValue)
+            return null;
+
+        var value = rule.Value;
+
+        if (value.ValueKind == JsonValueKind.Number &&
+            value.TryGetInt32(out var number))
+        {
+            return number;
+        }
+
+        if (value.ValueKind == JsonValueKind.String &&
+            int.TryParse(value.GetString(), out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    decimal? GetDecimalRule(
+        string? categoryConfigJson,
+        string? defaultConfigJson,
+        params string[] ruleNames)
+    {
+        var rule = GetRule(
+            categoryConfigJson,
+            defaultConfigJson,
+            ruleNames);
+
+        if (!rule.HasValue)
+            return null;
+
+        var value = rule.Value;
+
+        if (value.ValueKind == JsonValueKind.Number &&
+            value.TryGetDecimal(out var number))
+        {
+            return number;
+        }
+
+        if (value.ValueKind == JsonValueKind.String &&
+            decimal.TryParse(
+                value.GetString(),
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    string? GetStringRule(
+        string? categoryConfigJson,
+        string? defaultConfigJson,
+        params string[] ruleNames)
+    {
+        var rule = GetRule(
+            categoryConfigJson,
+            defaultConfigJson,
+            ruleNames);
+
+        if (!rule.HasValue)
+            return null;
+
+        var value = rule.Value;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null
+        };
+    }
+
+    List<string> ReadOptions(string? json)
+    {
+        var options = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(json))
+            return options;
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+
+            if (!document.RootElement.TryGetProperty(
+                    "options",
+                    out var optionArray) ||
+                optionArray.ValueKind != JsonValueKind.Array)
+            {
+                return options;
+            }
+
+            foreach (var option in optionArray.EnumerateArray())
+            {
+                if (option.ValueKind != JsonValueKind.String)
+                    continue;
+
+                var value = option.GetString();
+
+                if (!string.IsNullOrWhiteSpace(value))
+                    options.Add(value);
+            }
+        }
+        catch (JsonException)
+        {
+            // Invalid configuration JSON.
+        }
+
+        return options;
+    }
+
+    List<string> GetOptions(
+        string? categoryConfigJson,
+        string? defaultConfigJson)
+    {
+        var categoryOptions = ReadOptions(categoryConfigJson);
+
+        return categoryOptions.Count > 0
+            ? categoryOptions
+            : ReadOptions(defaultConfigJson);
+    }
+
+    string? ToInvariant(decimal? value)
+    {
+        return value?.ToString(CultureInfo.InvariantCulture);
+    }
+
+    string? NormalizeDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (string.Equals(
+                value,
+                "today",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return DateTime.Today.ToString("yyyy-MM-dd");
+        }
+
+        if (DateTime.TryParse(value, out var date))
+            return date.ToString("yyyy-MM-dd");
+
+        return null;
+    }
+
+    var q2MinLength = GetIntRule(
+        q2?.ConfigJson,
+        q2?.DefaultConfigJson,
+        "minLength");
+
+    var q2MaxLength = GetIntRule(
+        q2?.ConfigJson,
+        q2?.DefaultConfigJson,
+        "maxLength");
+
+    var q2RuleDescriptions = new List<string>();
+
+    if (q2?.IsRequired == true)
+    {
+        q2RuleDescriptions.Add("Required");
+    }
+
+    if (q2MinLength.HasValue)
+    {
+        q2RuleDescriptions.Add($"At least {q2MinLength.Value} character{(q2MinLength.Value == 1 ? "" : "s")}");
+    }
+
+    if (q2MaxLength.HasValue)
+    {
+        q2RuleDescriptions.Add($"No more than {q2MaxLength.Value} characters");
+    }
+
+    var q2RuleSummary = string.Join(" • ", q2RuleDescriptions.Distinct());
+}
+
+
+<style>
+    .ws-rule-summary {
+        margin-top: -4px;
+        margin-bottom: 8px;
+        font-size: 0.78rem;
+        color: #6c757d;
+    }
+
+    .ws-q {
+        padding: 12px;
+        margin-bottom: 8px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        transition: border-color .15s ease, background-color .15s ease;
+    }
+
+        .ws-q.ws-invalid {
+            border-color: #dc3545;
+            background: rgba(220, 53, 69, 0.06);
+        }
+
+            .ws-q.ws-invalid .ws-q-label,
+            .ws-q.ws-invalid .ws-rule-summary {
+                color: #b02a37;
+            }
+
+            .ws-q .is-invalid,
+            .ws-q.ws-invalid .ws-radio-grid {
+                border-color: #dc3545 !important;
+            }
+
+            .ws-q.ws-invalid .ws-radio-grid {
+                border: 1px solid #dc3545;
+                border-radius: 10px;
+                padding: 8px;
+            }
+
+    #wsQuillDescription.ws-invalid {
+        border: 1px solid #dc3545 !important;
+        border-radius: 8px;
+    }
+</style>
+
+<div style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
+    <h3 class="ws-step-title" style="margin-bottom: 0">Description step</h3>
+
+    <button type="button" class="ws-btn-primary-pill" id="wsSaveDescriptionBtn">
+        Save & Continue
+    </button>
+</div>
+<div class="row g-4">
+
+
+    <input type="hidden" id="WarningId" value="@(Model.WarningId ?? 0)" />
+
+    <!-- LEFT:  -->
+    <div class="col-12 col-lg-6">
+        <style>
+            .ws-editor-card .ql-toolbar.ql-snow {
+                border: none !important;
+                background: #fcfcfc;
+                border-bottom: 1px solid #f0f0f0 !important;
+            }
+
+            .ws-editor-card .ql-container.ql-snow {
+                border: none !important;
+                height: 300px;
+                font-size: 16px;
+            }
+        </style>
+        <div style="padding: 5px 25px 5px 0px; font-size: 13px; color: #6c757d;">
+            @(q2?.QuestionText ?? "Please describe the transgression")
+            @if (q2?.IsRequired == true)
+            {
+                <span class="ws-required">*</span>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(q2RuleSummary))
+        {
+            <div class="ws-rule-summary">
+                (@q2RuleSummary)
+            </div>
+        }
+        <div class="ws-editor-card" style="background: #fff; border-radius: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); overflow: hidden; border: none;">
+
+
+            <div id="wsQuillDescription"
+                 class="ws-q2"
+                 data-qid="2"
+                 data-required="@(q2?.IsRequired == true ? "true" : "false")"
+                 data-min-length="@(q2MinLength?.ToString() ?? "")"
+                 data-max-length="@(q2MaxLength?.ToString() ?? "")"></div>
+
+            <div id="Q2_ValidationMessage"
+                 class="text-danger small mt-2 d-none"></div>
+
+            <input type="hidden" id="Q2_AnswerText" value="@(q2?.AnswerText ?? "")" />
+            <input type="hidden" id="Q2_QuestionId" value="2" />
+
+            <div style="padding: 15px 25px 25px 25px; color: #888; font-size: 0.85rem;">
+                Keep it clear and factual (what happened, where, who was involved).
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="col-12 col-lg-6">
+        <div class="ws-card">
+            <div class="ws-card-title">Additional questions</div>
+
+            @if (otherQs.Count == 0)
+            {
+                <div class="text-muted">No additional questions for this category.</div>
+            }
+            else
+            {
+                @foreach (var q in otherQs)
+                {
+                    var qid = q.QuestionId;
+
+                    var options = GetOptions(
+                    q.ConfigJson,
+                    q.DefaultConfigJson);
+
+                    // Dropdown and radio rules.
+                    var allowMultiple = GetBoolRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                    false,
+                                    "allowMultiple");
+
+                    var maxSelected = GetIntRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "maxSelected");
+
+                    var minSelected = GetIntRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "minSelected");
+
+                    if (allowMultiple && q.IsRequired && !minSelected.HasValue)
+                    {
+                        minSelected = 1;
+                    }
+
+                    // Text rules.
+                    var minLength = GetIntRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "minLength");
+
+                    var maxLength = GetIntRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "maxLength");
+
+                    var pattern = GetStringRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "pattern",
+                                    "regex");
+
+                    // Number rules.
+                    var minimumNumber = GetDecimalRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "min",
+                                    "minimum",
+                                    "minValue");
+
+                    var maximumNumber = GetDecimalRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "max",
+                                    "maximum",
+                                    "maxValue");
+
+                    var numberStep = GetDecimalRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "step");
+
+                    var integerOnly = GetBoolRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                    false,
+                                    "integerOnly",
+                                    "wholeNumbersOnly");
+
+                    // Date rules.
+                    var minimumDate = NormalizeDate(
+                    GetStringRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "min",
+                                    "minDate",
+                                    "minimumDate"));
+
+                    var maximumDate = NormalizeDate(
+                    GetStringRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "max",
+                                    "maxDate",
+                                    "maximumDate"));
+
+                    var allowPastDates = GetBoolRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                    true,
+                                    "allowPast",
+                                    "allowPastDates");
+
+                    var allowFutureDates = GetBoolRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                    true,
+                                    "allowFuture",
+                                    "allowFutureDates");
+
+                    if (!allowPastDates && string.IsNullOrWhiteSpace(minimumDate))
+                    {
+                        minimumDate = DateTime.Today.ToString("yyyy-MM-dd");
+                    }
+
+                    if (!allowFutureDates && string.IsNullOrWhiteSpace(maximumDate))
+                    {
+                        maximumDate = DateTime.Today.ToString("yyyy-MM-dd");
+                    }
+
+                    var numberStepAttribute = integerOnly
+                    ? "1"
+                    : ToInvariant(numberStep) ?? "any";
+
+                    var trueLabel = GetStringRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "trueLabel") ?? "True";
+
+                    var falseLabel = GetStringRule(
+                    q.ConfigJson,
+                    q.DefaultConfigJson,
+                                    "falseLabel") ?? "False";
+
+
+                    var ruleDescriptions = new List<string>();
+
+                    if (q.IsRequired)
+                    {
+                        ruleDescriptions.Add("Required");
+                    }
+
+                    if (IsControl(q.ControlType, "Text") ||
+                    IsControl(q.ControlType, "Textarea"))
+                    {
+                        if (minLength.HasValue)
+                        {
+                            ruleDescriptions.Add($"At least {minLength.Value} character{(minLength.Value == 1 ? "" : "s")}");
+                        }
+
+                        if (maxLength.HasValue)
+                        {
+                            ruleDescriptions.Add($"No more than {maxLength.Value} characters");
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(pattern))
+                        {
+                            ruleDescriptions.Add("Must match the required format");
+                        }
+                    }
+                    else if (IsControl(q.ControlType, "Dropdown") ||
+                    IsControl(q.ControlType, "Select"))
+                    {
+                        if (allowMultiple && minSelected.HasValue)
+                        {
+                            ruleDescriptions.Add($"Select at least {minSelected.Value} option{(minSelected.Value == 1 ? "" : "s")}");
+                        }
+                        else if (q.IsRequired)
+                        {
+                            ruleDescriptions.Add("Select at least one option");
+                        }
+
+                        if (allowMultiple && maxSelected.HasValue)
+                        {
+                            ruleDescriptions.Add($"Select no more than {maxSelected.Value} option{(maxSelected.Value == 1 ? "" : "s")}");
+                        }
+                    }
+                    else if (IsControl(q.ControlType, "Radio") ||
+                    IsControl(q.ControlType, "TrueFalse") ||
+                    IsControl(q.ControlType, "True/False") ||
+                    IsControl(q.ControlType, "YesNo") ||
+                    IsControl(q.ControlType, "Yes/No") ||
+                    IsControl(q.ControlType, "Boolean") ||
+                    IsControl(q.ControlType, "Bool"))
+                    {
+                        if (q.IsRequired)
+                        {
+                            ruleDescriptions.Add("Select one option");
+                        }
+                    }
+                    else if (IsControl(q.ControlType, "Number") ||
+                    IsControl(q.ControlType, "Numeric"))
+                    {
+                        if (minimumNumber.HasValue && maximumNumber.HasValue)
+                        {
+                            ruleDescriptions.Add($"Value must be between {ToInvariant(minimumNumber)} and {ToInvariant(maximumNumber)}");
+                        }
+                        else if (minimumNumber.HasValue)
+                        {
+                            ruleDescriptions.Add($"Value must be at least {ToInvariant(minimumNumber)}");
+                        }
+                        else if (maximumNumber.HasValue)
+                        {
+                            ruleDescriptions.Add($"Value must be no more than {ToInvariant(maximumNumber)}");
+                        }
+
+                        if (integerOnly)
+                        {
+                            ruleDescriptions.Add("Whole numbers only");
+                        }
+                    }
+                    else if (IsControl(q.ControlType, "Date") ||
+                    IsControl(q.ControlType, "DatePicker"))
+                    {
+                        if (!string.IsNullOrWhiteSpace(minimumDate) &&
+                        !string.IsNullOrWhiteSpace(maximumDate))
+                        {
+                            ruleDescriptions.Add($"Date must be between {minimumDate} and {maximumDate}");
+                        }
+                        else if (!string.IsNullOrWhiteSpace(minimumDate))
+                        {
+                            ruleDescriptions.Add($"Date must be on or after {minimumDate}");
+                        }
+                        else if (!string.IsNullOrWhiteSpace(maximumDate))
+                        {
+                            ruleDescriptions.Add($"Date must be on or before {maximumDate}");
+                        }
+                    }
+
+                    var ruleSummary = string.Join(
+                                            " • ",
+                    ruleDescriptions.Distinct());
+
+
+                    <div class="ws-q"
+                         data-question-id="@qid"
+                         data-control-type="@q.ControlType"
+                         data-required="@(q.IsRequired ? "true" : "false")">
+                        <label class="form-label ws-q-label">
+                            @q.QuestionText
+
+                            @if (q.IsRequired)
+                            {
+                                <span class="ws-required">*</span>
+                            }
+                        </label>
+
+                        @if (!string.IsNullOrWhiteSpace(ruleSummary))
+                        {
+                            <div class="ws-rule-summary">
+                                (@ruleSummary)
+                            </div>
+                        }
+
+
+                        @if (IsControl(q.ControlType, "Text"))
+                        {
+                            <input type="text"
+                                   class="form-control ws-text ws-answer-field"
+                                   id="Q@(qid)_AnswerText"
+                                   data-qid="@qid"
+                                   value="@(q.AnswerText ?? "")"
+                                   placeholder="Enter answer..."
+                                   required="@(q.IsRequired ? "required" : null)"
+                                   minlength="@minLength"
+                                   maxlength="@maxLength"
+                                   pattern="@pattern" />
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerJson"
+                                   value="@(q.AnswerJson ?? "")" />
+                        }
+                        else if (IsControl(q.ControlType, "Textarea"))
+                        {
+                            <textarea class="form-control ws-text ws-answer-field"
+                                      id="Q@(qid)_AnswerText"
+                          data-qid="@qid"
+                          rows="4"
+                          placeholder="Enter answer..."
+                          required="@(q.IsRequired ? "required" : null)"
+                          minlength="@minLength"
+                          maxlength="@maxLength">@(q.AnswerText ?? "")</textarea>
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerJson"
+                                   value="@(q.AnswerJson ?? "")" />
+                        }
+                        else if (IsControl(q.ControlType, "Dropdown") ||
+                        IsControl(q.ControlType, "Select"))
+                        {
+                            if (allowMultiple)
+                            {
+                                <select class="form-select ws-multi ws-answer-field"
+                                        id="Q@(qid)_AnswerSelect"
+                                        data-qid="@qid"
+                                        multiple
+                                        required="@(q.IsRequired ? "required" : null)"
+                                        data-min-selected="@(minSelected?.ToString() ?? "")"
+                                        data-max-selected="@(maxSelected?.ToString() ?? "")">
+
+                                    @foreach (var opt in options)
+                                    {
+                                        <option value="@opt">@opt</option>
+                                    }
+                                </select>
+
+                                <input type="hidden"
+                                       id="Q@(qid)_AnswerText"
+                                       value="@(q.AnswerText ?? "")" />
+
+                                <input type="hidden"
+                                       id="Q@(qid)_AnswerJson"
+                                       value="@(q.AnswerJson ?? "")" />
+                            }
+                            else
+                            {
+                                <select class="form-select ws-single ws-answer-field"
+                                        id="Q@(qid)_AnswerText"
+                                        data-qid="@qid"
+                                        required="@(q.IsRequired ? "required" : null)">
+
+                                    <option value="">-- Select --</option>
+
+                                    @foreach (var opt in options)
+                                    {
+                                        <option value="@opt"
+                                                selected="@(opt == (q.AnswerText ?? "") ? "selected" : null)">
+                                            @opt
+                                        </option>
+                                    }
+                                </select>
+
+                                <input type="hidden"
+                                       id="Q@(qid)_AnswerJson"
+                                       value="@(q.AnswerJson ?? "")" />
+                            }
+                        }
+                        else if (IsControl(q.ControlType, "Radio"))
+                        {
+                            <div class="ws-radio-grid">
+                                @if (options.Count == 0)
+                                {
+                                    <div class="text-danger small">
+                                        No options parsed for this radio question.
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var opt in options)
+                                    {
+                                        <label class="ws-radio-item">
+                                            <input type="radio"
+                                                   class="ws-radio"
+                                                   data-qid="@qid"
+                                                   name="Q@(qid)_Radio"
+                                                   value="@opt"
+                                                   required="@(q.IsRequired ? "required" : null)"
+                                                   checked="@(opt == (q.AnswerText ?? "") ? "checked" : null)" />
+
+                                            <span>@opt</span>
+                                        </label>
+                                    }
+                                }
+                            </div>
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerText"
+                                   value="@(q.AnswerText ?? "")" />
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerJson"
+                                   value="@(q.AnswerJson ?? "")" />
+                        }
+                        else if (IsControl(q.ControlType, "Date") ||
+                        IsControl(q.ControlType, "DatePicker"))
+                        {
+                            <input type="date"
+                                   class="form-control ws-date ws-answer-field"
+                                   id="Q@(qid)_AnswerText"
+                                   data-qid="@qid"
+                                   value="@NormalizeDate(q.AnswerText)"
+                                   required="@(q.IsRequired ? "required" : null)"
+                                   min="@minimumDate"
+                                   max="@maximumDate" />
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerJson"
+                                   value="@(q.AnswerJson ?? "")" />
+                        }
+                        else if (IsControl(q.ControlType, "Number") ||
+                        IsControl(q.ControlType, "Numeric"))
+                        {
+                            <input type="number"
+                                   class="form-control ws-number ws-answer-field"
+                                   id="Q@(qid)_AnswerText"
+                                   data-qid="@qid"
+                                   value="@(q.AnswerText ?? "")"
+                                   placeholder="Enter a number..."
+                                   required="@(q.IsRequired ? "required" : null)"
+                                   min="@ToInvariant(minimumNumber)"
+                                   max="@ToInvariant(maximumNumber)"
+                                   step="@numberStepAttribute" />
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerJson"
+                                   value="@(q.AnswerJson ?? "")" />
+                        }
+                        else if (IsControl(q.ControlType, "TrueFalse") ||
+                        IsControl(q.ControlType, "True/False") ||
+                        IsControl(q.ControlType, "Boolean") ||
+                        IsControl(q.ControlType, "Bool"))
+                        {
+                            <div class="ws-radio-grid">
+                                <label class="ws-radio-item">
+                                    <input type="radio"
+                                           class="ws-radio ws-choice"
+                                           data-qid="@qid"
+                                           name="Q@(qid)_TrueFalse"
+                                           value="True"
+                                           required="@(q.IsRequired ? "required" : null)"
+                                           checked="@(
+                                           string.Equals(
+                                               q.AnswerText,
+                                               "True",
+                                               StringComparison.OrdinalIgnoreCase)
+                                               ? "checked"
+                                               : null)" />
+
+                                    <span>@trueLabel</span>
+                                </label>
+
+                                <label class="ws-radio-item">
+                                    <input type="radio"
+                                           class="ws-radio ws-choice"
+                                           data-qid="@qid"
+                                           name="Q@(qid)_TrueFalse"
+                                           value="False"
+                                           required="@(q.IsRequired ? "required" : null)"
+                                           checked="@(
+                                           string.Equals(
+                                               q.AnswerText,
+                                               "False",
+                                               StringComparison.OrdinalIgnoreCase)
+                                               ? "checked"
+                                               : null)" />
+
+                                    <span>@falseLabel</span>
+                                </label>
+                            </div>
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerText"
+                                   value="@(q.AnswerText ?? "")" />
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerJson"
+                                   value="@(q.AnswerJson ?? "")" />
+                        }
+                        else
+                        {
+                            <div class="text-muted small">
+                                Unsupported ControlType:
+                                <strong>@q.ControlType</strong>
+                            </div>
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerText"
+                                   value="@(q.AnswerText ?? "")" />
+
+                            <input type="hidden"
+                                   id="Q@(qid)_AnswerJson"
+                                   value="@(q.AnswerJson ?? "")" />
+                        }
+
+                        <div class="text-danger small mt-1 ws-validation-message d-none"></div>
+
+                        <input type="hidden"
+                               id="Q@(qid)_QuestionId"
+                               value="@qid" />
+                    </div>
+                }
+            }
+
+
+        </div>
+    </div>
+</div>
+
+
+<script>
+    (function () {
+        const quillElement = document.getElementById("wsQuillDescription");
+        const descriptionAnswer = document.getElementById("Q2_AnswerText");
+        const saveButton = document.getElementById("wsSaveDescriptionBtn");
+
+        if (!quillElement || !descriptionAnswer || !saveButton) {
+            return;
+        }
+
+        // Avoid creating a second Quill instance when the partial is reloaded.
+        if (window.quillDesc) {
+            try {
+                window.quillDesc.off("text-change");
+            } catch {
+                // Ignore old instance cleanup errors.
+            }
+        }
+
+        window.quillDesc = new Quill("#wsQuillDescription", {
+            theme: "snow"
+        });
+
+        window.quillDesc.root.innerHTML = descriptionAnswer.value || "";
+
+        window.quillDesc.on("text-change", function () {
+            descriptionAnswer.value = window.quillDesc.root.innerHTML;
+            clearDescriptionError();
+        });
+
+        function getWarningId() {
+            return Number.parseInt(
+                document.getElementById("WarningId")?.value || "0",
+                10
+            );
+        }
+
+        function parseOptionalInteger(value) {
+            if (value === undefined || value === null || value === "") {
+                return null;
+            }
+
+            const parsed = Number.parseInt(value, 10);
+            return Number.isInteger(parsed) ? parsed : null;
+        }
+
+        function getQuestionId(questionContainer) {
+            return Number.parseInt(
+                questionContainer.dataset.questionId || "0",
+                10
+            );
+        }
+
+        function getValidationMessage(questionContainer) {
+            return questionContainer?.querySelector(".ws-validation-message");
+        }
+
+        function clearQuestionError(questionContainer) {
+            if (!questionContainer) {
+                return;
+            }
+
+            questionContainer.classList.remove("ws-invalid");
+
+            questionContainer
+                .querySelectorAll(".is-invalid")
+                .forEach(control => {
+                    control.classList.remove("is-invalid");
+                    control.setCustomValidity?.("");
+                });
+
+            const message = getValidationMessage(questionContainer);
+
+            if (message) {
+                message.textContent = "";
+                message.classList.add("d-none");
+            }
+        }
+
+        function showQuestionError(questionContainer, control, messageText) {
+            questionContainer?.classList.add("ws-invalid");
+            control?.classList.add("is-invalid");
+
+            const message = getValidationMessage(questionContainer);
+
+            if (message) {
+                message.textContent = messageText;
+                message.classList.remove("d-none");
+            }
+        }
+
+        function clearDescriptionError() {
+            quillElement.classList.remove("ws-invalid");
+
+            const message = document.getElementById("Q2_ValidationMessage");
+
+            if (message) {
+                message.textContent = "";
+                message.classList.add("d-none");
+            }
+        }
+
+        function showDescriptionError(messageText) {
+            quillElement.classList.add("ws-invalid");
+
+            const message = document.getElementById("Q2_ValidationMessage");
+
+            if (message) {
+                message.textContent = messageText;
+                message.classList.remove("d-none");
+            }
+        }
+
+        function applyCustomFieldRules(field) {
+            field.setCustomValidity("");
+
+            const fieldType = (field.getAttribute("type") || "").toLowerCase();
+            const isTextControl = field.tagName === "TEXTAREA" || fieldType === "text";
+
+            if (isTextControl) {
+                const value = (field.value || "").trim();
+                const minLength = parseOptionalInteger(field.getAttribute("minlength"));
+                const maxLength = parseOptionalInteger(field.getAttribute("maxlength"));
+
+                if (value.length > 0 && minLength !== null && value.length < minLength) {
+                    field.setCustomValidity(
+                        `Please enter at least ${minLength} character${minLength === 1 ? "" : "s"}.`
+                    );
+                    return;
+                }
+
+                if (value.length > 0 && maxLength !== null && value.length > maxLength) {
+                    field.setCustomValidity(
+                        `Please enter no more than ${maxLength} characters.`
+                    );
+                    return;
+                }
+            }
+
+            if (field.classList.contains("ws-multi")) {
+                const minSelected = parseOptionalInteger(field.dataset.minSelected);
+                const maxSelected = parseOptionalInteger(field.dataset.maxSelected);
+                const selectedCount = field.selectedOptions.length;
+
+                if (minSelected !== null && selectedCount < minSelected) {
+                    field.setCustomValidity(
+                        `Please select at least ${minSelected} option${minSelected === 1 ? "" : "s"}.`
+                    );
+                    return;
+                }
+
+                if (maxSelected !== null && selectedCount > maxSelected) {
+                    field.setCustomValidity(
+                        `Please select no more than ${maxSelected} option${maxSelected === 1 ? "" : "s"}.`
+                    );
+                }
+            }
+        }
+
+        function validateDescription() {
+            clearDescriptionError();
+
+            const plainText = (window.quillDesc.getText() || "").trim();
+            const required = quillElement.dataset.required === "true";
+            const minLength = parseOptionalInteger(quillElement.dataset.minLength);
+            const maxLength = parseOptionalInteger(quillElement.dataset.maxLength);
+
+            if (required && plainText.length === 0) {
+                showDescriptionError("Please enter a description.");
+                return false;
+            }
+
+            if (plainText.length > 0 && minLength !== null && plainText.length < minLength) {
+                showDescriptionError(
+                    `Please enter at least ${minLength} character${minLength === 1 ? "" : "s"}.`
+                );
+                return false;
+            }
+
+            if (plainText.length > 0 && maxLength !== null && plainText.length > maxLength) {
+                showDescriptionError(
+                    `Please enter no more than ${maxLength} characters.`
+                );
+                return false;
+            }
+
+            return true;
+        }
+
+        function validateQuestion(questionContainer) {
+            clearQuestionError(questionContainer);
+
+            const required = questionContainer.dataset.required === "true";
+            const radioButtons = questionContainer.querySelectorAll(
+                "input[type='radio'][data-qid]"
+            );
+
+            if (radioButtons.length > 0) {
+                const selected = questionContainer.querySelector(
+                    "input[type='radio'][data-qid]:checked"
+                );
+
+                if (required && !selected) {
+                    showQuestionError(
+                        questionContainer,
+                        radioButtons[0],
+                        "Please select an option."
+                    );
+                    return { valid: false, control: radioButtons[0] };
+                }
+
+                return { valid: true, control: selected || radioButtons[0] };
+            }
+
+            const field = questionContainer.querySelector(".ws-answer-field");
+
+            if (!field) {
+                return { valid: true, control: null };
+            }
+
+            applyCustomFieldRules(field);
+
+            if (!field.checkValidity()) {
+                showQuestionError(
+                    questionContainer,
+                    field,
+                    field.validationMessage || "Please correct this answer."
+                );
+                return { valid: false, control: field };
+            }
+
+            return { valid: true, control: field };
+        }
+
+        function validateAllQuestions() {
+            let isValid = validateDescription();
+            let firstInvalidControl = isValid ? null : quillElement;
+
+            document.querySelectorAll(".ws-q[data-question-id]").forEach(questionContainer => {
+                const result = validateQuestion(questionContainer);
+
+                if (!result.valid) {
+                    isValid = false;
+                    firstInvalidControl ??= result.control;
+                }
+            });
+
+            if (firstInvalidControl) {
+                firstInvalidControl.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+
+                if (firstInvalidControl === quillElement) {
+                    window.quillDesc.focus();
+                } else {
+                    firstInvalidControl.focus?.();
+                    firstInvalidControl.reportValidity?.();
+                }
+            }
+
+            return isValid;
+        }
+
+        function getExistingMultiValues(answerTextElement, answerJsonElement) {
+            if (answerJsonElement?.value) {
+                try {
+                    const parsed = JSON.parse(answerJsonElement.value);
+
+                    if (Array.isArray(parsed)) {
+                        return parsed.map(String);
+                    }
+
+                    if (parsed && Array.isArray(parsed.selected)) {
+                        return parsed.selected.map(String);
+                    }
+                } catch {
+                    // Fall back to AnswerText.
+                }
+            }
+
+            return (answerTextElement?.value || "")
+                .split(",")
+                .map(value => value.trim())
+                .filter(Boolean);
+        }
+
+        function syncMultiSelect(select) {
+            const questionId = Number.parseInt(select.dataset.qid || "0", 10);
+            const selectedValues = Array.from(select.selectedOptions)
+                .map(option => option.value);
+
+            const answerText = document.getElementById(`Q${questionId}_AnswerText`);
+            const answerJson = document.getElementById(`Q${questionId}_AnswerJson`);
+
+            if (answerText) {
+                answerText.value = selectedValues.join(", ");
+            }
+
+            if (answerJson) {
+                answerJson.value = JSON.stringify({ selected: selectedValues });
+            }
+
+            applyCustomFieldRules(select);
+        }
+
+        function initialiseMultiSelects() {
+            document.querySelectorAll(".ws-multi").forEach(select => {
+                const questionId = Number.parseInt(select.dataset.qid || "0", 10);
+                const answerText = document.getElementById(`Q${questionId}_AnswerText`);
+                const answerJson = document.getElementById(`Q${questionId}_AnswerJson`);
+                const existingValues = getExistingMultiValues(answerText, answerJson);
+
+                Array.from(select.options).forEach(option => {
+                    option.selected = existingValues.includes(option.value);
+                });
+
+                syncMultiSelect(select);
+            });
+        }
+
+        function syncRadioAnswer(radio) {
+            if (!radio.checked) {
+                return;
+            }
+
+            const questionId = Number.parseInt(radio.dataset.qid || "0", 10);
+            const answerText = document.getElementById(`Q${questionId}_AnswerText`);
+            const answerJson = document.getElementById(`Q${questionId}_AnswerJson`);
+
+            if (answerText) {
+                answerText.value = radio.value || "";
+            }
+
+            if (answerJson) {
+                answerJson.value = "";
+            }
+        }
+
+        function collectQuestionAnswer(questionContainer, warningId) {
+            const questionId = getQuestionId(questionContainer);
+
+            if (!questionId) {
+                return null;
+            }
+
+            const required = questionContainer.dataset.required === "true";
+            const multiSelect = questionContainer.querySelector("select.ws-multi");
+            const selectedRadio = questionContainer.querySelector(
+                "input[type='radio'][data-qid]:checked"
+            );
+            const normalControl = questionContainer.querySelector(".ws-answer-field");
+            const answerJsonElement = document.getElementById(`Q${questionId}_AnswerJson`);
+
+            let answerText = "";
+            let answerJson = "";
+
+            if (multiSelect) {
+                const selectedValues = Array.from(multiSelect.selectedOptions)
+                    .map(option => option.value);
+
+                answerText = selectedValues.join(", ");
+                answerJson = selectedValues.length > 0
+                    ? JSON.stringify({ selected: selectedValues })
+                    : "";
+            } else if (selectedRadio) {
+                answerText = selectedRadio.value || "";
+            } else if (normalControl) {
+                answerText = normalControl.value || "";
+                answerJson = answerJsonElement?.value || "";
+            }
+
+            answerText = typeof answerText === "string"
+                ? answerText.trim()
+                : answerText;
+
+            const hasValue = Boolean(answerText) || Boolean(answerJson);
+
+            // Required blank answers never reach this point because validation blocks them.
+            // Optional blank answers are not posted, preventing empty database rows.
+            if (!hasValue && !required) {
+                return null;
+            }
+
+            return {
+                warningId: warningId,
+                questionId: questionId,
+                answerText: answerText,
+                answerJson: answerJson
+            };
+        }
+
+        function collectAnswers() {
+            const warningId = getWarningId();
+            const answers = [];
+            const descriptionPlainText = (window.quillDesc.getText() || "").trim();
+
+            if (descriptionPlainText.length > 0 || quillElement.dataset.required === "true") {
+                answers.push({
+                    warningId: warningId,
+                    questionId: 2,
+                    answerText: descriptionAnswer.value || "",
+                    answerJson: ""
+                });
+            }
+
+            document.querySelectorAll(".ws-q[data-question-id]").forEach(questionContainer => {
+                const answer = collectQuestionAnswer(questionContainer, warningId);
+
+                if (answer) {
+                    answers.push(answer);
+                }
+            });
+
+            return answers;
+        }
+
+        async function saveAnswers(button) {
+            const warningId = getWarningId();
+
+            if (!warningId || warningId <= 0) {
+                alert("Please create the warning before saving this step.");
+                return;
+            }
+
+            if (!validateAllQuestions()) {
+                console.warn("Save blocked because one or more question rules failed.");
+                return;
+            }
+
+            const answers = collectAnswers();
+
+            if (answers.length === 0) {
+                alert("There are no answers to save.");
+                return;
+            }
+
+            const originalText = button.textContent;
+
+            try {
+                button.disabled = true;
+                button.textContent = "Saving...";
+
+                const headers = {
+                    "Content-Type": "application/json"
+                };
+
+                const antiForgeryToken = document.querySelector(
+                    "input[name='__RequestVerificationToken']"
+                )?.value;
+
+                if (antiForgeryToken) {
+                    headers.RequestVerificationToken = antiForgeryToken;
+                }
+
+                console.table(answers.map(answer => ({
+                    QuestionId: answer.questionId,
+                    AnswerText: answer.answerText,
+                    AnswerJson: answer.answerJson
+                })));
+
+                const response = await fetch("/Transgression/SaveAnswers", {
+                    method: "POST",
+                    headers: headers,
+                    credentials: "same-origin",
+                    body: JSON.stringify(answers)
+                });
+
+                const responseText = await response.text();
+                let responseData = null;
+
+                if (responseText) {
+                    try {
+                        responseData = JSON.parse(responseText);
+                    } catch {
+                        console.log("Save response:", responseText);
+                    }
+                }
+
+                if (!response.ok || responseData?.success === false) {
+                    throw new Error(
+                        responseData?.message ||
+                        `Save failed with HTTP ${response.status}.`
+                    );
+                }
+
+                console.log("Warning answers saved successfully.");
+
+                const nextStep = document.querySelector('.ws-step[data-step="4"]');
+                nextStep?.click();
+            } catch (error) {
+                console.error("Error saving warning answers:", error);
+                alert(error?.message || "An error occurred while saving.");
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        initialiseMultiSelects();
+
+        document.querySelectorAll("input[type='radio'][data-qid]").forEach(radio => {
+            if (radio.checked) {
+                syncRadioAnswer(radio);
+            }
+
+            radio.addEventListener("change", function () {
+                syncRadioAnswer(this);
+                clearQuestionError(this.closest(".ws-q"));
+            });
+        });
+
+        document.querySelectorAll(".ws-multi").forEach(select => {
+            select.addEventListener("change", function () {
+                syncMultiSelect(this);
+                clearQuestionError(this.closest(".ws-q"));
+            });
+        });
+
+        document.querySelectorAll(".ws-answer-field:not(.ws-multi)").forEach(field => {
+            ["input", "change"].forEach(eventName => {
+                field.addEventListener(eventName, function () {
+                    this.setCustomValidity("");
+                    clearQuestionError(this.closest(".ws-q"));
+                });
+            });
+        });
+
+        saveButton.addEventListener("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            saveAnswers(saveButton);
+        }, true);
+    })();
+</script>

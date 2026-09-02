@@ -1,0 +1,298 @@
+﻿@model WarningSystems.Core.ViewModels.AdminVM
+
+@{
+    ViewData["Title"] = "Admin";
+    Layout = "_Layout";
+}
+
+<div class="ws-page">
+    <div class="ws-page-inner">
+
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <div class="main-panel">
+
+            <!-- Tabs header -->
+            <ul class="nav nav-tabs hw-tabs" id="adminTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active"
+                            id="questions-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#questions"
+                            type="button"
+                            role="tab"
+                            aria-controls="questions"
+                            aria-selected="true">
+                        Questions
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link"
+                            id="categories-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#categories"
+                            type="button"
+                            role="tab"
+                            aria-controls="categories"
+                            aria-selected="false">
+                        Categories
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="adminTabsContent">
+
+                <!-- QUESTIONS TAB -->
+                <div class="tab-pane fade show active" id="questions" role="tabpanel" aria-labelledby="questions-tab">
+                    <div class="panel-body">
+
+                        <div class="filters-row">
+                            <div class="filters-left">
+                                <input id="questionSearch"
+                                       class="form-control search-box"
+                                       placeholder="Search questions..." />
+                            </div>
+
+                            <button class="btn btn-outline-primary rounded-pill"
+                                    type="button"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalCreateQuestion">
+                                Add New Question
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table dashboard-table table-hover align-middle" id="questionsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Question</th>
+                                        <th>Control</th>
+                                        <th>Date Added</th>
+                                        <th>Added By</th>
+                                        <th>Last Edited</th>
+                                        <th>Active</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var q in Model.Questions)
+                                    {
+                                        <tr>
+                                            <td class="q-text">@q.QuestionText</td>
+                                            <td>@q.ControlType</td>
+                                            <td>@q.CreatedOn.ToString("yyyy/MM/dd HH:mm")</td>
+                                            <td>@q.CreatedBy</td>
+                                            <td>@(q.UpdatedOn.HasValue? q.UpdatedOn.Value.ToString("yyyy/MM/dd HH:mm") : "-")</td>
+                                            <td>
+                                                @if (q.IsActive)
+                                                {
+                                                    <span class="badge bg-success">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">No</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-link"
+                                                        type="button"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#modalEditQuestion"
+                                                        data-id="@q.QuestionId"
+                                                        data-text="@q.QuestionText"
+                                                        data-control="@q.ControlType"
+                                                        data-config="@q.DefaultConfigJson"
+                                                        data-active="@q.IsActive">
+                                                    Edit
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- CATEGORIES TAB -->
+                <div class="tab-pane fade" id="categories" role="tabpanel" aria-labelledby="categories-tab">
+                    <div class="panel-body">
+
+                        <div class="filters-row">
+                            <div class="filters-left">
+                                <input id="categorySearch"
+                                       class="form-control search-box"
+                                       placeholder="Search categories..." />
+                            </div>
+
+                            <button class="btn btn-outline-primary rounded-pill"
+                                    type="button"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalCreateCategory">
+                                Add New Category
+                            </button>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table dashboard-table table-hover align-middle" id="categoriesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Date Added</th>
+                                        <th>Added By</th>
+                                        <th>Last Edited</th>
+                                        <th>Active</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in Model.Categories)
+                                    {
+                                        <tr>
+                                            <td class="c-text">@c.Name</td>
+                                            <td>@c.CreatedOn.ToString("yyyy/MM/dd HH:mm")</td>
+                                            <td>@c.CreatedBy</td>
+                                            <td>@(c.UpdatedOn.HasValue? c.UpdatedOn.Value.ToString("yyyy/MM/dd HH:mm") : "-")</td>
+                                            <td>
+                                                @if (c.IsActive)
+                                                {
+                                                    <span class="badge bg-success">Yes</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">No</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-link"
+                                                        type="button"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#modalEditCategory"
+                                                        data-id="@c.CategoryId"
+                                                        data-name="@c.Name"
+                                                        data-active="@c.IsActive">
+                                                    Edit
+                                                </button>
+
+                                                <button class="btn btn-sm btn-link"
+                                                        type="button"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#modalManageCategoryQuestions"
+                                                        data-id="@c.CategoryId"
+                                                        data-name="@c.Name">
+                                                    Manage Questions
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- MODALS -->
+        @await Html.PartialAsync("Partials/_CreateQuestionModal")
+        @await Html.PartialAsync("Partials/_EditQuestionModal")
+        @await Html.PartialAsync("Partials/_CreateCategoryModal")
+        @await Html.PartialAsync("Partials/_EditCategoryModal")
+        @await Html.PartialAsync("Partials/_ManageCategoryQuestionsModal")
+
+
+    </div>
+</div>
+<div style="display:none">
+    @Html.AntiForgeryToken()
+</div>
+@section Scripts {
+    <script src="~/js/admin/Global.js"></script>
+    <script src="~/js/admin/CreateQuestionBuilder.js"></script>
+    <script src="~/js/admin/EditQuestionBuilder.js"></script>
+    <script src="~/js/admin/ManageCategoryQuestions.js"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const storageKey = "admin-active-tab";
+            const mainPanel =
+                document.querySelector(".admin-main-panel");
+
+            function resizeAdminPanel() {
+                if (!mainPanel) {
+                    return;
+                }
+
+                const panelTop =
+                    mainPanel.getBoundingClientRect().top;
+
+                const bottomSpacing = 20;
+
+                const availableHeight =
+                    window.innerHeight -
+                    panelTop -
+                    bottomSpacing;
+
+                mainPanel.style.height =
+                    Math.max(availableHeight, 300) + "px";
+            }
+
+
+            const savedTabSelector =
+                sessionStorage.getItem(storageKey);
+
+            if (savedTabSelector) {
+                const savedTab =
+                    document.querySelector(savedTabSelector);
+
+                if (savedTab) {
+                    bootstrap.Tab
+                        .getOrCreateInstance(savedTab)
+                        .show();
+                }
+            }
+
+            const tabButtons =
+                document.querySelectorAll(
+                    '#adminTabs button[data-bs-toggle="tab"]'
+                );
+
+            tabButtons.forEach(function(tabButton) {
+                tabButton.addEventListener(
+                    "shown.bs.tab",
+                    function(event) {
+                        sessionStorage.setItem(
+                            storageKey,
+                            "#" + event.target.id
+                        );
+                    }
+                );
+            });
+
+            resizeAdminPanel();
+
+            window.addEventListener(
+                "resize",
+                resizeAdminPanel
+            );
+        });
+    </script>
+}

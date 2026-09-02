@@ -1,0 +1,165 @@
+﻿
+@using WarningSystems.Core.ViewModels
+@model WarningWizardVm
+
+@{
+    ViewData["Title"] = "Issue Wizard";
+    Layout = "_Layout";
+}
+
+<div class="ws-page">
+    <div class="ws-page-inner">
+        <div class="ws-shell">
+
+            <div class="row">
+                <div class="col-12 col-lg-3">
+                    <div class="ws-left">
+                        <div class="ws-left-badge">1</div>
+                        <h2 class="ws-left-title">Issue</h2>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-9">
+                    <div class="ws-stepper" id="wsStepper">
+                        <div class="ws-step active" data-step="1">
+                            <div class="ws-step-circle">1</div>
+                            <div class="ws-step-label">Issue</div>
+                        </div>
+                        <div class="ws-step" data-step="2">
+                            <div class="ws-step-circle">2</div>
+                            <div class="ws-step-label">Dates</div>
+                        </div>
+                        <div class="ws-step" data-step="3">
+                            <div class="ws-step-circle">3</div>
+                            <div class="ws-step-label">Description</div>
+                        </div>
+                        <div class="ws-step" data-step="4">
+                            <div class="ws-step-circle">4</div>
+                            <div class="ws-step-label">SOP Compliance</div>
+                        </div>
+
+                        <div class="ws-step" data-step="5">
+                            <div class="ws-step-circle">5</div>
+                            <div class="ws-step-label">Attachments</div>
+                        </div>
+
+                        <div class="ws-step" data-step="6">
+                            <div class="ws-step-circle">6</div>
+                            <div class="ws-step-label">Overview</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+
+        <div class="ws-content">
+            <div class="ws-pane active" data-pane="1">
+                @await Html.PartialAsync("Partials/_Transgression", Model)
+            </div>
+
+            <div class="ws-pane ws-pane-center" data-pane="2">
+                @await Html.PartialAsync("Partials/_Dates", Model)
+            </div>
+
+            <div class="ws-pane" data-pane="3">
+                @await Html.PartialAsync("Partials/_Description", Model)
+            </div>
+
+            <div class="ws-pane" data-pane="4">
+                @await Html.PartialAsync("Partials/_SopCompliance", Model)
+            </div>
+
+            <div class="ws-pane" data-pane="5">
+                @await Html.PartialAsync("Partials/_Attachments", Model)
+            </div>
+
+            <div class="ws-pane" data-pane="6">
+                @await Html.PartialAsync("Partials/_Overview", Model)
+            </div>
+        </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    window.wsEndpoints = window.wsEndpoints || {};
+    window.wsEndpoints.saveAnswer = '@Url.Action("SaveAnswer", "Transgression")';
+</script>
+@section Scripts {
+
+    <script src="~/js/warning/stepper.js"></script>
+    <script src="~/js/warning/dates.js"></script>
+    <script src="~/js/warning/answers.js"></script>
+    <script src="~/js/warning/sop.js"></script>
+    <script src="~/js/warning/attachments.js"></script>
+    <script src="~/js/warning/UpdateStatus.js"></script>
+    <script src="~/js/warning/transgression.js"></script>
+
+    <script>
+        (function restoreWarningWizardStep() {
+            const storageKey = "warningWizardActiveStep";
+
+            function restoreStep() {
+                const savedStep =
+                    sessionStorage.getItem(storageKey);
+
+                if (!savedStep) {
+                    return;
+                }
+
+                const stepButton =
+                    document.querySelector(
+                        `.ws-step[data-step="${savedStep}"]`
+                    );
+
+                const stepPane =
+                    document.querySelector(
+                        `.ws-pane[data-pane="${savedStep}"]`
+                    );
+
+                if (!stepButton || !stepPane) {
+                    console.error(
+                        `Could not restore wizard step ${savedStep}.`,
+                        {
+                            stepButtonFound: !!stepButton,
+                            stepPaneFound: !!stepPane
+                        }
+                    );
+
+                    sessionStorage.removeItem(storageKey);
+                    return;
+                }
+
+                console.log(
+                    `Restoring wizard to step ${savedStep}.`
+                );
+
+
+                sessionStorage.removeItem(storageKey);
+
+
+                stepButton.click();
+            }
+
+            if (document.readyState === "loading") {
+                document.addEventListener(
+                    "DOMContentLoaded",
+                    function () {
+     
+                        window.setTimeout(
+                            restoreStep,
+                            0
+                        );
+                    }
+                );
+            } else {
+                window.setTimeout(
+                    restoreStep,
+                    0
+                );
+            }
+        })();
+    </script>
+}

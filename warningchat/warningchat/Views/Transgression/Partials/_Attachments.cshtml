@@ -1,0 +1,126 @@
+﻿
+@using WarningSystems.Core.Services
+@using WarningSystems.Core.ViewModels
+
+@model WarningWizardVm
+
+@{
+    var allowedImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp"
+    };
+}
+
+<div class="ws-step-page">
+
+    <div class="ws-step-header">
+        <div>
+            <h3 class="ws-step-title">Attachments</h3>
+            <p class="ws-step-subtext mb-0">Add all other required attachments:</p>
+
+            <div class="alert alert-warning mt-3 mb-0 ws-evidence-warning">
+                <strong>Evidence required:</strong>
+                Please upload all supporting evidence before continuing. This may include documents, audio files, videos, screenshots, or any other proof related to the warning.
+            </div>
+        </div>
+
+        <button type="button"
+                class="btn ws-btn-primary-pill"
+                id="btnSaveAttachmentsContinue"
+                disabled
+                aria-disabled="true">
+            Save & Continue
+        </button>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-lg-5">
+            <form id="frmSaveAttachment"
+                  asp-controller="Transgression"
+                  asp-action="SaveEvidenceAttachment"
+                  method="post"
+                  enctype="multipart/form-data">
+
+                <input type="hidden" name="WarningId" value="@Model.WarningId" />
+
+                <div class="ws-upload-panel">
+                    <div class="ws-upload-row">
+                        <select class="form-select ws-pill-select" name="AttachmentType">
+                            <option value="Document">Document</option>
+                            <option value="Audio">Audio</option>
+                            <option value="Video">Video</option>
+                        </select>
+                        <input class="form-control ws-pill-input"
+                               type="text"
+                               id="attachmentName"
+                               name="AttachmentName"
+                               placeholder="Name" />
+                    </div>
+
+                    <label class="btn ws-btn-upload w-100">
+                        Choose file(s) to upload
+                        <input type="file"
+                               class="d-none"
+                               id="attachmentFile"
+                               name="Files"
+                               multiple />
+                    </label>
+                </div>
+            </form>
+        </div>
+
+        <div class="col-12 col-lg-7">
+            <div class="ws-attachments-panel">
+                <h6 class="ws-attachments-title">List of attachments uploaded</h6>
+
+                <div id="pendingPreview" class="ws-pending-preview d-none">
+                    <div class="ws-pending-title">Pending upload</div>
+                    <div class="ws-pending-body" id="pendingBody"></div>
+                </div>
+
+                @if (Model.EvidenceStored == null || !Model.EvidenceStored.Any())
+                {
+                    <div class="text-muted">No attachments uploaded yet.</div>
+                }
+                else
+                {
+                    <ul class="ws-attach-list">
+                        @foreach (var fileName in Model.EvidenceStored)
+                        {
+                            var displayName = FileNameHelper.GetDisplayFileName(fileName);
+                            var ext = System.IO.Path.GetExtension(displayName);
+                            var isImage = !string.IsNullOrWhiteSpace(ext) && allowedImageExtensions.Contains(ext);
+
+                            <li class="ws-attach-item">
+                                <div class="ws-attach-left">
+                                    @if (isImage)
+                                    {
+                                        <img class="ws-attach-thumb"
+                                             src="@Url.Action("GetAttachment", "Transgression", new { id = Model.WarningId, fileName = fileName })"
+                                             alt="attachment" />
+                                    }
+                                    else
+                                    {
+                                        <div class="ws-attach-fileicon">📄</div>
+                                    }
+
+                                    <a class="ws-attach-name"
+                                       href="@Url.Action("DownloadAttachment", "Transgression", new { id = Model.WarningId, fileName = fileName })">
+                                        @displayName
+                                    </a>
+                                </div>
+
+                                <button type="button"
+                                        class="ws-attach-remove btn btn-link p-0"
+                                        data-warning-id="@Model.WarningId"
+                                        data-file-name="@fileName">
+                                    Remove
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+</div>
