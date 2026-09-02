@@ -7,10 +7,7 @@
     var normalizedStatus = (Model.Status ?? "").Trim().ToLowerInvariant();
 
     var canNotifyLegalCompleted =
-        normalizedStatus != "draft" &&
-        normalizedStatus != "new" &&
-        normalizedStatus != "in progress" &&
-        normalizedStatus != "completed";
+        normalizedStatus == "pending";
     ViewData["Title"] = "Add More Information";
 
     string ValOrDash(string? value)
@@ -34,6 +31,8 @@
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
     var issueStatus = ValOrDash(Model.Status);
+    var issueType = ValOrDash(Model.Type);
+    var warningCategory = ValOrDash(Model.WarningSubtype);
 
     var issueCreatedOn = Model.CreatedOn == default
         ? "—"
@@ -89,7 +88,7 @@
                             style="border-radius:999px;"
                             id="btnNotifyLegalComplete"
                             onclick="notifyLegalIssueCompleted(this)">
-                        Notify Legal Completed
+                        Notify Legal Issued
                     </button>
                 }
 
@@ -137,6 +136,17 @@
                                 <div class="ws-ov-label">Status:</div>
                                 <div class="ws-ov-value">@issueStatus</div>
                             </div>
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Type:</div>
+                                <div class="ws-ov-value">@issueType</div>
+                            </div>
+                            @if (string.Equals(Model.Type, "Warning", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="ws-ov-row">
+                                    <div class="ws-ov-label">Warning category:</div>
+                                    <div class="ws-ov-value">@warningCategory</div>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -602,7 +612,7 @@
                 throw new Error(data.message || "Failed to notify Legal.");
             }
 
-            alert("Legal has been notified.");
+            alert("Legal has been notified that the issue was issued.");
             location.reload();
 
         } catch (err) {

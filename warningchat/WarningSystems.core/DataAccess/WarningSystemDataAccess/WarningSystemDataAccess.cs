@@ -25,9 +25,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
     {
         return await _context.Warnings
             .AsNoTracking()
-            .Where(warning =>
-                !warning.IsDeleted &&
-                !warning.Completed)
+            .Where(warning => !warning.IsDeleted)
             .Include(warning => warning.WarningCategories)
                 .ThenInclude(link => link.Category)
             .Include(warning => warning.Notes)
@@ -41,9 +39,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
     {
         return await _context.Warnings
             .AsNoTracking()
-            .Where(warning =>
-                !warning.IsDeleted &&
-                !warning.Completed)
+            .Where(warning => !warning.IsDeleted)
             .Include(warning =>
                 warning.WarningCategories)
                 .ThenInclude(link =>
@@ -566,10 +562,35 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         if (!string.IsNullOrWhiteSpace(status))
         {
             w.Status = status;
+            if (string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) &&
+                !w.SubmittedOn.HasValue)
+            {
+                w.SubmittedOn = NowSast;
+            }
         }
 
         w.LastStatusChangedOn = NowSast;
         w.LastStatusChangedBy = user;
+
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateWarningDecisionAsync(
+        long warningId,
+        string status,
+        string type,
+        string? warningSubtype,
+        string user)
+    {
+        var warning = await _context.Warnings
+            .FirstOrDefaultAsync(x => x.WarningId == warningId && !x.IsDeleted)
+            ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
+
+        warning.Status = status;
+        warning.Type = type;
+        warning.WarningSubtype = warningSubtype;
+        warning.LastStatusChangedOn = NowSast;
+        warning.LastStatusChangedBy = string.IsNullOrWhiteSpace(user) ? "system" : user.Trim();
 
         await _context.SaveChangesAsync();
     }
