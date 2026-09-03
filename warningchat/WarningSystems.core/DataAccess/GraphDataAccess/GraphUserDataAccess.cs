@@ -2,6 +2,7 @@
 using Microsoft.Graph.Models;
 using Microsoft.Identity.Web;
 using WarningSystems.Core.DataAccess.GraphDataAccess.Context;
+using WarningSystems.Core.Services;
 using WarningSystems.Core.ViewModels;
 
 namespace WarningSystems.Core.DataAccess.GraphDataAccess;
@@ -245,8 +246,7 @@ public class GraphUserDataAccess : IGraphUserDataAccess
                 Content = request.BodyHtml
             },
 
-            ToRecipients = request.ToRecipients
-                .Where(email => !string.IsNullOrWhiteSpace(email))
+            ToRecipients = EmailRecipientNormalizer.Normalize(request.ToRecipients)
                 .Select(email => new Recipient
                 {
                     EmailAddress = new EmailAddress
@@ -268,6 +268,12 @@ public class GraphUserDataAccess : IGraphUserDataAccess
                 })
                 .ToList()
         };
+
+        if (message.ToRecipients.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No valid email recipients are configured.");
+        }
 
         await SendEmailAsync(message,request.SaveToSentItems);
     }

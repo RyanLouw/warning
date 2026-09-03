@@ -7,7 +7,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="EmailTemplates\*.html" />
+		<!-- Keep the manifest name stable across Windows and Linux builds. -->
+		<EmbeddedResource Include="EmailTemplates/*.html"
+		                  LogicalName="WarningSystems.Core.EmailTemplates.%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -11,6 +11,7 @@ using WarningSystems.Core.DataAccess.SOPDataAccess;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
 using WarningSystems.Core.Models.Enum;
+using WarningSystems.Core.Services;
 using WarningSystems.Core.Services.Interface;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Models.DTO;
@@ -1854,10 +1855,7 @@ public class TransgressionManager : ITransgressionManager
                 nameof(email));
         }
 
-        var toList = email.ToRecipients
-            .Where(address => !string.IsNullOrWhiteSpace(address))
-            .Select(address => address.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        var toList = EmailRecipientNormalizer.Normalize(email.ToRecipients)
             .Select(address => new Recipient
             {
                 EmailAddress = new EmailAddress
@@ -1887,10 +1885,7 @@ public class TransgressionManager : ITransgressionManager
 
         if (email.CcRecipients is { Count: > 0 })
         {
-            var ccList = email.CcRecipients
-                .Where(address => !string.IsNullOrWhiteSpace(address))
-                .Select(address => address.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            var ccList = EmailRecipientNormalizer.Normalize(email.CcRecipients)
                 .Select(address => new Recipient
                 {
                     EmailAddress = new EmailAddress
@@ -1908,10 +1903,7 @@ public class TransgressionManager : ITransgressionManager
 
         if (email.BccRecipients is { Count: > 0 })
         {
-            var bccList = email.BccRecipients
-                .Where(address => !string.IsNullOrWhiteSpace(address))
-                .Select(address => address.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            var bccList = EmailRecipientNormalizer.Normalize(email.BccRecipients)
                 .Select(address => new Recipient
                 {
                     EmailAddress = new EmailAddress
