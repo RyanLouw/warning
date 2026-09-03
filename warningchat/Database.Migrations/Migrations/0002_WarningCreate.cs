@@ -13,7 +13,6 @@ public class _0002_WarningCreate : Migration
 
     public override void Up()
     {
-        if (Schema.Table("Benchmark").Exists())
-            Execute.Script(@"Migrations\Scripts\0002.sql");
+        Execute.Script(@"Migrations\Scripts\0002.sql");
     }
 }

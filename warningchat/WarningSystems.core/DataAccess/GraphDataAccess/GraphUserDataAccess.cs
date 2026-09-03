@@ -72,6 +72,83 @@ public class GraphUserDataAccess : IGraphUserDataAccess
             .ToList();
     }
 
+    /// <summary>
+    /// Returns the signed-in user's descendants together with the descendants
+    /// of users who report to the same manager. Same-level users are excluded.
+    /// If the signed-in user has no manager (for example, the CEO), all of
+    /// their descendants are returned.
+    /// </summary>
+    public async Task<List<User>> GetUsersBelowMyLevelAsync()
+    {
+        var me = await GetMeAsync();
+        if (string.IsNullOrWhiteSpace(me?.Id))
+            return [];
+
+        var users = new Dictionary<string, User>(StringComparer.OrdinalIgnoreCase);
+        var visitedManagers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Always include the user's own reporting branch.
+        await AddReportsRecursiveAsync(me.Id, users, visitedManagers);
+
+        var manager = await GetManagerAsync(me.Id);
+        if (!string.IsNullOrWhiteSpace(manager?.Id))
+        {
+            var sameLevelUsers = await GetDirectReportsUsersAsync(manager.Id);
+
+            foreach (var sameLevelUser in sameLevelUsers)
+            {
+                if (string.IsNullOrWhiteSpace(sameLevelUser.Id) ||
+                    sameLevelUser.Id.Equals(me.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Add only the peer's descendants, never the peer.
+                await AddReportsRecursiveAsync(
+                    sameLevelUser.Id,
+                    users,
+                    visitedManagers);
+            }
+        }
+
+        users.Remove(me.Id);
+
+        return users.Values
+            .OrderBy(user => user.DisplayName)
+            .ThenBy(user => user.UserPrincipalName)
+            .ToList();
+    }
+
+    public async Task<User?> GetManagerAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return null;
+
+        try
+        {
+            var manager = await _graph.Users[userId].Manager.GetAsync(cfg =>
+            {
+                cfg.QueryParameters.Select =
+                [
+                    "id",
+                    "displayName",
+                    "mail",
+                    "userPrincipalName",
+                    "jobTitle",
+                    "department"
+                ];
+            });
+
+            return manager as User;
+        }
+        catch (Microsoft.Kiota.Abstractions.ApiException ex)
+            when (ex.ResponseStatusCode == 404)
+        {
+            // A top-level employee, such as the CEO, has no manager.
+            return null;
+        }
+    }
+
     private async Task AddReportsRecursiveAsync(
         string managerId,
         Dictionary<string, User> users,
@@ -92,8 +169,11 @@ public class GraphUserDataAccess : IGraphUserDataAccess
         }
     }
 
-    private async Task<List<User>> GetDirectReportsUsersAsync(string userId)
+    public async Task<List<User>> GetDirectReportsUsersAsync(string userId)
     {
+        if (string.IsNullOrWhiteSpace(userId))
+            return [];
+
         var response = await _graph.Users[userId].DirectReports.GetAsync(cfg =>
         {
             cfg.QueryParameters.Select = new[]

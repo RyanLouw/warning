@@ -6,6 +6,8 @@ public class CompleteTransgressionDto
 {
     public int WarningId { get; set; }
     public string Status { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string? WarningSubtype { get; set; }
     public IFormFile? File { get; set; }
 }
 

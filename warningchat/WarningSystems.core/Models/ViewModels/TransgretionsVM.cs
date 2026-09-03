@@ -13,6 +13,8 @@ public class TransgretionsVM
     public DateTime CreatedOn { get; set; }
 
     public required string Status { get; set; }
+    public string Type { get; set; } = "Issue";
+    public string? WarningSubtype { get; set; }
 
     public int CategoryId { get; set; }
 

@@ -184,6 +184,16 @@ public class WarningSystemDbContext : DbContext
                 .IsUnicode(false)
                 .IsRequired();
 
+            e.Property(x => x.Type)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Issue")
+                .IsRequired();
+
+            e.Property(x => x.WarningSubtype)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+
             e.Property(x => x.CreatedOn)
                 .HasDefaultValueSql("SYSUTCDATETIME()");
 
@@ -202,6 +212,10 @@ public class WarningSystemDbContext : DbContext
                 .IsRequired();
 
             e.Property(x => x.IsDeleted)
+                .HasDefaultValue(false)
+                .IsRequired();
+
+            e.Property(x => x.HideFromTeamLead)
                 .HasDefaultValue(false)
                 .IsRequired();
         });

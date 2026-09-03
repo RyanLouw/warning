@@ -17,7 +17,6 @@ public class _0003_StoreProc : Migration
         {
             Create.Schema("ws");
         }
-        if (Schema.Table("Benchmark").Exists())
-            Execute.Script(@"Migrations\Scripts\0003.sql");
+        Execute.Script(@"Migrations\Scripts\0003.sql");
     }
 }
