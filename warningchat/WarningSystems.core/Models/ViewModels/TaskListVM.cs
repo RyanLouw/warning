@@ -14,6 +14,10 @@ public class TaskListVM
     public int DraftCount { get; set; }
     public int New { get; set; }
     public int InProgress { get; set; }
+    public int Pending { get; set; }
+    public int Completed { get; set; }
+    public int Validated { get; set; }
+    public int Invalid { get; set; }
     public int Due { get; set; }
     public int OverDue { get; set; }
 

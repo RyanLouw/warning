@@ -50,6 +50,26 @@
             </div>
 
             <div class="status-pill">
+                <span class="label">Pending</span>
+                <span class="count count-pending">@Model.Pending</span>
+            </div>
+
+            <div class="status-pill">
+                <span class="label">Completed</span>
+                <span class="count count-completed">@Model.Completed</span>
+            </div>
+
+            <div class="status-pill">
+                <span class="label">Validated</span>
+                <span class="count count-validated">@Model.Validated</span>
+            </div>
+
+            <div class="status-pill">
+                <span class="label">Invalid</span>
+                <span class="count count-invalid">@Model.Invalid</span>
+            </div>
+
+            <div class="status-pill">
                 <span class="label">Due</span>
                 <span class="count count-due">@Model.Due.ToString()</span>
             </div>

@@ -667,6 +667,14 @@ public class TransgressionManager : ITransgressionManager
             else if (status.Equals("InProgress", StringComparison.OrdinalIgnoreCase) ||
                      status.Equals("In Progress", StringComparison.OrdinalIgnoreCase))
             { vm.InProgress++; }
+            else if (status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+            { vm.Pending++; }
+            else if (status.Equals("Completed", StringComparison.OrdinalIgnoreCase))
+            { vm.Completed++; }
+            else if (status.Equals("Validated", StringComparison.OrdinalIgnoreCase))
+            { vm.Validated++; }
+            else if (status.Equals("Invalid", StringComparison.OrdinalIgnoreCase))
+            { vm.Invalid++; }
 
             if (row.LegalExpiryDate.HasValue)
             {

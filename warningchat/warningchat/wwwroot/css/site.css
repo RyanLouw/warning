@@ -145,13 +145,14 @@ body {
 
 .status-bar {
     display: flex;
+    flex-wrap: wrap;
     gap: 1.75rem;
-    justify-content: space-between;
+    justify-content: flex-start;
     margin-bottom: 1.75rem;
 }
 
 .status-pill {
-    flex: 1;
+    flex: 1 1 240px;
     min-width: 240px;
     max-width: 320px;
     display: flex;
@@ -189,6 +190,22 @@ body {
 
 .count-progress {
     background: #0aa84f;
+}
+
+.count-pending {
+    background: #7c3aed;
+}
+
+.count-completed {
+    background: #047857;
+}
+
+.count-validated {
+    background: #1d4ed8;
+}
+
+.count-invalid {
+    background: #64748b;
 }
 
 .count-due {
