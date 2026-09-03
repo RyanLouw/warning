@@ -37,6 +37,9 @@
 		<None Update="Migrations\Scripts\0010.sql">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
+		<None Update="Migrations\Scripts\0011.sql">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 		<None Update="Migrations\Scripts\0006.sql">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
