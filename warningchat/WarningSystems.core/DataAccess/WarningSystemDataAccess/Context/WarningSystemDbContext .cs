@@ -214,6 +214,10 @@ public class WarningSystemDbContext : DbContext
             e.Property(x => x.IsDeleted)
                 .HasDefaultValue(false)
                 .IsRequired();
+
+            e.Property(x => x.HideFromTeamLead)
+                .HasDefaultValue(false)
+                .IsRequired();
         });
 
         // --------------------------
