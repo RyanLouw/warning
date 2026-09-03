@@ -13,7 +13,6 @@ public class _0006_Notes : Migration
 
     public override void Up()
     {
-        if (Schema.Table("Benchmark").Exists())
-            Execute.Script(@"Migrations\Scripts\0006.sql");
+        Execute.Script(@"Migrations\Scripts\0006.sql");
     }
 }

@@ -13,7 +13,6 @@ public class _0008_IssueWorkflow : Migration
 
     public override void Up()
     {
-        if (Schema.Table("Benchmark").Exists())
-            Execute.Script(@"Migrations\Scripts\0008.sql");
+        Execute.Script(@"Migrations\Scripts\0008.sql");
     }
 }
