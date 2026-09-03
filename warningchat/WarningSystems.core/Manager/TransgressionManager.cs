@@ -738,7 +738,7 @@ public class TransgressionManager : ITransgressionManager
 
     private async Task<List<User>> UnderMe()
     {
-        return await _graphUserDataAccess.GetUsersUnderMeAsync();
+        return await _graphUserDataAccess.GetUsersBelowMyLevelAsync();
     }
 
     public async Task<AdminVM> BuildAdminView()
