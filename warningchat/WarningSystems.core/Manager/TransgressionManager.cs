@@ -2464,8 +2464,6 @@ public class TransgressionManager : ITransgressionManager
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var legalUsername = "Legal Team";
-
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={warningId}";
 
             var employeeDisplayName = await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
@@ -2497,122 +2495,25 @@ public class TransgressionManager : ITransgressionManager
                 $"{_applicationOptions.BaseUrl.TrimEnd('/')}" +
                 $"/Legal/Index/{warningInfo.WarningId}";
 
-            var noteDisplay = string.IsNullOrWhiteSpace(noteText)
-                ? "No note was added."
-                : noteText.Trim();
-
-            var uploadedFilesDisplay = validFiles.Any()
-                ? string.Join("<br/>", validFiles.Select(x => System.Net.WebUtility.HtmlEncode(x.FileName)))
-                : "No documents were uploaded.";
-
-            var safeNoteText = System.Net.WebUtility.HtmlEncode(noteDisplay);
-            var safeLegalUsername = System.Net.WebUtility.HtmlEncode(legalUsername);
-            var safeEmployeeDisplayName = System.Net.WebUtility.HtmlEncode(employeeDisplayName);
-            var safeSubmittedByDisplayName = System.Net.WebUtility.HtmlEncode(submittedByDisplayName);
-            var safeCategory = System.Net.WebUtility.HtmlEncode(
-                warningInfo.Category.Name ?? warningInfo.CategoryId.ToString());
-            var safeStatus = System.Net.WebUtility.HtmlEncode(warningInfo.Status ?? "");
-            var safeLegalUrl = System.Net.WebUtility.HtmlEncode(legalUrl);
+            var bodyHtml = _emailTemplateRenderer.Render(
+                "IssueCreated",
+                new Dictionary<string, string?>
+                {
+                    ["EmployeeDisplayName"] = employeeDisplayName,
+                    ["SubmittedByDisplayName"] = submittedByDisplayName,
+                    ["Category"] = warningInfo.Category?.Name
+                        ?? warningInfo.CategoryId.ToString(),
+                    ["Status"] = warningInfo.Status,
+                    ["WarningId"] = warningInfo.WarningId.ToString(),
+                    ["DueDate"] = warningInfo.LegalExpiryDate?.ToString("dd/MM/yyyy")
+                        ?? "—",
+                    ["LegalUrl"] = legalUrl
+                });
 
             var req = new SendEmailRequest
             {
-                Subject = $"Warning System | More information added - Issue {warningInfo.WarningId}",
-                BodyHtml = $@"
-                <div style=""font-family: Arial, sans-serif; color:#333; line-height:1.5;"">
-
-                    <h2 style=""color:#014678; margin-bottom:8px;"">
-                        More Information Added
-                    </h2>
-
-                    <p>Hi {safeLegalUsername},</p>
-
-                    <p>
-                        The requested information has been added for issue
-                        <strong>#{warningInfo.WarningId}</strong>.
-                    </p>
-
-                    <table style=""border-collapse:collapse; margin-top:15px; margin-bottom:15px; width:100%; max-width:650px;"">
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Employee
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeEmployeeDisplayName}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Submitted By
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeSubmittedByDisplayName}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Category
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeCategory}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Current Status
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeStatus}
-                            </td>
-                        </tr>
-                    </table>
-
-                    <p style=""margin-bottom:6px;""><strong>Information Added:</strong></p>
-
-                    <div style=""
-                        border:1px solid #ddd;
-                        background:#f8f9fa;
-                        padding:12px;
-                        border-radius:6px;
-                        white-space:pre-wrap;
-                        margin-bottom:18px;"">
-                        {safeNoteText}
-                    </div>
-
-                    <p style=""margin-bottom:6px;""><strong>Documents Uploaded:</strong></p>
-
-                    <div style=""
-                        border:1px solid #ddd;
-                        background:#f8f9fa;
-                        padding:12px;
-                        border-radius:6px;
-                        margin-bottom:18px;"">
-                        {uploadedFilesDisplay}
-                    </div>
-
-                    <p>
-                        Please open the link below to review the submitted information:
-                    </p>
-
-                    <p>
-                        <a href=""{safeLegalUrl}""
-                           style=""
-                               display:inline-block;
-                               padding:10px 18px;
-                               background:#014678;
-                               color:#ffffff;
-                               text-decoration:none;
-                               border-radius:999px;
-                               font-weight:bold;"">
-                            Review Issue
-                        </a>
-                    </p>
-
-                    <p style=""font-size:12px; color:#666; margin-top:20px;"">
-                        If the button does not work, copy and paste this link into your browser:<br/>
-                        <span>{safeLegalUrl}</span>
-                    </p>
-
-                </div>",
+                Subject = "Warning System | Issue Created",
+                BodyHtml = bodyHtml,
                 ToRecipients = legalRecipients,
                 SaveToSentItems = true
             };
