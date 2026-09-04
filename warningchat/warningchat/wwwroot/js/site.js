@@ -6,6 +6,7 @@
 
     let pendingOperations = 0;
     let showTimer = null;
+    let navigationInProgress = false;
 
     function render() {
         const isBusy = pendingOperations > 0;
@@ -39,7 +40,22 @@
 
     function reset() {
         pendingOperations = 0;
+        navigationInProgress = false;
         render();
+    }
+
+    function beginNavigation() {
+        if (navigationInProgress) return;
+
+        navigationInProgress = true;
+        show();
+
+        // Navigation leaves the current document in place while the server
+        // builds the next page, so reveal the loader immediately rather than
+        // waiting for the short-request delay used by fetch and XHR.
+        clearTimeout(showTimer);
+        showTimer = null;
+        loader.classList.add("app-loader--visible");
     }
 
     window.appLoader = {
@@ -79,14 +95,13 @@
         }
     };
 
-    // Submit only fires after native validation succeeds. Waiting until event
-    // dispatch completes avoids leaving the loader open for AJAX forms that
-    // call preventDefault and then use the fetch/XHR hooks below.
+    // Listen during bubbling so a form's submit handler can prevent the native
+    // navigation first. AJAX submissions are covered by the fetch/XHR hooks;
+    // treating them as native submissions as well would leave an unmatched
+    // loader operation after the request completes.
     document.addEventListener("submit", event => {
-        queueMicrotask(() => {
-            if (!event.defaultPrevented) show();
-        });
-    }, true);
+        if (!event.defaultPrevented) beginNavigation();
+    });
 
     document.addEventListener("click", event => {
         const link = event.target.closest("a[href]");
@@ -101,10 +116,13 @@
         const destination = new URL(link.href, window.location.href);
         if (destination.origin !== window.location.origin) return;
 
-        queueMicrotask(() => {
-            if (!event.defaultPrevented) show();
-        });
-    }, true);
+        if (!event.defaultPrevented) beginNavigation();
+    });
+
+    // Covers controller requests started without clicking a normal link, such
+    // as browser reloads, location changes, and history navigation. Calls are
+    // idempotent because a link or form may already have started the loader.
+    window.addEventListener("beforeunload", beginNavigation);
 
     // A page restored from the back-forward cache can retain its old busy DOM.
     window.addEventListener("pageshow", reset);
