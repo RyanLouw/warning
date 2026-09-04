@@ -13,7 +13,6 @@ public class _0005_Categorys : Migration
 
     public override void Up()
     {
-        if (Schema.Table("Benchmark").Exists())
-            Execute.Script(@"Migrations\Scripts\0005.sql");
+        Execute.Script(@"Migrations\Scripts\0005.sql");
     }
 }

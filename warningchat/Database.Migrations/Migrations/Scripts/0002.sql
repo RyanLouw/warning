@@ -138,7 +138,10 @@ BEGIN
         SubmittedOn DATETIME2(0) NULL,
         LegalExpiryDate DATE NULL,
         LastStatusChangedOn DATETIME2(0) NULL,
-        LastStatusChangedBy VARCHAR(100) NULL
+        LastStatusChangedBy VARCHAR(100) NULL,
+        Completed BIT NOT NULL CONSTRAINT DF_Warning_Completed DEFAULT ((0)),
+        IsDeleted BIT NOT NULL CONSTRAINT DF_Warning_IsDeleted DEFAULT ((0)),
+        HideFromTeamLead BIT NOT NULL CONSTRAINT DF_Warning_HideFromTeamLead DEFAULT ((0))
     );
 END
 
@@ -197,4 +200,3 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name='FK_WarningEvidence_War
     ALTER TABLE ws.WarningEvidence
     ADD CONSTRAINT FK_WarningEvidence_Warning
     FOREIGN KEY (WarningId) REFERENCES ws.Warning(WarningId);
-

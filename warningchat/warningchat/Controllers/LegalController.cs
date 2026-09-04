@@ -153,26 +153,52 @@ namespace WarningSystems.Controllers
             if (dto.WarningId is 0) return BadRequest("Invalid warningId.");
             if (string.IsNullOrWhiteSpace(dto.Status)) return BadRequest("Status required.");
 
-            if (dto.File is not  null && dto.File.Length is > 0)
+            try
             {
-                var mediaType = _fileStorageService.GetAttachmentType(dto.File);
-                var type = "LegalComplete";
+                if (string.IsNullOrWhiteSpace(dto.Type))
+                    return BadRequest("Type required.");
 
-                var fileName = await _fileStorageService.UploadWarningFileAsync(dto.WarningId, type, dto.File);
+                if (dto.File is not null && dto.File.Length is > 0)
+                {
+                    var mediaType = _fileStorageService.GetAttachmentType(dto.File);
+                    var attachmentType = "LegalDecision";
+
+                    var fileName = await _fileStorageService.UploadWarningFileAsync(
+                        dto.WarningId, attachmentType, dto.File);
+
+                    await _transgressionManager.SaveEvidenceAsync(
+                        dto.WarningId, fileName, mediaType, dto.File.Length, null, 3, true);
+                }
+
+                await _transgressionManager.ApplyLegalDecisionAsync(
+                    dto.WarningId, dto.Type, dto.WarningSubtype);
                 await _transgressionManager.SendEmailToTeamLeadAsync(dto);
 
-                await _transgressionManager.SaveEvidenceAsync(
-                    dto.WarningId,
-                    fileName,
-                    mediaType,
-                    dto.File.Length,
-                    null, 3, true
-                );
+                return Ok(new { success = true });
             }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
 
-            await _transgressionManager.UpdateWarningStatusAsync(dto.WarningId, null, dto.Status);
+        [Authorize(Roles = "Legal")]
+        [HttpPost]
+        public async Task<IActionResult> ValidateTransgression(
+            [FromBody] NotifyLegalIssueCompletedDto dto)
+        {
+            if (dto is null || dto.WarningId is 0)
+                return BadRequest(new { success = false, message = "Invalid warning id." });
 
-            return Ok(new { success = true });
+            try
+            {
+                await _transgressionManager.ValidateWarningAsync(dto.WarningId);
+                return Ok(new { success = true, status = "Validated" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [Authorize(Roles = "Legal")]

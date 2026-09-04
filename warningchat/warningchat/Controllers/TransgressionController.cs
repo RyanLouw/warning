@@ -233,6 +233,9 @@ namespace WarningSystems.Controllers
             if (string.IsNullOrWhiteSpace(dto.Status))
                 return BadRequest(new { success = false, message = "Status missing." });
 
+            if (!string.Equals(dto.Status, "New", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { success = false, message = "A draft can only be submitted as New." });
+
             DateOnly? due = null;
 
             if (!string.IsNullOrWhiteSpace(dto.DueDate))
