@@ -56,6 +56,8 @@ public interface IWarningSystemDataAccess
 
     public Task UpdateWarningStatusAsync(long warningId, DateOnly? dueDate, string? status, string user);
 
+    public Task UpdateWarningDecisionAsync(long warningId, string status, string type,string? warningSubtype, string user);
+
     public Task<long?> SaveEvidenceAsync(long warningId, string? fileName, string? mediaType, long? fileSizeBytes,
         string user, string? notes, int? noteTypeId);
 

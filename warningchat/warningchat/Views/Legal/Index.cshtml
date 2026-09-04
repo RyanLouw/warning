@@ -1,5 +1,4 @@
-﻿
-@using WarningSystems.Core.Services
+﻿@using WarningSystems.Core.Services
 @using WarningSystems.Core.ViewModels
 
 @model WarningSystems.Core.ViewModels.LegalWizardVm
@@ -28,6 +27,10 @@
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
     var issueStatus = ValOrDash(Model.Status);
+    var issueType = ValOrDash(Model.Type);
+    var warningCategory = ValOrDash(Model.WarningSubtype);
+    var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
+    var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
 
     var issueCreatedOn = Model.CreatedOn == default
         ? "—"
@@ -69,12 +72,26 @@
 
 
         <div class="page-actions d-flex gap-2">
-            <button type="button"
-                    class="ws-btn-primary-pill"
-                    data-bs-toggle="modal"
-                    data-bs-target="#completeModal">
-                Update Status
-            </button>
+            @if (canRecordDecision)
+            {
+                <button type="button"
+                        class="ws-btn-primary-pill"
+                        data-bs-toggle="modal"
+                        data-bs-target="#completeModal">
+                    Record Decision
+                </button>
+            }
+
+            @if (canValidate)
+            {
+                <button type="button"
+                        class="btn btn-success"
+                        style="border-radius:999px;"
+                        id="btnValidateIssue"
+                        onclick="validateIssue(this)">
+                    Validate
+                </button>
+            }
 
             <button type="button"
                     class="ws-btn-primary-pill"
@@ -84,25 +101,6 @@
                 Change Due Date
             </button>
 
-            <button type="button"
-                    id="btnToggleTeamLeadVisibility"
-                    class="ws-btn-primary-pill @(Model.HideFromTeamLead ? "ws-sensitive-hidden" : "")"
-                    style="border-radius:999px;"
-                    data-warning-id="@Model.WarningId"
-                    data-is-hidden="@Model.HideFromTeamLead.ToString().ToLowerInvariant()"
-                    onclick="toggleTeamLeadVisibility(this)">
-
-                <span class="ws-visibility-button-text">
-                    @if (Model.HideFromTeamLead)
-                    {
-                        <text>Already Hidden from Team Leads</text>
-                    }
-                    else
-                    {
-                        <text>Hide Sensitive Information</text>
-                    }
-                </span>
-            </button>
         </div>
         <div class="mb-4">
             <h5 class="mb-2">Issue Recap</h5>
@@ -136,6 +134,17 @@
                                 <div class="ws-ov-label">Status:</div>
                                 <div class="ws-ov-value">@issueStatus</div>
                             </div>
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Type:</div>
+                                <div class="ws-ov-value">@issueType</div>
+                            </div>
+                            @if (string.Equals(Model.Type, "Warning", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="ws-ov-row">
+                                    <div class="ws-ov-label">Warning category:</div>
+                                    <div class="ws-ov-value">@warningCategory</div>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -251,7 +260,7 @@
                     </button>
                 </li>
             </ul>
-           
+
             <div class="tab-content">
 
                 <!-- NOTES TAB -->
@@ -352,7 +361,7 @@
                                             foreach (var interaction in orderedInteractions)
                                             {
                                                 <tr>
-                                                    <td >
+                                                    <td>
                                                         @interaction.NoteText
                                                     </td>
 
@@ -712,7 +721,7 @@
         <div class="modal-content">
 
             <div class="modal-header">
-                <h5 class="modal-title">Complete Issue</h5>
+                <h5 class="modal-title">Record Legal Decision</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
@@ -727,7 +736,7 @@
 
                 <div class="border rounded p-3">
 
-                    <div class="fw-semibold mb-2">Select Status</div>
+                    <div class="fw-semibold mb-2">Select legal decision</div>
 
                     <div class="form-check">
                         <input class="form-check-input"
@@ -765,20 +774,22 @@
                                value="Hearing">
                         <label class="form-check-label" for="stHearing">Hearing</label>
                     </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stComplete"
-                               value="Complete">
-                        <label class="form-check-label" for="stComplete">Complete</label>
+
+                    <div class="mb-3 d-none" id="warningSubtypeGroup">
+                        <label class="form-label" for="warningSubtype">Warning category</label>
+                        <select class="form-select" id="warningSubtype">
+                            <option value="">Select warning category</option>
+                            <option value="Verbal warning">Verbal warning</option>
+                            <option value="1st written warning">1st written warning</option>
+                            <option value="2nd written warning">2nd written warning</option>
+                            <option value="Final warning">Final warning</option>
+                        </select>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Upload supporting document (optional)</label>
                         <input class="form-control" type="file" id="completeFile" />
                     </div>
-
                 </div>
             </div>
 
@@ -1007,6 +1018,14 @@
             return;
         }
 
+        const type = status;
+        const warningSubtype = document.getElementById("warningSubtype")?.value || "";
+
+        if (type === "Warning" && !warningSubtype) {
+            alert("Please select a warning category.");
+            return;
+        }
+
         const fileInput = document.getElementById("completeFile");
         const file = (fileInput && fileInput.files && fileInput.files.length > 0)
             ? fileInput.files[0]
@@ -1018,6 +1037,8 @@
             const fd = new FormData();
             fd.append("WarningId", warningId.toString());
             fd.append("Status", status);
+            fd.append("Type", type);
+            fd.append("WarningSubtype", warningSubtype);
 
             if (file) {
                 fd.append("File", file, file.name);
@@ -1050,6 +1071,51 @@
             btn.disabled = false;
         }
     }
+
+    async function validateIssue(btn) {
+        const warningId = @Model.WarningId;
+        const confirmed = confirm(
+            "Confirm that all required steps are complete and the Team Leader or Line Manager added the information to PaySpace."
+        );
+
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Validating...";
+
+        try {
+            const res = await fetch("/Legal/ValidateTransgression", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ warningId: warningId })
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || "Failed to validate the issue.");
+            }
+
+            location.reload();
+        } catch (err) {
+            alert("Failed to validate: " + (err?.message || err));
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    document.querySelectorAll('input[name="completeStatus"][type="radio"]').forEach(input => {
+        input.addEventListener("change", function () {
+            const group = document.getElementById("warningSubtypeGroup");
+            const select = document.getElementById("warningSubtype");
+            const isWarning = this.value === "Warning";
+            group?.classList.toggle("d-none", !isWarning);
+            if (select) {
+                select.required = isWarning;
+                if (!isWarning) select.value = "";
+            }
+        });
+    });
 
     function showDueDateMsg(text, isError) {
         const el = document.getElementById("dueDateSaveMsg");
@@ -1129,121 +1195,6 @@
 
         } catch (err) {
             showDueDateMsg("Network error: " + (err?.message || err), true);
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-
-
-
-        async function toggleTeamLeadVisibility(btn) {
-        const warningId = Number.parseInt(
-            btn.dataset.warningId || "0",
-            10
-        );
-
-        const currentlyHidden =
-            btn.dataset.isHidden === "true";
-
-        const newHiddenValue =
-            !currentlyHidden;
-
-        if (!warningId) {
-            alert("Missing WarningId.");
-            return;
-        }
-
-        const confirmationMessage = newHiddenValue
-            ? "Hide this sensitive information from Team Leads?"
-            : "Make this information visible to Team Leads again?";
-
-        if (!window.confirm(confirmationMessage)) {
-            return;
-        }
-
-        const textElement =
-            btn.querySelector(
-                ".ws-visibility-button-text"
-            );
-
-        const originalText =
-            textElement?.textContent || "";
-
-        btn.disabled = true;
-
-        if (textElement) {
-            textElement.textContent = "Saving...";
-        }
-
-        try {
-            const response = await fetch(
-                "/Legal/SetTeamLeadVisibility",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        warningId: warningId,
-                        hideFromTeamLead: newHiddenValue
-                    })
-                }
-            );
-
-            const data =
-                await response.json().catch(() => ({}));
-
-            if (!response.ok || data.success === false) {
-                throw new Error(
-                    data.message ||
-                    "The visibility could not be updated."
-                );
-            }
-
-            const isNowHidden =
-                data.hideFromTeamLead === true;
-
-            btn.dataset.isHidden =
-                String(isNowHidden);
-
-            if (textElement) {
-                textElement.textContent = isNowHidden
-                    ? "Already Hidden from Team Leads"
-                    : "Hide Sensitive Information";
-            }
-
-            btn.classList.toggle(
-                "ws-sensitive-hidden",
-                isNowHidden
-            );
-
-            btn.title = isNowHidden
-                ? "Click to make this issue visible to Team Leads again."
-                : "Click to hide this sensitive issue from Team Leads.";
-
-            console.log(
-                "Team Lead visibility updated:",
-                {
-                    warningId: warningId,
-                    hideFromTeamLead: isNowHidden
-                }
-            );
-        } catch (error) {
-            console.error(
-                "Visibility update failed:",
-                error
-            );
-
-            alert(
-                error?.message ||
-                "The visibility could not be updated."
-            );
-
-            if (textElement) {
-                textElement.textContent =
-                    originalText;
-            }
         } finally {
             btn.disabled = false;
         }

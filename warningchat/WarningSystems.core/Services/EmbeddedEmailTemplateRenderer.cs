@@ -10,7 +10,8 @@ public sealed class EmbeddedEmailTemplateRenderer
     : IEmailTemplateRenderer
 {
     private readonly Assembly _assembly;
-
+    private const string TemplateResourcePrefix =
+       "WarningSystems.Core.EmailTemplates.";
     private readonly ConcurrentDictionary<string, string> _templateCache =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -50,20 +51,18 @@ public sealed class EmbeddedEmailTemplateRenderer
 
     private string LoadTemplate(string templateName)
     {
-        var expectedSuffix =
-            $".EmailTemplates.{templateName}.html";
+        var expectedResourceName =
+            $"{TemplateResourcePrefix}{templateName}.html";
 
-        var resourceName = _assembly
-            .GetManifestResourceNames()
-            .FirstOrDefault(name =>
-                name.EndsWith(
-                    expectedSuffix,
-                    StringComparison.OrdinalIgnoreCase));
+        var resourceName = _assembly.GetManifestResourceNames()
+           .FirstOrDefault(name => string.Equals(
+               name,
+               expectedResourceName,
+               StringComparison.OrdinalIgnoreCase));
 
         if (resourceName is null)
         {
-            throw new InvalidOperationException(
-                $"Email template '{templateName}' could not be found.");
+            throw new InvalidOperationException($"Email template '{templateName}' could not be found as embedded resource " +$"'{expectedResourceName}'.");
         }
 
         using var stream =

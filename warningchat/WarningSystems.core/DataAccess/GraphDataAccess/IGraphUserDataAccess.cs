@@ -13,6 +13,12 @@ public interface IGraphUserDataAccess
 
     public Task<List<User>> GetUsersUnderMeAsync();
 
+    public Task<User?> GetManagerAsync(string userId);
+
+    public Task<List<User>> GetDirectReportsUsersAsync(string userId);
+
+    public Task<List<User>> GetUsersBelowMyLevelAsync();
+
     public Task SendEmailAsync(Message message, bool saveToSentItems = true);
     public Task SendEmailAsync(SendEmailRequest request);
 }

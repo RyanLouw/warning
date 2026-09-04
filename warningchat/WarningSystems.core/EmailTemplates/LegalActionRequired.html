@@ -7,7 +7,7 @@
     <p>Hi {{LegalUsername}},</p>
 
     <p>
-        The team lead has confirmed that warning
+        The team lead has confirmed that issue
         <strong>#{{WarningId}}</strong>
         has been issued to the employee.
     </p>
@@ -21,7 +21,7 @@
     <table style="border-collapse:collapse; margin-top:15px; margin-bottom:15px; width:100%; max-width:650px;">
         <tr>
             <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
-                Warning ID
+                Issue ID
             </td>
             <td style="padding:8px; border:1px solid #ddd;">
                 #{{WarningId}}
@@ -63,6 +63,22 @@
                 {{Status}}
             </td>
         </tr>
+        <tr>
+            <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                Type
+            </td>
+            <td style="padding:8px; border:1px solid #ddd;">
+                {{Type}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                Warning Category
+            </td>
+            <td style="padding:8px; border:1px solid #ddd;">
+                {{WarningSubtype}}
+            </td>
+        </tr>
     </table>
 
     <p>
@@ -79,7 +95,7 @@
                text-decoration:none;
                border-radius:999px;
                font-weight:bold;">
-            Review Warning
+            Review Issue
         </a>
     </p>
 

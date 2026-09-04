@@ -2,7 +2,5 @@
 
 public interface IEmailTemplateRenderer
 {
-    public string Render(
-        string templateName,
-        IReadOnlyDictionary<string, string?> values);
+    public string Render(string templateName,IReadOnlyDictionary<string, string?> values);
 }

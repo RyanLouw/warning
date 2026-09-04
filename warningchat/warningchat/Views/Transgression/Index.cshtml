@@ -1,5 +1,4 @@
-﻿
-@using WarningSystems.Core.ViewModels
+﻿@using WarningSystems.Core.ViewModels
 @model WarningWizardVm
 
 @{
@@ -53,31 +52,31 @@
 
 
 
-        <div class="ws-content">
-            <div class="ws-pane active" data-pane="1">
-                @await Html.PartialAsync("Partials/_Transgression", Model)
-            </div>
+            <div class="ws-content">
+                <div class="ws-pane active" data-pane="1">
+                    @await Html.PartialAsync("Partials/_Transgression", Model)
+                </div>
 
-            <div class="ws-pane ws-pane-center" data-pane="2">
-                @await Html.PartialAsync("Partials/_Dates", Model)
-            </div>
+                <div class="ws-pane ws-pane-center" data-pane="2">
+                    @await Html.PartialAsync("Partials/_Dates", Model)
+                </div>
 
-            <div class="ws-pane" data-pane="3">
-                @await Html.PartialAsync("Partials/_Description", Model)
-            </div>
+                <div class="ws-pane" data-pane="3">
+                    @await Html.PartialAsync("Partials/_Description", Model)
+                </div>
 
-            <div class="ws-pane" data-pane="4">
-                @await Html.PartialAsync("Partials/_SopCompliance", Model)
-            </div>
+                <div class="ws-pane" data-pane="4">
+                    @await Html.PartialAsync("Partials/_SopCompliance", Model)
+                </div>
 
-            <div class="ws-pane" data-pane="5">
-                @await Html.PartialAsync("Partials/_Attachments", Model)
-            </div>
+                <div class="ws-pane" data-pane="5">
+                    @await Html.PartialAsync("Partials/_Attachments", Model)
+                </div>
 
-            <div class="ws-pane" data-pane="6">
-                @await Html.PartialAsync("Partials/_Overview", Model)
+                <div class="ws-pane" data-pane="6">
+                    @await Html.PartialAsync("Partials/_Overview", Model)
+                </div>
             </div>
-        </div>
 
         </div>
     </div>
@@ -147,7 +146,7 @@
                 document.addEventListener(
                     "DOMContentLoaded",
                     function () {
-     
+
                         window.setTimeout(
                             restoreStep,
                             0

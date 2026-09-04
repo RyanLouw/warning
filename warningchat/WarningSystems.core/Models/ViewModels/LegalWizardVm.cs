@@ -5,6 +5,8 @@ public class LegalWizardVm
     public long WarningId { get; set; }
     public  string EmployeeId { get; set; }
     public  string Status { get; set; }
+    public string Type { get; set; } = "Issue";
+    public string? WarningSubtype { get; set; }
     public DateTime CreatedOn { get; set; }
     public  string CreatedBy { get; set; }
 

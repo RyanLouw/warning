@@ -365,17 +365,17 @@
     <!-- LEFT:  -->
     <div class="col-12 col-lg-6">
         <style>
-            .ws-editor-card .ql-toolbar.ql-snow {
-                border: none !important;
-                background: #fcfcfc;
-                border-bottom: 1px solid #f0f0f0 !important;
-            }
+                    .ws-editor-card .ql-toolbar.ql-snow {
+                        border: none !important;
+                        background: #fcfcfc;
+                        border-bottom: 1px solid #f0f0f0 !important;
+                    }
 
-            .ws-editor-card .ql-container.ql-snow {
-                border: none !important;
-                height: 300px;
-                font-size: 16px;
-            }
+                    .ws-editor-card .ql-container.ql-snow {
+                        border: none !important;
+                        height: 300px;
+                        font-size: 16px;
+                    }
         </style>
         <div style="padding: 5px 25px 5px 0px; font-size: 13px; color: #6c757d;">
             @(q2?.QuestionText ?? "Please describe the transgression")
@@ -428,106 +428,40 @@
                 {
                     var qid = q.QuestionId;
 
-                    var options = GetOptions(
-                    q.ConfigJson,
-                    q.DefaultConfigJson);
+                    var options = GetOptions( q.ConfigJson,q.DefaultConfigJson);
 
-                    // Dropdown and radio rules.
-                    var allowMultiple = GetBoolRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                    false,
-                                    "allowMultiple");
+                    var allowMultiple = GetBoolRule( q.ConfigJson,q.DefaultConfigJson,false, "allowMultiple");
 
-                    var maxSelected = GetIntRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "maxSelected");
+                    var maxSelected = GetIntRule( q.ConfigJson,q.DefaultConfigJson,"maxSelected");
 
-                    var minSelected = GetIntRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "minSelected");
+                    var minSelected = GetIntRule( q.ConfigJson, q.DefaultConfigJson,"minSelected");
 
                     if (allowMultiple && q.IsRequired && !minSelected.HasValue)
                     {
                         minSelected = 1;
                     }
 
-                    // Text rules.
-                    var minLength = GetIntRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "minLength");
+                    var minLength = GetIntRule( q.ConfigJson,q.DefaultConfigJson, "minLength");
 
-                    var maxLength = GetIntRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "maxLength");
+                    var maxLength = GetIntRule(q.ConfigJson, q.DefaultConfigJson, "maxLength");
 
-                    var pattern = GetStringRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "pattern",
-                                    "regex");
+                    var pattern = GetStringRule( q.ConfigJson,q.DefaultConfigJson, "pattern","regex");
 
-                    // Number rules.
-                    var minimumNumber = GetDecimalRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "min",
-                                    "minimum",
-                                    "minValue");
+                    var minimumNumber = GetDecimalRule(q.ConfigJson,q.DefaultConfigJson,"min","minimum","minValue");
 
-                    var maximumNumber = GetDecimalRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "max",
-                                    "maximum",
-                                    "maxValue");
+                    var maximumNumber = GetDecimalRule(q.ConfigJson,q.DefaultConfigJson,"max","maximum","maxValue");
 
-                    var numberStep = GetDecimalRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "step");
+                    var numberStep = GetDecimalRule(q.ConfigJson,q.DefaultConfigJson,"step");
 
-                    var integerOnly = GetBoolRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                    false,
-                                    "integerOnly",
-                                    "wholeNumbersOnly");
+                    var integerOnly = GetBoolRule(q.ConfigJson,q.DefaultConfigJson,false,"integerOnly","wholeNumbersOnly");
 
-                    // Date rules.
-                    var minimumDate = NormalizeDate(
-                    GetStringRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "min",
-                                    "minDate",
-                                    "minimumDate"));
+                    var minimumDate = NormalizeDate(GetStringRule(q.ConfigJson,q.DefaultConfigJson,"min","minDate", "minimumDate"));
 
-                    var maximumDate = NormalizeDate(
-                    GetStringRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                                    "max",
-                                    "maxDate",
-                                    "maximumDate"));
+                    var maximumDate = NormalizeDate(GetStringRule(q.ConfigJson,q.DefaultConfigJson,"max", "maxDate","maximumDate"));
 
-                    var allowPastDates = GetBoolRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                    true,
-                                    "allowPast",
-                                    "allowPastDates");
+                    var allowPastDates = GetBoolRule(q.ConfigJson,q.DefaultConfigJson,true,"allowPast","allowPastDates");
 
-                    var allowFutureDates = GetBoolRule(
-                    q.ConfigJson,
-                    q.DefaultConfigJson,
-                    true,
-                                    "allowFuture",
-                                    "allowFutureDates");
+                    var allowFutureDates = GetBoolRule(q.ConfigJson,q.DefaultConfigJson,true,"allowFuture","allowFutureDates");
 
                     if (!allowPastDates && string.IsNullOrWhiteSpace(minimumDate))
                     {
@@ -597,20 +531,20 @@
                         }
                     }
                     else if (IsControl(q.ControlType, "Radio") ||
-                    IsControl(q.ControlType, "TrueFalse") ||
-                    IsControl(q.ControlType, "True/False") ||
-                    IsControl(q.ControlType, "YesNo") ||
-                    IsControl(q.ControlType, "Yes/No") ||
-                    IsControl(q.ControlType, "Boolean") ||
-                    IsControl(q.ControlType, "Bool"))
-                    {
-                        if (q.IsRequired)
-                        {
-                            ruleDescriptions.Add("Select one option");
-                        }
-                    }
-                    else if (IsControl(q.ControlType, "Number") ||
-                    IsControl(q.ControlType, "Numeric"))
+                             IsControl(q.ControlType, "TrueFalse") ||
+                             IsControl(q.ControlType, "True/False") ||
+                             IsControl(q.ControlType, "YesNo") ||
+                             IsControl(q.ControlType, "Yes/No") ||
+                             IsControl(q.ControlType, "Boolean") ||
+                             IsControl(q.ControlType, "Bool"))
+                            {
+                                if (q.IsRequired)
+                                {
+                                    ruleDescriptions.Add("Select one option");
+                                }
+                            }
+
+                    else if (IsControl(q.ControlType, "Number") || IsControl(q.ControlType, "Numeric"))
                     {
                         if (minimumNumber.HasValue && maximumNumber.HasValue)
                         {
@@ -695,12 +629,12 @@
                         {
                             <textarea class="form-control ws-text ws-answer-field"
                                       id="Q@(qid)_AnswerText"
-                          data-qid="@qid"
-                          rows="4"
-                          placeholder="Enter answer..."
-                          required="@(q.IsRequired ? "required" : null)"
-                          minlength="@minLength"
-                          maxlength="@maxLength">@(q.AnswerText ?? "")</textarea>
+                                      data-qid="@qid"
+                                      rows="4"
+                                      placeholder="Enter answer..."
+                                      required="@(q.IsRequired ? "required" : null)"
+                                      minlength="@minLength"
+                                      maxlength="@maxLength">@(q.AnswerText ?? "")</textarea>
 
                             <input type="hidden"
                                    id="Q@(qid)_AnswerJson"
@@ -918,12 +852,11 @@
             return;
         }
 
-        // Avoid creating a second Quill instance when the partial is reloaded.
         if (window.quillDesc) {
             try {
                 window.quillDesc.off("text-change");
             } catch {
-                // Ignore old instance cleanup errors.
+
             }
         }
 
@@ -1286,8 +1219,6 @@
 
             const hasValue = Boolean(answerText) || Boolean(answerJson);
 
-            // Required blank answers never reach this point because validation blocks them.
-            // Optional blank answers are not posted, preventing empty database rows.
             if (!hasValue && !required) {
                 return null;
             }

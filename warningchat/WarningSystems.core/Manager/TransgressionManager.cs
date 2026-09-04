@@ -11,6 +11,7 @@ using WarningSystems.Core.DataAccess.SOPDataAccess;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
 using WarningSystems.Core.Models.Enum;
+using WarningSystems.Core.Services;
 using WarningSystems.Core.Services.Interface;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Models.DTO;
@@ -65,16 +66,16 @@ public class TransgressionManager : ITransgressionManager
         bool isLegal = roles.Contains("Legal");
 
         bool isDraft = status == "draft";
-        bool isNewOrInProgress = status == "new" || status == "in progress";
-
         if (isUser && isDraft)
             return WarningRedirectTarget.TransgressionIndex;
 
+        // Legal must be able to reopen every submitted issue, including a
+        // Completed issue that is waiting for final validation.
+        if (isLegal && !isDraft)
+            return WarningRedirectTarget.LegalIndex;
+
         if (isUser && !isDraft)
             return WarningRedirectTarget.TransgressionTeamLeadWarning;
-
-        if (isLegal && isNewOrInProgress)
-            return WarningRedirectTarget.LegalIndex;
 
         return WarningRedirectTarget.HomeIndex;
     }
@@ -220,6 +221,8 @@ public class TransgressionManager : ITransgressionManager
                     Status = warning.Completed
                         ? "Completed"
                         : warning.Status,
+                    Type = warning.Type,
+                    WarningSubtype = warning.WarningSubtype,
 
                     CategoryId = warning.CategoryId,
                     CategoryIds = categoryIds,
@@ -258,9 +261,9 @@ public class TransgressionManager : ITransgressionManager
             })
             .ToList();
     }
-   
-    
-    
+
+
+
     public async Task<EmployeeDashboardVm> GetEmployeeDashboardAsync(
        string employeeId)
     {
@@ -544,7 +547,7 @@ public class TransgressionManager : ITransgressionManager
         }
     }
 
-   
+
     private async Task<Dictionary<string, string>> BuildUserLookupAsync(
         IEnumerable<string?> ids)
     {
@@ -627,10 +630,8 @@ public class TransgressionManager : ITransgressionManager
         else if (ctx.IsUser)
         {
             filtered = filtered.Where(r =>
-                !r.HideFromTeamLead &&
                 !string.IsNullOrWhiteSpace(r.EmployeeId) &&
-                underMeIds.Contains(r.EmployeeId.Trim()) &&
-                IsTeamLeadVisibleStatus(r.Status));
+                underMeIds.Contains(r.EmployeeId.Trim()));
         }
 
         if (ctx.IsChairperson)
@@ -640,15 +641,6 @@ public class TransgressionManager : ITransgressionManager
         }
 
         return filtered.ToList();
-    }
-
-    private static bool IsTeamLeadVisibleStatus(string? status)
-    {
-        var cleanStatus = (status ?? "").Trim();
-
-        return string.Equals(cleanStatus, "Draft", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(cleanStatus, "New", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(cleanStatus, "In Progress", StringComparison.OrdinalIgnoreCase);
     }
 
     private static HashSet<string> BuildUnderMeIdSet(List<User> underme)
@@ -747,7 +739,7 @@ public class TransgressionManager : ITransgressionManager
 
     private async Task<List<User>> UnderMe()
     {
-        return await _graphUserDataAccess.GetUsersUnderMeAsync();
+        return await _graphUserDataAccess.GetUsersBelowMyLevelAsync();
     }
 
     public async Task<AdminVM> BuildAdminView()
@@ -1509,6 +1501,8 @@ public class TransgressionManager : ITransgressionManager
             EmployeeIdDesplayName = employeeDisplayName,
             HideFromTeamLead = warning.HideFromTeamLead,
             Status = warning.Status,
+            Type = warning.Type,
+            WarningSubtype = warning.WarningSubtype,
             CreatedOn = warning.CreatedOn,
             CreatedBy = warning.CreatedBy,
             CreatedByDesplayName = createdByDisplayName,
@@ -1548,7 +1542,7 @@ public class TransgressionManager : ITransgressionManager
     bool hideFromTeamLead,
     string changedBy)
     {
-        
+
         return await _data
             .SetHideFromTeamLeadAsync(
                 warningId,
@@ -1660,6 +1654,7 @@ public class TransgressionManager : ITransgressionManager
                 CategoryId = categoryIds.First(),
 
                 Status = "Draft",
+                Type = "Issue",
                 CreatedBy = currentUserId,
                 CreatedOn = NowSast,
                 LastStatusChangedBy = currentUserId,
@@ -1671,7 +1666,7 @@ public class TransgressionManager : ITransgressionManager
                      CategoryId = categoryId
                  })
                  .ToList()
-                    };
+            };
 
             warningId = await _data.CreateWarningAsync(
                 warning,
@@ -1743,23 +1738,108 @@ public class TransgressionManager : ITransgressionManager
     {
         var user = _currentUser.ObjectId;
 
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var warning = await _data.GetWarningByIdAsync(warningId)
+                ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
+
+            if (!string.Equals(warning.Status, "Draft", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(status, "New", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Only Draft issues can be submitted to Legal as New.");
+            }
+        }
+
         await _data.UpdateWarningStatusAsync(warningId, duedate, status, user);
+    }
+
+    public async Task ApplyLegalDecisionAsync(
+        long warningId,
+        string type,
+        string? warningSubtype)
+    {
+        var warning = await _data.GetWarningByIdAsync(warningId)
+            ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
+
+        if (!string.Equals(warning.Status, "In Progress", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Legal can only record a decision while an issue is In Progress.");
+
+        var cleanType = (type ?? string.Empty).Trim();
+        var allowedTypes = new[] { "Invalid", "Warning", "Discussion", "Hearing" };
+        cleanType = allowedTypes.FirstOrDefault(x => x.Equals(cleanType, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Select Invalid, Warning, Discussion, or Hearing.");
+
+        var storedType = cleanType == "Invalid" ? "Issue" : cleanType;
+        var status = cleanType == "Invalid" ? "Invalid" : "Pending";
+        var cleanSubtype = string.IsNullOrWhiteSpace(warningSubtype) ? null : warningSubtype.Trim();
+
+        if (storedType == "Warning")
+        {
+            var allowedSubtypes = new[]
+            {
+                "Verbal warning", "1st written warning", "2nd written warning", "Final warning"
+            };
+            cleanSubtype = allowedSubtypes.FirstOrDefault(x =>
+                x.Equals(cleanSubtype, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException("A valid warning subtype is required.");
+        }
+        else
+        {
+            cleanSubtype = null;
+        }
+
+        await _data.UpdateWarningDecisionAsync(
+            warningId, status, storedType, cleanSubtype, _currentUser.ObjectId);
+    }
+
+    public async Task ValidateWarningAsync(long warningId)
+    {
+        var warning = await _data.GetWarningByIdAsync(warningId)
+            ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
+
+        if (!string.Equals(warning.Status, "Completed", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Only a Completed issue can be Validated.");
+
+        await _data.UpdateWarningDecisionAsync(
+            warningId, "Validated", warning.Type, warning.WarningSubtype, _currentUser.ObjectId);
     }
 
     public async Task SendEmailToLegalAsync(long warningId, DateOnly? duedate, string? status)
     {
-        var to = _emailSettings.LegalRecipients;
+        var warning = await _data.GetWarningByIdAsync(warningId)
+            ?? throw new InvalidOperationException($"Warning not found. WarningId={warningId}");
+
+        if (string.IsNullOrWhiteSpace(_applicationOptions.BaseUrl))
+            throw new InvalidOperationException("The application base URL has not been configured.");
+
+        var employeeDisplayName = await GetDisplayNameFromUserIdAsync(warning.EmployeeId);
+        var submittedByDisplayName = await GetDisplayNameFromUserIdAsync(warning.CreatedBy);
+        var legalUrl = $"{_applicationOptions.BaseUrl.TrimEnd('/')}/Legal/Index/{warning.WarningId}";
+
+        var bodyHtml = _emailTemplateRenderer.Render(
+            "IssueCreated",
+            new Dictionary<string, string?>
+            {
+                ["EmployeeDisplayName"] = string.IsNullOrWhiteSpace(employeeDisplayName)
+                    ? warning.EmployeeId
+                    : employeeDisplayName,
+                ["SubmittedByDisplayName"] = string.IsNullOrWhiteSpace(submittedByDisplayName)
+                    ? warning.CreatedBy
+                    : submittedByDisplayName,
+                ["Category"] = warning.Category?.Name ?? warning.CategoryId.ToString(),
+                ["Status"] = string.IsNullOrWhiteSpace(status) ? warning.Status : status.Trim(),
+                ["WarningId"] = warning.WarningId.ToString(),
+                ["DueDate"] = duedate.HasValue ? duedate.Value.ToString("dd/MM/yyyy") : "—",
+                ["LegalUrl"] = legalUrl
+            });
 
         var email = new SendEmailRequest
         {
-            Subject = $"Issue Created {warningId}",
-            BodyHtml = $@"
-                <p>The warning has been Uploaded.</p>
-                <p><strong>Status:</strong> {status}</p>
-                <p><strong>Due Date:</strong> {duedate}</p>
-            ",
-            ToRecipients = to,
+            Subject = "Warning System | Issue Created",
+            BodyHtml = bodyHtml,
+            ToRecipients = _emailSettings.LegalRecipients,
         };
+
         await EmailSender(email);
     }
 
@@ -1775,10 +1855,7 @@ public class TransgressionManager : ITransgressionManager
                 nameof(email));
         }
 
-        var toList = email.ToRecipients
-            .Where(address => !string.IsNullOrWhiteSpace(address))
-            .Select(address => address.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        var toList = EmailRecipientNormalizer.Normalize(email.ToRecipients)
             .Select(address => new Recipient
             {
                 EmailAddress = new EmailAddress
@@ -1808,10 +1885,7 @@ public class TransgressionManager : ITransgressionManager
 
         if (email.CcRecipients is { Count: > 0 })
         {
-            var ccList = email.CcRecipients
-                .Where(address => !string.IsNullOrWhiteSpace(address))
-                .Select(address => address.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            var ccList = EmailRecipientNormalizer.Normalize(email.CcRecipients)
                 .Select(address => new Recipient
                 {
                     EmailAddress = new EmailAddress
@@ -1829,10 +1903,7 @@ public class TransgressionManager : ITransgressionManager
 
         if (email.BccRecipients is { Count: > 0 })
         {
-            var bccList = email.BccRecipients
-                .Where(address => !string.IsNullOrWhiteSpace(address))
-                .Select(address => address.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            var bccList = EmailRecipientNormalizer.Normalize(email.BccRecipients)
                 .Select(address => new Recipient
                 {
                     EmailAddress = new EmailAddress
@@ -2008,18 +2079,18 @@ public class TransgressionManager : ITransgressionManager
 
             var req = new SendEmailRequest
             {
-                Subject = $"Warning #{warningInfo.WarningId} updated",
+                Subject = $"Warning System | Issue {warningInfo.WarningId} updated",
                 BodyHtml = $@"
                         <div style=""font-family: Arial, sans-serif; color:#333; line-height:1.5;"">
 
                             <h2 style=""color:#014678; margin-bottom:8px;"">
-                                Warning Updated
+                                Issue Updated
                             </h2>
 
                             <p>Hi {safeUsername},</p>
 
                             <p>
-                                Warning <strong>#{warningInfo.WarningId}</strong> has been updated/completed.
+                                Issue <strong>#{warningInfo.WarningId}</strong> has been updated.
                             </p>
 
                             <table style=""border-collapse:collapse; margin-top:15px; margin-bottom:15px; width:100%; max-width:650px;"">
@@ -2050,7 +2121,7 @@ public class TransgressionManager : ITransgressionManager
                             </table>
 
                             <p>
-                                Please open the link below to review the warning:
+                                Please open the link below to review the issue:
                             </p>
 
                             <p>
@@ -2063,7 +2134,7 @@ public class TransgressionManager : ITransgressionManager
                                        text-decoration:none;
                                        border-radius:999px;
                                        font-weight:bold;"">
-                                    Open Warning
+                                    Open Issue
                                 </a>
                             </p>
 
@@ -2189,7 +2260,7 @@ public class TransgressionManager : ITransgressionManager
 
             var req = new SendEmailRequest
             {
-                Subject = $"More information required - Warning #{warningInfo.WarningId}",
+                Subject = $"Warning System | More information required - Issue {warningInfo.WarningId}",
                 BodyHtml = $@"
             <div style=""font-family: Arial, sans-serif; color:#333; line-height:1.5;"">
 
@@ -2200,7 +2271,7 @@ public class TransgressionManager : ITransgressionManager
             <p>Hi {safeUsername},</p>
 
             <p>
-                Legal has requested more information for warning
+                Legal has requested more information for issue
                 <strong>#{warningInfo.WarningId}</strong>.
             </p>
 
@@ -2257,7 +2328,7 @@ public class TransgressionManager : ITransgressionManager
                        text-decoration:none;
                        border-radius:999px;
                        font-weight:bold;"">
-                    Open Warning
+                    Open Issue
                 </a>
             </p>
 
@@ -2398,7 +2469,7 @@ public class TransgressionManager : ITransgressionManager
 
             var req = new SendEmailRequest
             {
-                Subject = $"More information added - Warning #{warningInfo.WarningId}",
+                Subject = $"Warning System | More information added - Issue {warningInfo.WarningId}",
                 BodyHtml = $@"
                 <div style=""font-family: Arial, sans-serif; color:#333; line-height:1.5;"">
 
@@ -2409,7 +2480,7 @@ public class TransgressionManager : ITransgressionManager
                     <p>Hi {safeLegalUsername},</p>
 
                     <p>
-                        The requested information has been added for warning
+                        The requested information has been added for issue
                         <strong>#{warningInfo.WarningId}</strong>.
                     </p>
 
@@ -2485,7 +2556,7 @@ public class TransgressionManager : ITransgressionManager
                                text-decoration:none;
                                border-radius:999px;
                                font-weight:bold;"">
-                            Review Warning
+                            Review Issue
                         </a>
                     </p>
 
@@ -2629,6 +2700,10 @@ public class TransgressionManager : ITransgressionManager
                         submittedByDisplayName,
                     ["Category"] = categoryName,
                     ["Status"] = warningInfo.Status,
+                    ["Type"] = warningInfo.Type,
+                    ["WarningSubtype"] = string.IsNullOrWhiteSpace(warningInfo.WarningSubtype)
+                        ? "—"
+                        : warningInfo.WarningSubtype,
                     ["LegalUrl"] = legalUrl
                 });
 
@@ -2768,20 +2843,16 @@ public class TransgressionManager : ITransgressionManager
 
             var status = (warningInfo.Status ?? "").Trim();
 
-            var blockedStatuses = new[]
-            {
-            "Draft",
-            "New",
-            "In Progress",
-            "Completed"
-        };
-
-            if (blockedStatuses.Contains(status, StringComparer.OrdinalIgnoreCase))
+            if (!string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"Legal cannot be notified while status is '{status}'."
+                    $"This action is only available while status is Pending, not '{status}'."
                 );
             }
+
+            await _data.UpdateWarningDecisionAsync(
+                warningId, "Completed", warningInfo.Type, warningInfo.WarningSubtype,
+                _currentUser.ObjectId);
 
             stage = $"Sending legal completed email. WarningId={warningId}";
 

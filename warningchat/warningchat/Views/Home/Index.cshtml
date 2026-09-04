@@ -666,10 +666,10 @@
                                                         <th>Draft</th>
                                                         <th>In Progress</th>
                                                         <th>Completed</th>
+
                                                      
-                                                       
                                                         <th>Warning</th>
-                                                       
+
                                                     </tr>
                                                 </thead>
 
@@ -1006,7 +1006,7 @@
     });
 
 
-     document.addEventListener("click", async function (e) {
+    document.addEventListener("click", async function (e) {
         const row = e.target.closest(".employee-row");
         if (!row) return;
 
@@ -1040,13 +1040,13 @@
         } catch (error) {
             console.error(error);
             modalBody.innerHTML = `
-                <div class="alert alert-danger">
-                    Could not load employee dashboard.
-                </div>`;
+                    <div class="alert alert-danger">
+                        Could not load employee dashboard.
+                    </div>`;
         }
     });
 
-     function filterAndSortEmployeeTable() {
+    function filterAndSortEmployeeTable() {
         const searchValue = (document.getElementById("employeeSearch")?.value || "").toLowerCase().trim();
         const sortValue = document.getElementById("employeeSort")?.value || "desc";
 
@@ -1116,11 +1116,11 @@
 
 
     document.addEventListener("click", function (e) {
-      const row = e.target.closest("tr.clickable-row");
-      if (!row) return;
+        const row = e.target.closest("tr.clickable-row");
+        if (!row) return;
 
-      const url = row.dataset.url;
-      if (url) window.location.href = url;
+        const url = row.dataset.url;
+        if (url) window.location.href = url;
     });
 
     document.getElementById("btnRequestWarning").addEventListener("click", function () {
@@ -1128,7 +1128,7 @@
     });
 
 
-          function getReportDate(value) {
+    function getReportDate(value) {
         if (!value) return null;
 
         const date = new Date(value + "T00:00:00");
@@ -1137,7 +1137,7 @@
         return date;
     }
 
-        function normaliseReportValue(value) {
+    function normaliseReportValue(value) {
         return (value || "")
             .trim()
             .toLowerCase();
@@ -1257,7 +1257,7 @@
                     );
 
                 return !department ||
-                       rowDepartment === department;
+                    rowDepartment === department;
             })
             .map(row =>
                 row.dataset.manager || "");
@@ -1314,7 +1314,7 @@
                     rowManager === manager;
 
                 return matchesDepartment &&
-                       matchesManager;
+                    matchesManager;
             })
             .map(row =>
                 row.dataset.employee || "");
@@ -1436,10 +1436,9 @@
                 summary.discussion++;
             }
 
-              if (
-            status === "warning" ||
-            issueTypes.includes("warning")) 
-            {
+            if (
+                status === "warning" ||
+                issueTypes.includes("warning")) {
                 summary.warning++;
             }
 
@@ -1463,12 +1462,12 @@
 
         if (departments.size === 0) {
             tableBody.innerHTML = `
-                <tr>
-                    <td colspan="10"
-                        class="text-center text-muted py-3">
-                        No department data found.
-                    </td>
-                </tr>`;
+                    <tr>
+                        <td colspan="10"
+                            class="text-center text-muted py-3">
+                            No department data found.
+                        </td>
+                    </tr>`;
 
             return;
         }
@@ -1481,16 +1480,16 @@
                 const row =
                     document.createElement("tr");
 
-                  row.innerHTML = `
-                    <td>${escapeReportHtml(summary.name)}</td>
-                    <td>${summary.total}</td>
-                    <td>${summary.draft}</td>
-                    <td>${summary.inProgress}</td>
-                    <td>${summary.completed}</td>
-                    <td>${summary.warning}</td>
-                `;
-          
+                row.innerHTML = `
+                        <td>${escapeReportHtml(summary.name)}</td>
+                        <td>${summary.total}</td>
+                        <td>${summary.draft}</td>
+                        <td>${summary.inProgress}</td>
+                        <td>${summary.completed}</td>
+                        <td>${summary.warning}</td>
+                    `;
 
+          
                 tableBody.appendChild(row);
             });
     }
@@ -1505,7 +1504,7 @@
         return element.innerHTML;
     }
 
-       function updateReportSummary(visibleRows) {
+    function updateReportSummary(visibleRows) {
         const departmentCount = new Set(
             visibleRows
                 .map(row =>
@@ -1601,8 +1600,8 @@
             "reportWarningTypeCount",
             warningCount
         );
-  
 
+  
         buildDepartmentBreakdown(visibleRows);
     }
 

@@ -11,6 +11,9 @@ public class Warning : IAutomaticallyAuditedEntity
 
     public string Status { get; set; }
 
+    public string Type { get; set; } = "Issue";
+    public string? WarningSubtype { get; set; }
+
     public int CategoryId { get; set; }
 
     public DateTime? SubmittedOn { get; set; }
