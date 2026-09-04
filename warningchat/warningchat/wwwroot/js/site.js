@@ -5,26 +5,56 @@
     if (!loader) return;
 
     let pendingOperations = 0;
-    let showTimer = null;
+    const minimumVisibleTime = 350;
+    let visibleSince = 0;
+    let hideTimer = null;
+
+    function setPageInactive(isInactive) {
+        Array.from(document.body.children).forEach(element => {
+            if (element === loader) return;
+
+            if (isInactive && !element.hasAttribute("inert")) {
+                element.setAttribute("inert", "");
+                element.dataset.appLoaderInert = "true";
+            } else if (!isInactive && element.dataset.appLoaderInert === "true") {
+                element.removeAttribute("inert");
+                delete element.dataset.appLoaderInert;
+            }
+        });
+    }
+
+    function showLoader() {
+        window.clearTimeout(hideTimer);
+        hideTimer = null;
+        visibleSince = performance.now();
+        document.body.classList.add("app-is-loading");
+        loader.classList.add("app-loader--visible");
+        loader.setAttribute("aria-hidden", "false");
+        setPageInactive(true);
+    }
+
+    function hideLoader() {
+        if (pendingOperations > 0) return;
+
+        document.body.classList.remove("app-is-loading");
+        loader.classList.remove("app-loader--visible");
+        loader.setAttribute("aria-hidden", "true");
+        setPageInactive(false);
+        visibleSince = 0;
+        hideTimer = null;
+    }
 
     function render() {
-        const isBusy = pendingOperations > 0;
-        document.body.classList.toggle("app-is-loading", isBusy);
-        loader.setAttribute("aria-hidden", String(!isBusy));
-
-        if (!isBusy) {
-            clearTimeout(showTimer);
-            showTimer = null;
-            loader.classList.remove("app-loader--visible");
+        if (pendingOperations > 0) {
+            window.clearTimeout(hideTimer);
+            hideTimer = null;
+            if (!loader.classList.contains("app-loader--visible")) showLoader();
             return;
         }
 
-        if (!showTimer && !loader.classList.contains("app-loader--visible")) {
-            showTimer = window.setTimeout(() => {
-                loader.classList.add("app-loader--visible");
-                showTimer = null;
-            }, 120);
-        }
+        const remainingTime = minimumVisibleTime - (performance.now() - visibleSince);
+        window.clearTimeout(hideTimer);
+        hideTimer = window.setTimeout(hideLoader, Math.max(0, remainingTime));
     }
 
     function show() {
@@ -39,7 +69,8 @@
 
     function reset() {
         pendingOperations = 0;
-        render();
+        window.clearTimeout(hideTimer);
+        hideLoader();
     }
 
     window.appLoader = {

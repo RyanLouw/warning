@@ -1761,6 +1761,10 @@ body {
     cursor: wait;
 }
 
+body.app-is-loading {
+    overflow: hidden;
+}
+
 .app-loader__panel {
     display: flex;
     min-width: 190px;
