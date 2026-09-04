@@ -16,6 +16,10 @@ public class EmployeeDashboardVm
     public int InProgressCount { get; set; }
     public int DueCount { get; set; }
     public int OverdueCount { get; set; }
+    public IReadOnlyDictionary<string, int> StatusCounts { get; set; }
+        = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, int> SubStatusCounts { get; set; }
+        = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     public DateTime? LastActionedDate { get; set; }
     public string CurrentState { get; set; }

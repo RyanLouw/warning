@@ -57,18 +57,13 @@
                     <span class="empdash-stat-label">Total</span>
                     <span class="empdash-stat-value">@Model.TotalWarnings</span>
                 </div>
-                <div class="empdash-stat">
-                    <span class="empdash-stat-label">Draft</span>
-                    <span class="empdash-stat-value">@Model.DraftCount</span>
-                </div>
-                <div class="empdash-stat">
-                    <span class="empdash-stat-label">New</span>
-                    <span class="empdash-stat-value">@Model.NewCount</span>
-                </div>
-                <div class="empdash-stat">
-                    <span class="empdash-stat-label">In Progress</span>
-                    <span class="empdash-stat-value">@Model.InProgressCount</span>
-                </div>
+                @foreach (var statusCount in Model.StatusCounts)
+                {
+                    <div class="empdash-stat">
+                        <span class="empdash-stat-label">@statusCount.Key</span>
+                        <span class="empdash-stat-value">@statusCount.Value</span>
+                    </div>
+                }
                 <div class="empdash-stat">
                     <span class="empdash-stat-label">Due</span>
                     <span class="empdash-stat-value">@Model.DueCount</span>
@@ -78,6 +73,18 @@
                     <span class="empdash-stat-value">@Model.OverdueCount</span>
                 </div>
             </div>
+            @if (Model.SubStatusCounts.Any())
+            {
+                <div class="empdash-card-body empdash-stats border-top">
+                    @foreach (var subStatusCount in Model.SubStatusCounts)
+                    {
+                        <div class="empdash-stat">
+                            <span class="empdash-stat-label">@subStatusCount.Key</span>
+                            <span class="empdash-stat-value">@subStatusCount.Value</span>
+                        </div>
+                    }
+                </div>
+            }
         </section>
 
         <section class="empdash-card empdash-card-latest">
@@ -154,6 +161,7 @@
                 <thead>
                     <tr>
                         <th>Status</th>
+                        <th>Sub-status</th>
                         <th>Category</th>
                         <th>Created By</th>
                         <th>Created</th>
@@ -166,7 +174,7 @@
                     @if (Model.Warnings == null || !Model.Warnings.Any())
                     {
                         <tr>
-                            <td colspan="7" class="text-center text-muted">No warnings found.</td>
+                            <td colspan="8" class="text-center text-muted">No warnings found.</td>
                         </tr>
                     }
                     else
@@ -175,6 +183,7 @@
                         {
                             <tr>
                                 <td>@warning.Status</td>
+                                <td>@(string.IsNullOrWhiteSpace(warning.SubStatus) ? "—" : warning.SubStatus)</td>
                                 <td>@warning.CategoryName</td>
                                 <td>@warning.CreatedByDisplayName</td>
                                 <td>@warning.CreatedOn.ToString("yyyy/MM/dd")</td>

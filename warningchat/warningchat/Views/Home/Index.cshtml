@@ -33,21 +33,13 @@
     <div class="ws-page-inner">
 
         <div class="status-bar">
-
-            <div class="status-pill">
-                <span class="label">Draft</span>
-                <span class="count count-draft">@Model.DraftCount</span>
-            </div>
-
-            <div class="status-pill">
-                <span class="label">New</span>
-                <span class="count count-new">@Model.New</span>
-            </div>
-
-            <div class="status-pill">
-                <span class="label">In Progress</span>
-                <span class="count count-progress">@Model.InProgress</span>
-            </div>
+            @foreach (var statusCount in Model.StatusCounts)
+            {
+                <div class="status-pill">
+                    <span class="label">@statusCount.Key</span>
+                    <span class="count count-status">@statusCount.Value</span>
+                </div>
+            }
 
             <div class="status-pill">
                 <span class="label">Due</span>
@@ -348,6 +340,35 @@
                                 .Distinct(StringComparer.OrdinalIgnoreCase)
                                 .OrderBy(value => value)
                                 .ToList();
+
+                            string[] workflowStatusOrder = ["Draft", "New", "In Progress", "Pending", "Completed", "Validated", "Invalid"];
+                            var reportStatuses = reportRows
+                                .Select(row => string.IsNullOrWhiteSpace(row.Status) ? "Unspecified" : row.Status.Trim())
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .OrderBy(value =>
+                                {
+                                    var index = Array.FindIndex(workflowStatusOrder,
+                                        status => status.Equals(value, StringComparison.OrdinalIgnoreCase));
+                                    return index < 0 ? workflowStatusOrder.Length : index;
+                                })
+                                .ThenBy(value => value)
+                                .ToList();
+
+                            string ReportSubStatus(TransgretionsVM row)
+                            {
+                                var type = row.Type?.Trim() ?? string.Empty;
+                                var subtype = row.WarningSubtype?.Trim() ?? string.Empty;
+                                if (type.Equals("Warning", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(subtype))
+                                    return $"Warning - {subtype}";
+                                return type.Equals("Issue", StringComparison.OrdinalIgnoreCase) ? string.Empty : type;
+                            }
+
+                            var reportSubStatuses = reportRows
+                                .Select(ReportSubStatus)
+                                .Where(value => !string.IsNullOrWhiteSpace(value))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .OrderBy(value => value)
+                                .ToList();
                         }
 
                         <div class="mb-4">
@@ -465,17 +486,21 @@
                                                     All statuses
                                                 </option>
 
-                                                <option value="draft">
-                                                    Draft
-                                                </option>
+                                                @foreach (var reportStatus in reportStatuses)
+                                                {
+                                                    <option value="@reportStatus">@reportStatus</option>
+                                                }
+                                            </select>
+                                        </div>
 
-                                                <option value="in progress">
-                                                    In Progress
-                                                </option>
-
-                                                <option value="completed">
-                                                    Completed
-                                                </option>
+                                        <div class="mb-3">
+                                            <label class="form-label">Sub-status</label>
+                                            <select id="reportSubStatus" class="form-select report-filter">
+                                                <option value="">All sub-statuses</option>
+                                                @foreach (var subStatus in reportSubStatuses)
+                                                {
+                                                    <option value="@subStatus">@subStatus</option>
+                                                }
                                             </select>
                                         </div>
 
@@ -567,87 +592,39 @@
                                         </div>
                                     </div>
 
-                                    <div class="col-6 col-md-4 col-xl">
-                                        <div class="card border-0 shadow-sm h-100">
-                                            <div class="card-body text-center">
-                                                <div class="small text-muted">
-                                                    Draft
-                                                </div>
-
-                                                <div class="fs-3 fw-bold"
-                                                     id="reportDraftCount">
-                                                    0
+                                    @foreach (var reportStatus in reportStatuses)
+                                    {
+                                        <div class="col-6 col-md-4 col-xl">
+                                            <div class="card border-0 shadow-sm h-100">
+                                                <div class="card-body text-center">
+                                                    <div class="small text-muted">@reportStatus</div>
+                                                    <div class="fs-3 fw-bold report-status-count"
+                                                         data-report-status="@reportStatus">0</div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-
-                                    <div class="col-6 col-md-4 col-xl">
-                                        <div class="card border-0 shadow-sm h-100">
-                                            <div class="card-body text-center">
-                                                <div class="small text-muted">
-                                                    In Progress
-                                                </div>
-
-                                                <div class="fs-3 fw-bold"
-                                                     id="reportInProgressCount">
-                                                    0
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-6 col-md-4 col-xl">
-                                        <div class="card border-0 shadow-sm h-100">
-                                            <div class="card-body text-center">
-                                                <div class="small text-muted">
-                                                    Completed
-                                                </div>
-
-                                                <div class="fs-3 fw-bold"
-                                                     id="reportCompletedCount">
-                                                    0
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    }
 
                                 </div>
 
-                                <div class="row g-3 mb-4">
-
-                                    <div class="col-6 col-md-4 col-xl">
-                                        <div class="card border-0 shadow-sm h-100">
-                                            <div class="card-body text-center">
-                                                <div class="small text-muted">
-                                                    Discussion
-                                                </div>
-
-                                                <div class="fs-3 fw-bold"
-                                                     id="reportDiscussionCount">
-                                                    0
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-6 col-md-4 col-xl">
-                                        <div class="card border-0 shadow-sm h-100">
-                                            <div class="card-body text-center">
-                                                <div class="small text-muted">
-                                                    Warning
-                                                </div>
-
-                                                <div class="fs-3 fw-bold"
-                                                     id="reportWarningTypeCount">
-                                                    0
+                                @if (reportSubStatuses.Any())
+                                {
+                                    <h5 class="mb-3">Sub-statuses</h5>
+                                    <div class="row g-3 mb-4">
+                                        @foreach (var subStatus in reportSubStatuses)
+                                        {
+                                            <div class="col-6 col-md-4 col-xl">
+                                                <div class="card border-0 shadow-sm h-100">
+                                                    <div class="card-body text-center">
+                                                        <div class="small text-muted">@subStatus</div>
+                                                        <div class="fs-3 fw-bold report-sub-status-count"
+                                                             data-report-sub-status="@subStatus">0</div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        }
                                     </div>
-
-
-                                </div>
+                                }
 
                                 <!-- DEPARTMENT BREAKDOWN -->
                                 <div class="card border-0 shadow-sm mb-4">
@@ -663,12 +640,10 @@
                                                     <tr>
                                                         <th>Department</th>
                                                         <th>Total</th>
-                                                        <th>Draft</th>
-                                                        <th>In Progress</th>
-                                                        <th>Completed</th>
-
-                                                     
-                                                        <th>Warning</th>
+                                                        @foreach (var reportStatus in reportStatuses)
+                                                        {
+                                                            <th class="report-department-status" data-status="@reportStatus">@reportStatus</th>
+                                                        }
 
                                                     </tr>
                                                 </thead>
@@ -807,12 +782,19 @@
                                                                     data-manager="@manager"
                                                                     data-created-by="@createdBy"
                                                                     data-status="@status"
+                                                                    data-sub-status="@ReportSubStatus(row)"
                                                                     data-issue-types="@issueTypeData"
                                                                     data-latest-action="@latestAction"
                                                                     data-created="@row.CreatedOn.ToString("yyyy-MM-dd")"
                                                                     data-issued-to-employee="@row.IssuedToEmployee.ToString().ToLowerInvariant()">
 
-                                                                    <td>@status</td>
+                                                                    <td>
+                                                                        <div>@status</div>
+                                                                        @if (!string.IsNullOrWhiteSpace(ReportSubStatus(row)))
+                                                                        {
+                                                                            <small class="text-muted">@ReportSubStatus(row)</small>
+                                                                        }
+                                                                    </td>
 
                                                                     <td>
                                                                         @(string.IsNullOrWhiteSpace(issueTypeText)
@@ -1372,6 +1354,9 @@
         }
 
         const departments = new Map();
+        const departmentStatuses = Array.from(
+            document.querySelectorAll(".report-department-status")
+        ).map(element => normaliseReportValue(element.dataset.status));
 
         visibleRows.forEach(row => {
             const departmentName =
@@ -1389,14 +1374,7 @@
                     {
                         name: departmentName,
                         total: 0,
-                        draft: 0,
-                        inProgress: 0,
-                        completed: 0,
-                        invalid: 0,
-                        discussion: 0,
-                        warning: 0,
-                        hearingNotice: 0,
-                        issued: 0
+                        statuses: {}
                     }
                 );
             }
@@ -1415,47 +1393,7 @@
                 getReportIssueTypes(row);
 
             summary.total++;
-
-            if (status === "draft") {
-                summary.draft++;
-            }
-
-            if (status === "in progress") {
-                summary.inProgress++;
-            }
-
-            if (status === "completed") {
-                summary.completed++;
-            }
-
-            if (issueTypes.includes("invalid")) {
-                summary.invalid++;
-            }
-
-            if (issueTypes.includes("discussion")) {
-                summary.discussion++;
-            }
-
-            if (
-                status === "warning" ||
-                issueTypes.includes("warning")) {
-                summary.warning++;
-            }
-
-            if (
-                issueTypes.includes(
-                    "hearing notice"
-                )
-            ) {
-                summary.hearingNotice++;
-            }
-
-            if (
-                row.dataset.issuedToEmployee ===
-                "true"
-            ) {
-                summary.issued++;
-            }
+            summary.statuses[status] = (summary.statuses[status] || 0) + 1;
         });
 
         tableBody.innerHTML = "";
@@ -1463,7 +1401,7 @@
         if (departments.size === 0) {
             tableBody.innerHTML = `
                     <tr>
-                        <td colspan="10"
+                        <td colspan="${departmentStatuses.length + 2}"
                             class="text-center text-muted py-3">
                             No department data found.
                         </td>
@@ -1483,10 +1421,9 @@
                 row.innerHTML = `
                         <td>${escapeReportHtml(summary.name)}</td>
                         <td>${summary.total}</td>
-                        <td>${summary.draft}</td>
-                        <td>${summary.inProgress}</td>
-                        <td>${summary.completed}</td>
-                        <td>${summary.warning}</td>
+                        ${departmentStatuses.map(status =>
+                            `<td>${summary.statuses[status] || 0}</td>`
+                        ).join("")}
                     `;
 
           
@@ -1532,6 +1469,19 @@
                     .includes(issueType)
             ).length;
         };
+
+        document.querySelectorAll(".report-status-count").forEach(element => {
+            element.textContent = countStatus(
+                normaliseReportValue(element.dataset.reportStatus)
+            );
+        });
+
+        document.querySelectorAll(".report-sub-status-count").forEach(element => {
+            const subStatus = normaliseReportValue(element.dataset.reportSubStatus);
+            element.textContent = visibleRows.filter(row =>
+                normaliseReportValue(row.dataset.subStatus) === subStatus
+            ).length;
+        });
 
         const issuedCount = visibleRows.filter(row =>
             normaliseReportValue(
@@ -1655,6 +1605,13 @@
                 )?.value
             );
 
+        const subStatus =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportSubStatus"
+                )?.value
+            );
+
         const issueType =
             normaliseReportValue(
                 document.getElementById(
@@ -1700,6 +1657,11 @@
                     row.dataset.status
                 );
 
+            const rowSubStatus =
+                normaliseReportValue(
+                    row.dataset.subStatus
+                );
+
             const rowLatestAction =
                 normaliseReportValue(
                     row.dataset.latestAction
@@ -1719,6 +1681,7 @@
                 rowManager,
                 rowCreatedBy,
                 rowStatus,
+                rowSubStatus,
                 rowLatestAction,
                 ...rowIssueTypes
             ].join(" ");
@@ -1756,6 +1719,13 @@
             if (
                 status &&
                 rowStatus !== status
+            ) {
+                show = false;
+            }
+
+            if (
+                subStatus &&
+                rowSubStatus !== subStatus
             ) {
                 show = false;
             }

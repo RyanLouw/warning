@@ -20,6 +20,8 @@ public class TaskListVM
     public int Invalid { get; set; }
     public int Due { get; set; }
     public int OverDue { get; set; }
+    public IReadOnlyDictionary<string, int> StatusCounts { get; set; }
+        = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
     public List<CategoryVM> Category { get; set; } = [];
 

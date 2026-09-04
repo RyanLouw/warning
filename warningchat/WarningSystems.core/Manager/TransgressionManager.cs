@@ -334,6 +334,20 @@ public class TransgressionManager : ITransgressionManager
 
             TotalWarnings = warnings.Count,
 
+            StatusCounts = warnings
+                .GroupBy(warning => string.IsNullOrWhiteSpace(warning.Status) ? "Unspecified" : warning.Status.Trim(),
+                    StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => GetStatusSortOrder(group.Key))
+                .ThenBy(group => group.Key)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
+
+            SubStatusCounts = warnings
+                .Select(warning => GetWarningSubStatus(warning.Type, warning.WarningSubtype))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .GroupBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group.Key)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase),
+
             DraftCount = warnings.Count(w =>
                 string.Equals(
                     w.Status,
@@ -379,6 +393,8 @@ public class TransgressionManager : ITransgressionManager
 
                     Status = warning.Status
                         ?? string.Empty,
+
+                    SubStatus = GetWarningSubStatus(warning.Type, warning.WarningSubtype),
 
                     CategoryName = warning.Category?.Name
                         ?? string.Empty,
@@ -657,6 +673,13 @@ public class TransgressionManager : ITransgressionManager
         var today = DateOnly.FromDateTime(DateTime.Now);
         var dueWindowDays = 3;
 
+        vm.StatusCounts = rows
+            .GroupBy(row => string.IsNullOrWhiteSpace(row.Status) ? "Unspecified" : row.Status.Trim(),
+                StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => GetStatusSortOrder(group.Key))
+            .ThenBy(group => group.Key)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
         foreach (var row in rows)
         {
             var status = (row.Status ?? "").Trim();
@@ -679,6 +702,30 @@ public class TransgressionManager : ITransgressionManager
                 { vm.Due++; }
             }
         }
+    }
+
+    private static string GetWarningSubStatus(string? type, string? warningSubtype)
+    {
+        var cleanType = type?.Trim() ?? string.Empty;
+        var cleanSubtype = warningSubtype?.Trim() ?? string.Empty;
+
+        if (cleanType.Equals("Warning", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(cleanSubtype))
+        {
+            return $"Warning - {cleanSubtype}";
+        }
+
+        return cleanType.Equals("Issue", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : cleanType;
+    }
+
+    private static int GetStatusSortOrder(string status)
+    {
+        string[] workflow = ["Draft", "New", "In Progress", "Pending", "Completed", "Validated", "Invalid"];
+        var index = Array.FindIndex(workflow,
+            value => value.Equals(status, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? workflow.Length : index;
     }
 
     private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(

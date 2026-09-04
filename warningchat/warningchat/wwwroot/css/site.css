@@ -145,9 +145,14 @@ body {
 
 .status-bar {
     display: flex;
+    flex-wrap: wrap;
     gap: 1.75rem;
     justify-content: space-between;
     margin-bottom: 1.75rem;
+}
+
+.count-status {
+    background: #2563eb;
 }
 
 .status-pill {
