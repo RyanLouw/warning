@@ -73,13 +73,14 @@
                     );
                 }
 
-                const nextStep = document.querySelector(
-                    '.ws-step[data-step="2"]'
-                );
+                // const nextStep = document.querySelector(
+                //     '.ws-step[data-step="2"]'
+                // );
 
-                if (nextStep) {
-                    nextStep.click();
-                }
+                // if (nextStep) {
+                //     nextStep.click();
+                // }
+                window.warningWizard?.goToStep(2);
             } catch (error) {
                 console.error(
                     "Could not save transgression details:",

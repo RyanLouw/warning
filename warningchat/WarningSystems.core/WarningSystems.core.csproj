@@ -7,10 +7,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="EmailTemplates\*.html" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<PackageReference Include="Azure.Storage.Files.Shares" Version="12.27.1" />
 		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />

@@ -73,12 +73,6 @@ public class GraphUserDataAccess : IGraphUserDataAccess
             .ToList();
     }
 
-    /// <summary>
-    /// Returns the signed-in user's descendants together with the descendants
-    /// of users who report to the same manager. Same-level users are excluded.
-    /// If the signed-in user has no manager (for example, the CEO), all of
-    /// their descendants are returned.
-    /// </summary>
     public async Task<List<User>> GetUsersBelowMyLevelAsync()
     {
         var me = await GetMeAsync();
@@ -88,7 +82,6 @@ public class GraphUserDataAccess : IGraphUserDataAccess
         var users = new Dictionary<string, User>(StringComparer.OrdinalIgnoreCase);
         var visitedManagers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Always include the user's own reporting branch.
         await AddReportsRecursiveAsync(me.Id, users, visitedManagers);
 
         var manager = await GetManagerAsync(me.Id);
@@ -104,7 +97,6 @@ public class GraphUserDataAccess : IGraphUserDataAccess
                     continue;
                 }
 
-                // Add only the peer's descendants, never the peer.
                 await AddReportsRecursiveAsync(
                     sameLevelUser.Id,
                     users,
@@ -145,7 +137,6 @@ public class GraphUserDataAccess : IGraphUserDataAccess
         catch (Microsoft.Kiota.Abstractions.ApiException ex)
             when (ex.ResponseStatusCode == 404)
         {
-            // A top-level employee, such as the CEO, has no manager.
             return null;
         }
     }

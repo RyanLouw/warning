@@ -27,21 +27,40 @@
                 : row.CreatedByDisplayName)
         .ToList();
 
+
+    var statusOrder = new[]
+      {
+        new { Key = "Draft",       Label = "Draft",       CssClass = "draft" },
+        new { Key = "New",         Label = "New",         CssClass = "new" },
+        new { Key = "In Progress", Label = "In Progress", CssClass = "in-progress" },
+        new { Key = "Pending",     Label = "Pending",     CssClass = "pending" },
+        new { Key = "Completed",   Label = "Issued",      CssClass = "issued" },
+        new { Key = "Validated",   Label = "Validated",   CssClass = "validated" }
+    };
+
+    var statusCounts = Model.StatusCounts
+        .ToDictionary(
+            x => x.Key.Trim(),
+            x => x.Value,
+            StringComparer.OrdinalIgnoreCase);
+
 }
 
 <div class="ws-page">
     <div class="ws-page-inner">
 
         <div class="status-bar">
-            @foreach (var statusCount in Model.StatusCounts)
+            @foreach (var status in statusOrder)
             {
-                <div class="status-pill">
-                    <span class="label">@statusCount.Key</span>
-                    <span class="count count-status">@statusCount.Value</span>
+                statusCounts.TryGetValue(status.Key, out var count);
+
+                <div class="status-pill status-@status.CssClass">
+                    <span class="label">@status.Label</span>
+                    <span class="count count-status">@count</span>
                 </div>
             }
 
-            <div class="status-pill">
+            @* <div class="status-pill">
                 <span class="label">Due</span>
                 <span class="count count-due">@Model.Due.ToString()</span>
             </div>
@@ -49,7 +68,7 @@
             <div class="status-pill">
                 <span class="label">Overdue</span>
                 <span class="count count-overdue">@Model.OverDue.ToString()</span>
-            </div>
+            </div> *@
 
         </div>
 
@@ -150,17 +169,18 @@
                                             var createdByName =
                                             (row.CreatedByDisplayName ?? string.Empty).Trim();
 
-                                            bool isUserNewOrInProgress =
-                                            isUser &&
-                                            (statusKey == "new" ||
-                                            statusKey == "in progress");
+                                            bool canClick = false;
 
-                                            bool canClick =
-                                            (isUser && statusKey == "draft") ||
-                                            isUserNewOrInProgress ||
-                                            (isLegal &&
-                                            (statusKey == "new" ||
-                                            statusKey == "in progress"));
+                                            if (isLegal)
+                                            {
+                                                
+                                                canClick = statusKey != "validated";
+                                            }
+                                            else if (isUser)
+                                            {
+                                                
+                                                canClick = statusKey != "completed";
+                                            }
 
                                             string? rowUrl = null;
 
@@ -599,7 +619,9 @@
                                                 <div class="card-body text-center">
                                                     <div class="small text-muted">@reportStatus</div>
                                                     <div class="fs-3 fw-bold report-status-count"
-                                                         data-report-status="@reportStatus">0</div>
+                                                         data-report-status="@reportStatus">
+                                                        0
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -618,7 +640,9 @@
                                                     <div class="card-body text-center">
                                                         <div class="small text-muted">@subStatus</div>
                                                         <div class="fs-3 fw-bold report-sub-status-count"
-                                                             data-report-sub-status="@subStatus">0</div>
+                                                             data-report-sub-status="@subStatus">
+                                                            0
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1022,9 +1046,9 @@
         } catch (error) {
             console.error(error);
             modalBody.innerHTML = `
-                    <div class="alert alert-danger">
-                        Could not load employee dashboard.
-                    </div>`;
+                        <div class="alert alert-danger">
+                            Could not load employee dashboard.
+                        </div>`;
         }
     });
 
@@ -1400,12 +1424,12 @@
 
         if (departments.size === 0) {
             tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="${departmentStatuses.length + 2}"
-                            class="text-center text-muted py-3">
-                            No department data found.
-                        </td>
-                    </tr>`;
+                        <tr>
+                            <td colspan="${departmentStatuses.length + 2}"
+                                class="text-center text-muted py-3">
+                                No department data found.
+                            </td>
+                        </tr>`;
 
             return;
         }
@@ -1419,12 +1443,12 @@
                     document.createElement("tr");
 
                 row.innerHTML = `
-                        <td>${escapeReportHtml(summary.name)}</td>
-                        <td>${summary.total}</td>
-                        ${departmentStatuses.map(status =>
-                            `<td>${summary.statuses[status] || 0}</td>`
-                        ).join("")}
-                    `;
+                            <td>${escapeReportHtml(summary.name)}</td>
+                            <td>${summary.total}</td>
+                            ${departmentStatuses.map(status =>
+                    `<td>${summary.statuses[status] || 0}</td>`
+                ).join("")}
+                        `;
 
           
                 tableBody.appendChild(row);
