@@ -1,10 +1,13 @@
-﻿namespace WarningSystems.Core.ViewModels;
+﻿using WarningSystems.Core.Models.Enum;
+
+namespace WarningSystems.Core.ViewModels;
 
 public class LegalWizardVm
 {
     public long WarningId { get; set; }
     public  string EmployeeId { get; set; }
     public  string Status { get; set; }
+    public IssueStatusGroup IssueStatusGroup { get; set; }
     public string Type { get; set; } = "Issue";
     public string? WarningSubtype { get; set; }
     public DateTime CreatedOn { get; set; }
@@ -25,4 +28,5 @@ public class LegalWizardVm
     public List<LegalEvidenceVm> Evidence { get; set; } = [];
     public List<LegalWarningHistoryVm> TransgretionHistory { get; set; } = [];
     public List<NoteTypeLookupVm> NoteTypes { get; set; } = [];
+    public List<IssueTypeLookupVm> IssueTypes { get; set; } = [];
 }

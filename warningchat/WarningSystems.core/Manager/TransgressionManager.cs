@@ -1517,15 +1517,33 @@ public class TransgressionManager : ITransgressionManager
             })
             .ToList();
 
+        var issueTypes = (await _data.GetActiveIssueTypesAsync())
+            .Select(type => new IssueTypeLookupVm
+            {
+                IssueTypeId = type.IssueTypeId,
+                IssueTypeName = type.IssueTypeName,
+                SubTypeSelectionMode = type.SubTypeSelectionMode,
+                SubTypes = type.IssueSubTypes
+                    .OrderBy(subType => subType.IssueSubTypeId)
+                    .Select(subType => new IssueSubTypeLookupVm
+                    {
+                        IssueSubTypeId = subType.IssueSubTypeId,
+                        IssueSubTypeName = subType.IssueSubTypeName
+                    })
+                    .ToList()
+            })
+            .ToList();
+
         return new LegalWizardVm
         {
             WarningId = warning.WarningId,
             EmployeeId = warning.EmployeeId,
             EmployeeIdDesplayName = employeeDisplayName,
             HideFromTeamLead = warning.HideFromTeamLead,
-            Status = warning.Status,
-            Type = warning.Type,
-            WarningSubtype = warning.WarningSubtype,
+            Status = warning.IssueStatus?.IssueStatusName ?? warning.Status,
+            IssueStatusGroup = warning.IssueStatus?.IssueStatusGroup ?? IssueStatusGroup.Draft,
+            Type = warning.IssueType?.IssueTypeName ?? warning.Type,
+            WarningSubtype = warning.IssueSubType?.IssueSubTypeName ?? warning.WarningSubtype,
             CreatedOn = warning.CreatedOn,
             CreatedBy = warning.CreatedBy,
             CreatedByDesplayName = createdByDisplayName,
@@ -1539,6 +1557,7 @@ public class TransgressionManager : ITransgressionManager
             Evidence = evidence,
             Notes = warningLevelNotes,
             NoteTypes = noteTypes,
+            IssueTypes = issueTypes,
             TransgretionHistory = history
         };
     }
@@ -1608,7 +1627,7 @@ public class TransgressionManager : ITransgressionManager
 
         var userId = _currentUser?.ObjectId ?? "system";
 
-        await _data.MarkWarningInProgressAsync(warningId, userId);
+        await _data.AdvanceWarningStatusAsync(warningId, IssueStatusGroup.LegalReview, userId);
     }
 
     public async Task<SaveIssueStepResult> SaveIssueStepAsync(
@@ -1669,6 +1688,9 @@ public class TransgressionManager : ITransgressionManager
         }
         else
         {
+            var draftStatus = await _data.GetIssueStatusByGroupAsync(IssueStatusGroup.Draft)
+                ?? throw new InvalidOperationException("The initial Draft status has not been configured.");
+
             var warning = new Warning
             {
                 EmployeeId = dto.EmployeeId.Trim(),
@@ -1676,7 +1698,8 @@ public class TransgressionManager : ITransgressionManager
 
                 CategoryId = categoryIds.First(),
 
-                Status = "Draft",
+                Status = draftStatus.IssueStatusName,
+                IssueStatusId = draftStatus.IssueStatusId,
                 Type = "Issue",
                 CreatedBy = currentUserId,
                 CreatedOn = NowSast,
@@ -1766,53 +1789,41 @@ public class TransgressionManager : ITransgressionManager
             var warning = await _data.GetWarningByIdAsync(warningId)
                 ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
 
-            if (!string.Equals(warning.Status, "Draft", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(status, "New", StringComparison.OrdinalIgnoreCase))
-            {
+            if (warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.Draft)
                 throw new InvalidOperationException("Only Draft issues can be submitted to Legal as New.");
-            }
+
+            await _data.AdvanceWarningStatusAsync(warningId, IssueStatusGroup.Draft, user);
         }
 
-        await _data.UpdateWarningStatusAsync(warningId, duedate, status, user);
+        await _data.UpdateWarningDueDateAsync(warningId, duedate, user);
     }
 
     public async Task ApplyLegalDecisionAsync(
         long warningId,
-        string type,
-        string? warningSubtype)
+        int issueTypeId,
+        int? issueSubTypeId)
     {
         var warning = await _data.GetWarningByIdAsync(warningId)
             ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
 
-        if (!string.Equals(warning.Status, "In Progress", StringComparison.OrdinalIgnoreCase))
+        if (warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.LegalDecision)
             throw new InvalidOperationException("Legal can only record a decision while an issue is In Progress.");
 
-        var cleanType = (type ?? string.Empty).Trim();
-        var allowedTypes = new[] { "Invalid", "Warning", "Discussion", "Hearing" };
-        cleanType = allowedTypes.FirstOrDefault(x => x.Equals(cleanType, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException("Select Invalid, Warning, Discussion, or Hearing.");
+        var issueType = (await _data.GetActiveIssueTypesAsync())
+            .SingleOrDefault(type => type.IssueTypeId == issueTypeId)
+            ?? throw new InvalidOperationException("Select a valid issue type.");
 
-        var storedType = cleanType == "Invalid" ? "Issue" : cleanType;
-        var status = cleanType == "Invalid" ? "Invalid" : "Pending";
-        var cleanSubtype = string.IsNullOrWhiteSpace(warningSubtype) ? null : warningSubtype.Trim();
+        var issueSubType = issueSubTypeId.HasValue
+            ? issueType.IssueSubTypes.SingleOrDefault(subType => subType.IssueSubTypeId == issueSubTypeId)
+            : null;
 
-        if (storedType == "Warning")
-        {
-            var allowedSubtypes = new[]
-            {
-                "Verbal warning", "1st written warning", "2nd written warning", "Final warning"
-            };
-            cleanSubtype = allowedSubtypes.FirstOrDefault(x =>
-                x.Equals(cleanSubtype, StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidOperationException("A valid warning subtype is required.");
-        }
-        else
-        {
-            cleanSubtype = null;
-        }
+        if (issueType.SubTypeSelectionMode == SubTypeSelectionMode.Required && issueSubType is null)
+            throw new InvalidOperationException("A valid issue subtype is required.");
 
-        await _data.UpdateWarningDecisionAsync(
-            warningId, status, storedType, cleanSubtype, _currentUser.ObjectId);
+        if (issueType.SubTypeSelectionMode == SubTypeSelectionMode.None)
+            issueSubType = null;
+
+        await _data.UpdateWarningDecisionAsync(warningId, issueType, issueSubType, _currentUser.ObjectId);
     }
 
     public async Task ValidateWarningAsync(long warningId)
@@ -1820,11 +1831,11 @@ public class TransgressionManager : ITransgressionManager
         var warning = await _data.GetWarningByIdAsync(warningId)
             ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
 
-        if (!string.Equals(warning.Status, "Issued", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Only a Completed issue can be Validated.");
+        if (warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.LegalValidation)
+            throw new InvalidOperationException("Only an Issued issue can be Validated.");
 
-        await _data.UpdateWarningDecisionAsync(
-            warningId, "Validated", warning.Type, warning.WarningSubtype, _currentUser.ObjectId);
+        await _data.AdvanceWarningStatusAsync(
+            warningId, IssueStatusGroup.LegalValidation, _currentUser.ObjectId);
     }
 
     public async Task SendEmailToLegalAsync(long warningId, DateOnly? duedate, string? status)
@@ -2094,7 +2105,7 @@ public class TransgressionManager : ITransgressionManager
                 $"/Transgression/TeamLeadWarning/{warningInfo.WarningId}";
 
             var safeUsername = System.Net.WebUtility.HtmlEncode(username);
-            var safeStatus = System.Net.WebUtility.HtmlEncode(dto.Status ?? "");
+            var safeStatus = System.Net.WebUtility.HtmlEncode(warningInfo.Status ?? "");
             var safeEmployeeDisplayName = System.Net.WebUtility.HtmlEncode(employeeDisplayName);
             var safeCategory = System.Net.WebUtility.HtmlEncode(
                 warningInfo.Category.Name ?? warningInfo.CategoryId.ToString());
@@ -2864,18 +2875,8 @@ public class TransgressionManager : ITransgressionManager
             if (warningInfo == null)
                 throw new InvalidOperationException($"Warning not found. WarningId={warningId}");
 
-            var status = (warningInfo.Status ?? "").Trim();
-
-            if (!string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"This action is only available while status is Pending, not '{status}'."
-                );
-            }
-
-            await _data.UpdateWarningDecisionAsync(
-                warningId, "Completed", warningInfo.Type, warningInfo.WarningSubtype,
-                _currentUser.ObjectId);
+            await _data.AdvanceWarningStatusAsync(
+                warningId, IssueStatusGroup.EmployeeAction, _currentUser.ObjectId);
 
             stage = $"Sending legal completed email. WarningId={warningId}";
 

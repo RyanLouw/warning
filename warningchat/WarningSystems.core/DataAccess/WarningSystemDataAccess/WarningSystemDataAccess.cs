@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using WarningSystems.Core.DataAccess.GraphDataAccess;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context;
@@ -25,6 +25,9 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
     {
         return await _context.Warnings
             .AsNoTracking()
+            .Include(warning => warning.IssueStatus)
+            .Include(warning => warning.IssueType)
+            .Include(warning => warning.IssueSubType)
             .Where(warning => !warning.IsDeleted)
             .Include(warning => warning.WarningCategories)
                 .ThenInclude(link => link.Category)
@@ -39,6 +42,9 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
     {
         return await _context.Warnings
             .AsNoTracking()
+            .Include(warning => warning.IssueStatus)
+            .Include(warning => warning.IssueType)
+            .Include(warning => warning.IssueSubType)
             .Where(warning => !warning.IsDeleted)
             .Include(warning =>
                 warning.WarningCategories)
@@ -58,6 +64,9 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
     {
         return await _context.Warnings
             .AsNoTracking()
+            .Include(warning => warning.IssueStatus)
+            .Include(warning => warning.IssueType)
+            .Include(warning => warning.IssueSubType)
             .Where(warning =>
                 !warning.IsDeleted)
             .Include(warning =>
@@ -260,6 +269,9 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         return await _context.Warnings
             .AsNoTracking()
             .AsSplitQuery()
+            .Include(warning => warning.IssueStatus)
+            .Include(warning => warning.IssueType)
+            .Include(warning => warning.IssueSubType)
             .Include(warning => warning.Category)
             .Include(warning => warning.Evidence)
                 .ThenInclude(evidence => evidence.Notes)
@@ -456,32 +468,6 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         }
     }
 
-    public async Task MarkWarningInProgressAsync(long warningId, string changedBy)
-    {
-        if (warningId is 0)
-            throw new ArgumentException("Invalid warning id.", nameof(warningId));
-
-        var warning = await _context.Warnings
-            .FirstOrDefaultAsync(w => w.WarningId == warningId);
-
-        if (warning is null)
-            throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
-
-        if (string.Equals(warning.Status, "Draft", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Draft warning cannot be moved to In Progress. WarningId={warningId}");
-
-        if (!string.Equals(warning.Status, "New", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        warning.Status = "In Progress";
-        warning.LastStatusChangedOn = NowSast;
-        warning.LastStatusChangedBy = string.IsNullOrWhiteSpace(changedBy)
-            ? "system"
-            : changedBy.Trim();
-
-        await _context.SaveChangesAsync();
-    }
-
     private async Task ReplaceWarningCategoriesAsync(
         long warningId,
         IReadOnlyCollection<int> categoryIds,
@@ -549,7 +535,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
             .ToListAsync();
     }
 
-    public async Task UpdateWarningStatusAsync(long warningId, DateOnly? dueDate, string? status, string user)
+    public async Task UpdateWarningDueDateAsync(long warningId, DateOnly? dueDate, string user)
     {
         var w = await _context.Warnings
             .FirstOrDefaultAsync(x => x.WarningId == warningId);
@@ -559,36 +545,77 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         {
             w.LegalExpiryDate = dueDate.Value;
         }
-        if (!string.IsNullOrWhiteSpace(status))
-        {
-            w.Status = status;
-            if (string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) &&
-                !w.SubmittedOn.HasValue)
-            {
-                w.SubmittedOn = NowSast;
-            }
-        }
-
         w.LastStatusChangedOn = NowSast;
         w.LastStatusChangedBy = user;
 
         await _context.SaveChangesAsync();
     }
 
+    public async Task<List<LookupIssueType>> GetActiveIssueTypesAsync()
+    {
+        return await _context.LookupIssueTypes
+            .AsNoTracking()
+            .Where(type => type.IsActive)
+            .Include(type => type.ResultIssueStatus)
+            .Include(type => type.IssueSubTypes.Where(subType => subType.IsActive))
+            .OrderBy(type => type.IssueTypeId)
+            .ToListAsync();
+    }
+
+    public async Task<LookupIssueStatus?> GetIssueStatusByGroupAsync(IssueStatusGroup group)
+    {
+        return await _context.LookupIssueStatuses
+            .AsNoTracking()
+            .OrderBy(status => status.IssueStatusId)
+            .FirstOrDefaultAsync(status => status.IsActive && status.IssueStatusGroup == group);
+    }
+
     public async Task UpdateWarningDecisionAsync(
         long warningId,
-        string status,
-        string type,
-        string? warningSubtype,
+        LookupIssueType issueType,
+        LookupIssueSubType? issueSubType,
         string user)
     {
         var warning = await _context.Warnings
             .FirstOrDefaultAsync(x => x.WarningId == warningId && !x.IsDeleted)
             ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
 
-        warning.Status = status;
-        warning.Type = type;
-        warning.WarningSubtype = warningSubtype;
+        warning.IssueTypeId = issueType.IssueTypeId;
+        warning.IssueSubTypeId = issueSubType?.IssueSubTypeId;
+        warning.IssueStatusId = issueType.ResultIssueStatusId;
+
+        // Keep the legacy display columns synchronized during the migration period.
+        warning.Type = issueType.IssueTypeName;
+        warning.WarningSubtype = issueSubType?.IssueSubTypeName;
+        warning.Status = issueType.ResultIssueStatus.IssueStatusName;
+        warning.LastStatusChangedOn = NowSast;
+        warning.LastStatusChangedBy = string.IsNullOrWhiteSpace(user) ? "system" : user.Trim();
+
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task AdvanceWarningStatusAsync(
+        long warningId,
+        IssueStatusGroup requiredGroup,
+        string user)
+    {
+        var warning = await _context.Warnings
+            .Include(x => x.IssueStatus)
+                .ThenInclude(status => status!.NextIssueStatus)
+            .FirstOrDefaultAsync(x => x.WarningId == warningId && !x.IsDeleted)
+            ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
+
+        if (warning.IssueStatus?.IssueStatusGroup != requiredGroup)
+            throw new InvalidOperationException("This action is not available for the issue's current status.");
+
+        var nextStatus = warning.IssueStatus.NextIssueStatus;
+        if (nextStatus is null || !nextStatus.IsActive)
+            throw new InvalidOperationException("The next issue status has not been configured.");
+
+        warning.IssueStatusId = nextStatus.IssueStatusId;
+        warning.Status = nextStatus.IssueStatusName;
+        if (requiredGroup == IssueStatusGroup.Draft && !warning.SubmittedOn.HasValue)
+            warning.SubmittedOn = NowSast;
         warning.LastStatusChangedOn = NowSast;
         warning.LastStatusChangedBy = string.IsNullOrWhiteSpace(user) ? "system" : user.Trim();
 

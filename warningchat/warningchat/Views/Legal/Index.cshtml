@@ -29,8 +29,8 @@
     var issueStatus = ValOrDash(Model.Status);
     var issueType = ValOrDash(Model.Type);
     var warningCategory = ValOrDash(Model.WarningSubtype);
-    var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
-    var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
+    var canValidate = Model.IssueStatusGroup == WarningSystems.Core.Models.Enum.IssueStatusGroup.LegalValidation;
+    var canRecordDecision = Model.IssueStatusGroup == WarningSystems.Core.Models.Enum.IssueStatusGroup.LegalDecision;
 
     var issueCreatedOn = Model.CreatedOn == default
         ? "—"
@@ -738,51 +738,24 @@
 
                     <div class="fw-semibold mb-2">Select legal decision</div>
 
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stInvalid"
-                               value="Invalid"
-                               checked>
-                        <label class="form-check-label" for="stInvalid">Invalid</label>
-                    </div>
-
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stDiscussion"
-                               value="Discussion">
-                        <label class="form-check-label" for="stDiscussion">Discussion</label>
-                    </div>
-
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stWarning"
-                               value="Warning">
-                        <label class="form-check-label" for="stWarning">Warning</label>
-                    </div>
-
-                    <div class="form-check mb-3">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stHearing"
-                               value="Hearing">
-                        <label class="form-check-label" for="stHearing">Hearing</label>
-                    </div>
+                    @foreach (var issueType in Model.IssueTypes)
+                    {
+                        var inputId = $"issueType{issueType.IssueTypeId}";
+                        <div class="form-check">
+                            <input class="form-check-input"
+                                   type="radio"
+                                   name="completeIssueType"
+                                   id="@inputId"
+                                   value="@issueType.IssueTypeId"
+                                   data-subtype-mode="@((byte)issueType.SubTypeSelectionMode)">
+                            <label class="form-check-label" for="@inputId">@issueType.IssueTypeName</label>
+                        </div>
+                    }
 
                     <div class="mb-3 d-none" id="warningSubtypeGroup">
-                        <label class="form-label" for="warningSubtype">Warning category</label>
+                        <label class="form-label" for="warningSubtype">Issue subtype</label>
                         <select class="form-select" id="warningSubtype">
-                            <option value="">Select warning category</option>
-                            <option value="Verbal warning">Verbal warning</option>
-                            <option value="1st written warning">1st written warning</option>
-                            <option value="2nd written warning">2nd written warning</option>
-                            <option value="Final warning">Final warning</option>
+                            <option value="">Select issue subtype</option>
                         </select>
                     </div>
 
@@ -1010,19 +983,19 @@
             return;
         }
 
-        const statusEl = document.querySelector('input[name="completeStatus"]:checked');
-        const status = statusEl ? statusEl.value : "";
+        const typeEl = document.querySelector('input[name="completeIssueType"]:checked');
+        const issueTypeId = typeEl ? parseInt(typeEl.value, 10) : 0;
 
-        if (!status) {
-            alert("Please select a status.");
+        if (!issueTypeId) {
+            alert("Please select an issue type.");
             return;
         }
 
-        const type = status;
-        const warningSubtype = document.getElementById("warningSubtype")?.value || "";
+        const subTypeMode = parseInt(typeEl.dataset.subtypeMode || "0", 10);
+        const issueSubTypeId = parseInt(document.getElementById("warningSubtype")?.value || "0", 10);
 
-        if (type === "Warning" && !warningSubtype) {
-            alert("Please select a warning category.");
+        if (subTypeMode === 2 && !issueSubTypeId) {
+            alert("Please select an issue subtype.");
             return;
         }
 
@@ -1036,9 +1009,8 @@
         try {
             const fd = new FormData();
             fd.append("WarningId", warningId.toString());
-            fd.append("Status", status);
-            fd.append("Type", type);
-            fd.append("WarningSubtype", warningSubtype);
+            fd.append("IssueTypeId", issueTypeId.toString());
+            if (issueSubTypeId) fd.append("IssueSubTypeId", issueSubTypeId.toString());
 
             if (file) {
                 fd.append("File", file, file.name);
@@ -1104,15 +1076,27 @@
         }
     }
 
-    document.querySelectorAll('input[name="completeStatus"][type="radio"]').forEach(input => {
+    const issueSubTypes = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+        Model.IssueTypes.ToDictionary(
+            type => type.IssueTypeId,
+            type => type.SubTypes)));
+
+    document.querySelectorAll('input[name="completeIssueType"][type="radio"]').forEach(input => {
         input.addEventListener("change", function () {
             const group = document.getElementById("warningSubtypeGroup");
             const select = document.getElementById("warningSubtype");
-            const isWarning = this.value === "Warning";
-            group?.classList.toggle("d-none", !isWarning);
+            const mode = parseInt(this.dataset.subtypeMode || "0", 10);
+            const subTypes = issueSubTypes[this.value] || [];
+            group?.classList.toggle("d-none", mode === 0);
             if (select) {
-                select.required = isWarning;
-                if (!isWarning) select.value = "";
+                select.required = mode === 2;
+                select.innerHTML = '<option value="">Select issue subtype</option>';
+                subTypes.forEach(subType => {
+                    const option = document.createElement("option");
+                    option.value = subType.IssueSubTypeId;
+                    option.textContent = subType.IssueSubTypeName;
+                    select.appendChild(option);
+                });
             }
         });
     });

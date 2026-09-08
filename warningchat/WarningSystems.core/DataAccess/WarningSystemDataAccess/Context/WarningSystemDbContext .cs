@@ -24,10 +24,48 @@ public class WarningSystemDbContext : DbContext
 
     public DbSet<WarningCategory> WarningCategories => Set<WarningCategory>();
     public DbSet<WarningNote> WarningNotes => Set<WarningNote>();
+    public DbSet<LookupIssueType> LookupIssueTypes => Set<LookupIssueType>();
+    public DbSet<LookupIssueSubType> LookupIssueSubTypes => Set<LookupIssueSubType>();
+    public DbSet<LookupIssueStatus> LookupIssueStatuses => Set<LookupIssueStatus>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("ws");
+
+        modelBuilder.Entity<LookupIssueStatus>(e =>
+        {
+            e.ToTable("LookupIssueStatuses");
+            e.HasKey(x => x.IssueStatusId);
+            e.Property(x => x.IssueStatusName).HasMaxLength(100).IsUnicode(false).IsRequired();
+            e.HasIndex(x => x.IssueStatusName).IsUnique();
+            e.Property(x => x.IssueStatusGroup).HasConversion<byte>().IsRequired();
+            e.Property(x => x.IsActive).HasDefaultValue(true).IsRequired();
+            e.HasOne(x => x.NextIssueStatus).WithMany().HasForeignKey(x => x.NextIssueStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<LookupIssueType>(e =>
+        {
+            e.ToTable("LookupIssueTypes");
+            e.HasKey(x => x.IssueTypeId);
+            e.Property(x => x.IssueTypeName).HasMaxLength(100).IsUnicode(false).IsRequired();
+            e.HasIndex(x => x.IssueTypeName).IsUnique();
+            e.Property(x => x.SubTypeSelectionMode).HasConversion<byte>().IsRequired();
+            e.Property(x => x.IsActive).HasDefaultValue(true).IsRequired();
+            e.HasOne(x => x.ResultIssueStatus).WithMany().HasForeignKey(x => x.ResultIssueStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<LookupIssueSubType>(e =>
+        {
+            e.ToTable("LookupIssueSubTypes");
+            e.HasKey(x => x.IssueSubTypeId);
+            e.Property(x => x.IssueSubTypeName).HasMaxLength(100).IsUnicode(false).IsRequired();
+            e.Property(x => x.IsActive).HasDefaultValue(true).IsRequired();
+            e.HasIndex(x => new { x.IssueTypeId, x.IssueSubTypeName }).IsUnique();
+            e.HasOne(x => x.IssueType).WithMany(x => x.IssueSubTypes).HasForeignKey(x => x.IssueTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         // --------------------------
         // TransgressionCategory
@@ -180,19 +218,26 @@ public class WarningSystemDbContext : DbContext
                 .IsRequired();
 
             e.Property(x => x.Status)
-                .HasMaxLength(20)
+                .HasMaxLength(100)
                 .IsUnicode(false)
                 .IsRequired();
 
             e.Property(x => x.Type)
-                .HasMaxLength(20)
+                .HasMaxLength(100)
                 .IsUnicode(false)
                 .HasDefaultValue("Issue")
                 .IsRequired();
 
             e.Property(x => x.WarningSubtype)
-                .HasMaxLength(30)
+                .HasMaxLength(100)
                 .IsUnicode(false);
+
+            e.HasOne(x => x.IssueStatus).WithMany().HasForeignKey(x => x.IssueStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.IssueType).WithMany().HasForeignKey(x => x.IssueTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.IssueSubType).WithMany().HasForeignKey(x => x.IssueSubTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             e.Property(x => x.CreatedOn)
                 .HasDefaultValueSql("SYSUTCDATETIME()");
