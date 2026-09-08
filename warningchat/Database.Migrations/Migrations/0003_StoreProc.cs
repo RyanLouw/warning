@@ -17,6 +17,6 @@ public class _0003_StoreProc : Migration
         {
             Create.Schema("ws");
         }
-        Execute.Script(@"Migrations\Scripts\0003.sql");
+        Execute.EmbeddedScript("0003.sql");
     }
 }

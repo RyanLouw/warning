@@ -25,36 +25,7 @@
 		<None Update="appsettings.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-		<None Update="Migrations\Scripts\0003.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0007.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0008.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0010.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0011.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0006.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0005.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0004.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0002.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0001.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
+		<EmbeddedResource Include="Migrations\Scripts\*.sql" />
 	</ItemGroup>
 
 

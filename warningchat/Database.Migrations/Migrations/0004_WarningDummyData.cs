@@ -13,7 +13,7 @@ public class _0004_WarningDummyData : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0004.sql");
+        Execute.EmbeddedScript("0004.sql");
         Execute.Sql("EXEC ws.sp_EnsureDefaultCategoryQuestions @CreatedBy = 'seed';");
     }
 }
