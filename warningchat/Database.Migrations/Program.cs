@@ -22,16 +22,11 @@ public class Program
         {
             Log.Information("Starting Application");
 
-            IConfigurationRoot configSettings = new ConfigurationBuilder()
-                    .SetBasePath(AppContext.BaseDirectory)
-                    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                    .Build();
-
             //Run migrations for all tags
             foreach (var tag in MigratorTags)
             {
                 Log.Information("Entered RunMigrations for {ConnectionKey}", tag.ConnectionKey);
-                IServiceProvider serviceProvider = CreateServices(tag, configSettings);
+                IServiceProvider serviceProvider = CreateServices(tag);
 
                 using var scope = serviceProvider.CreateScope();
                 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
@@ -48,19 +43,25 @@ public class Program
         }
     }
 
-    private static IServiceProvider CreateServices(MigratorTag migratorTag, IConfigurationRoot configSettings)
+    private static IServiceProvider CreateServices(MigratorTag migratorTag)
     {
         var builder = Host.CreateApplicationBuilder();
-        builder.Configuration.AddConfiguration(configSettings);
 
         Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(configSettings)
+            .ReadFrom.Configuration(builder.Configuration)
             .Enrich.FromLogContext()
             .CreateLogger();
 
         builder.AddServiceDefaults();
 
         var connection = builder.Configuration.GetConnectionString(migratorTag.ConnectionKey);
+        if (string.IsNullOrWhiteSpace(connection))
+        {
+            throw new InvalidOperationException(
+                $"Connection string '{migratorTag.ConnectionKey}' was not provided. " +
+                $"Run the migrations through the AppHost or set " +
+                $"ConnectionStrings__{migratorTag.ConnectionKey}.");
+        }
 
         builder.Services.AddFluentMigratorCore()
             .ConfigureRunner(rb =>
