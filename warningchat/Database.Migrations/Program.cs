@@ -31,9 +31,9 @@ public class Program
             foreach (var tag in MigratorTags)
             {
                 Log.Information("Entered RunMigrations for {ConnectionKey}", tag.ConnectionKey);
-                IServiceProvider serviceProvider = CreateServices(tag, configSettings);
+                using IHost host = CreateHost(tag, configSettings);
 
-                using var scope = serviceProvider.CreateScope();
+                using var scope = host.Services.CreateScope();
                 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
                 MigrateUp(scope.ServiceProvider);
                 Log.Information("Finished with {ConnectionKey}", tag.ConnectionKey);
@@ -44,10 +44,11 @@ public class Program
         catch (Exception ex)
         {
             Log.Error(ex, "Main");
+            throw;
         }
     }
 
-    private static IServiceProvider CreateServices(MigratorTag migratorTag, IConfigurationRoot configSettings)
+    private static IHost CreateHost(MigratorTag migratorTag, IConfigurationRoot configSettings)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration.AddConfiguration(configSettings);
@@ -72,9 +73,9 @@ public class Program
             .Configure<RunnerOptions>(opt => opt.Tags = [migratorTag.Tag])
             .AddSingleton(Log.Logger);
 
-        var app = builder.Build();
+        var host = builder.Build();
         Log.Information("Application services built successfully");
-        return app.Services;
+        return host;
     }
 
     private static void MigrateUp(IServiceProvider serviceProvider)

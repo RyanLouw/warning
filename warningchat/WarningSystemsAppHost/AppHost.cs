@@ -6,10 +6,12 @@ var sql = builder.AddSqlServer("WarningSystems-sql", port: 2433)
                   .AddDatabase("PitstopDb", "PitStop");
 
 var migrations = builder.AddProject<Projects.Database_Migrations>("database-migrations")
-    .WithEnvironment("ASPNECTCORE_ENVIRONMENT", "Staging")
+    .WithEnvironment("DOTNET_ENVIRONMENT", "Staging")
     .WithReference(sql)
     .WaitFor(sql);
 
-builder.AddProject<Projects.WarningSystems>("WarningSystems").WithExplicitStart();//.WithReference(sql);
+builder.AddProject<Projects.WarningSystems>("WarningSystems")
+    .WithReference(sql)
+    .WaitForCompletion(migrations);
 
 await builder.Build().RunAsync();
