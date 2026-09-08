@@ -11,10 +11,15 @@ public class SopDocumentLiteVm
     public SopDocumentLiteVm(SopDocument entity)
     {
         SOPDocumentId = entity.SOPDocumentId;
-        DocumentName = entity.DocumentName;
+       
+        SOPDocumentCategoryId = entity.SOPDocumentCategoryId;
+
+        DocumentName = $"{entity.SOPDocumentCategoryId} - {entity.DocumentName}";
+
     }
 
     public int SOPDocumentId { get; set; }
+    public int SOPDocumentCategoryId { get; set; }
 
     public string DocumentName { get; set; } = string.Empty;
 }

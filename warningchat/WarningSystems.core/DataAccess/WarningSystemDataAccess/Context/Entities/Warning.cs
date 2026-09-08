@@ -23,7 +23,7 @@ public class Warning : IAutomaticallyAuditedEntity
     public DateTime? LastStatusChangedOn { get; set; }
     public string? LastStatusChangedBy { get; set; }
 
-    public bool Completed { get; set; } = false;
+    //public bool Completed { get; set; } = false;
     public bool IsDeleted { get; set; } = false;
     public bool HideFromTeamLead { get; set; } = false;
 

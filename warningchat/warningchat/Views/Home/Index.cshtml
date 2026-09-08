@@ -27,6 +27,23 @@
                 : row.CreatedByDisplayName)
         .ToList();
 
+
+    var statusOrder = new[]
+      {
+        new { Key = "Draft",       Label = "Draft",       CssClass = "draft" },
+        new { Key = "New",         Label = "New",         CssClass = "new" },
+        new { Key = "In Progress", Label = "In Progress", CssClass = "in-progress" },
+        new { Key = "Pending",     Label = "Pending",     CssClass = "pending" },
+        new { Key = "Issued",      Label = "Issued",      CssClass = "issued" },
+        new { Key = "Validated",   Label = "Validated",   CssClass = "validated" }
+    };
+
+    var statusCounts = Model.StatusCounts
+        .ToDictionary(
+            x => x.Key.Trim(),
+            x => x.Value,
+            StringComparer.OrdinalIgnoreCase);
+
 }
 
 <div class="ws-page">
@@ -59,6 +76,11 @@
                 <span class="count count-overdue">@Model.OverDue.ToString()</span>
             </div>
 
+                <div class="status-pill status-@status.CssClass">
+                    <span class="label">@status.Label</span>
+                    <span class="count count-status">@count</span>
+                </div>
+            }
         </div>
 
         <div class="page-actions">
@@ -67,6 +89,13 @@
                     class="btn btn-lg px-4"
                     style="border-radius:999px; background:#0f6b7a; color:white;">
                 Create Issue
+            </button>
+
+            <button type="button"
+                    id="btnRequestWarning"
+                    class="btn btn-lg px-4"
+                    style="border-radius:999px; background:#0f6b7a; color:white;">
+                    Absent Descution
             </button>
         </div>
 

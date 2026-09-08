@@ -17,10 +17,13 @@ public class SOPDataAccess : ISOPDataAccess
         return await _context.SopDocuments
             .AsNoTracking()
             .Where(d => d.Status != 2)
+            .OrderBy(d => d.SOPDocumentCategoryId)
+            .ThenBy(d => d.DocumentName)
             .Select(d => new SopDocument
             {
                 SOPDocumentId = d.SOPDocumentId,
-                DocumentName = d.DocumentName
+                DocumentName = d.DocumentName,
+                SOPDocumentCategoryId = d.SOPDocumentCategoryId
             })
             .ToListAsync();
     }

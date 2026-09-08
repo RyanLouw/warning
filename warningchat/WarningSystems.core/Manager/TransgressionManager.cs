@@ -218,9 +218,8 @@ public class TransgressionManager : ITransgressionManager
                     CreatedByDisplayName = warning.CreatedBy,
 
                     CreatedOn = warning.CreatedOn,
-                    Status = warning.Completed
-                        ? "Completed"
-                        : warning.Status,
+                    Status = warning.Status,
+
                     Type = warning.Type,
                     WarningSubtype = warning.WarningSubtype,
 
@@ -679,6 +678,30 @@ public class TransgressionManager : ITransgressionManager
                 { vm.Due++; }
             }
         }
+    }
+
+    private static string GetWarningSubStatus(string? type, string? warningSubtype)
+    {
+        var cleanType = type?.Trim() ?? string.Empty;
+        var cleanSubtype = warningSubtype?.Trim() ?? string.Empty;
+
+        if (cleanType.Equals("Warning", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(cleanSubtype))
+        {
+            return $"Warning - {cleanSubtype}";
+        }
+
+        return cleanType.Equals("Issue", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : cleanType;
+    }
+
+    private static int GetStatusSortOrder(string status)
+    {
+        string[] workflow = ["Draft", "New", "In Progress", "Pending", "Issued", "Validated", "Invalid"];
+        var index = Array.FindIndex(workflow,
+            value => value.Equals(status, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? workflow.Length : index;
     }
 
     private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(
@@ -1797,7 +1820,7 @@ public class TransgressionManager : ITransgressionManager
         var warning = await _data.GetWarningByIdAsync(warningId)
             ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
 
-        if (!string.Equals(warning.Status, "Completed", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(warning.Status, "Issued", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Only a Completed issue can be Validated.");
 
         await _data.UpdateWarningDecisionAsync(

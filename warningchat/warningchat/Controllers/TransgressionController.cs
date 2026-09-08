@@ -98,14 +98,14 @@ namespace WarningSystems.Controllers
         {
             if (answers is null || answers.Count is 0)
             {
-               return BadRequest(new { success = false, message = "No answers provided." });
+                return BadRequest(new { success = false, message = "No answers provided." });
             }
-               
+
 
             var warningId = answers.First().WarningId;
             if (warningId is 0 || answers.Any(a => a.WarningId != warningId))
             {
-              return BadRequest(new { success = false, message = "All answers must have the same valid WarningId." });
+                return BadRequest(new { success = false, message = "All answers must have the same valid WarningId." });
             }
 
             foreach (var answer in answers)
@@ -165,23 +165,23 @@ namespace WarningSystems.Controllers
         {
             if (dto.WarningId is 0)
             {
-               return BadRequest();
+                return BadRequest();
             }
-               
+
 
             if (dto.Files is null || dto.Files.Count is 0)
             {
                 return BadRequest(new { success = false, message = "No files selected." });
             }
-                
+
 
             foreach (var file in dto.Files)
             {
                 if (file is null || file.Length is 0)
-                { 
-                  continue;
+                {
+                    continue;
                 }
-                   
+
 
                 var mediaType = _fileStorage.GetAttachmentType(file);
 
@@ -307,7 +307,7 @@ namespace WarningSystems.Controllers
                 });
             }
 
-           
+
             await _transgression.NotifyLegalIssueCompletedAsync(dto.WarningId);
 
             return Ok(new
@@ -315,7 +315,7 @@ namespace WarningSystems.Controllers
                 success = true,
                 message = "Legal notified successfully."
             });
-          
+
         }
     }
 }

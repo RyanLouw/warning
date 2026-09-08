@@ -207,9 +207,9 @@ public class WarningSystemDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_Warning_Category");
 
-            e.Property(x => x.Completed)
-                .HasDefaultValue(false)
-                .IsRequired();
+            //e.Property(x => x.Completed)
+            //    .HasDefaultValue(false)
+            //    .IsRequired();
 
             e.Property(x => x.IsDeleted)
                 .HasDefaultValue(false)
