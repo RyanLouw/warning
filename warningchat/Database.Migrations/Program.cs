@@ -60,7 +60,7 @@ public class Program
 
         builder.AddServiceDefaults();
 
-        var connection = builder.Configuration.GetConnectionString(migratorTag.ConnectionKey);
+        var connection = GetConnectionString(builder.Configuration, migratorTag.ConnectionKey);
 
         builder.Services.AddFluentMigratorCore()
             .ConfigureRunner(rb =>
@@ -76,6 +76,37 @@ public class Program
         var host = builder.Build();
         Log.Information("Application services built successfully");
         return host;
+    }
+
+    private static string GetConnectionString(IConfiguration configuration, string connectionKey)
+    {
+        var connection = configuration.GetConnectionString(connectionKey);
+
+        if (string.IsNullOrWhiteSpace(connection))
+        {
+            throw new InvalidOperationException(
+                $"Connection string 'ConnectionStrings:{connectionKey}' is not configured.");
+        }
+
+        connection = connection.Trim();
+
+        // Environment variables and user secrets are sometimes populated with
+        // the JSON quotes around the value. Those quotes are not part of a SQL
+        // Server connection string and cause SqlClient to fail at index zero.
+        if (connection.Length >= 2 &&
+            ((connection[0] == '"' && connection[^1] == '"') ||
+             (connection[0] == '\'' && connection[^1] == '\'')))
+        {
+            connection = connection[1..^1].Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(connection))
+        {
+            throw new InvalidOperationException(
+                $"Connection string 'ConnectionStrings:{connectionKey}' is empty.");
+        }
+
+        return connection;
     }
 
     private static void MigrateUp(IServiceProvider serviceProvider)
