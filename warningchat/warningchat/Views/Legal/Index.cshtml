@@ -738,17 +738,17 @@
 
                     <div class="fw-semibold mb-2">Select legal decision</div>
 
-                    @foreach (var issueType in Model.IssueTypes)
+                    @foreach (var lookupIssueType in Model.IssueTypes)
                     {
-                        var inputId = $"issueType{issueType.IssueTypeId}";
+                        var inputId = $"issueType{lookupIssueType.IssueTypeId}";
                         <div class="form-check">
                             <input class="form-check-input"
                                    type="radio"
                                    name="completeIssueType"
                                    id="@inputId"
-                                   value="@issueType.IssueTypeId"
-                                   data-subtype-mode="@((byte)issueType.SubTypeSelectionMode)">
-                            <label class="form-check-label" for="@inputId">@issueType.IssueTypeName</label>
+                                   value="@lookupIssueType.IssueTypeId"
+                                   data-subtype-mode="@((byte)lookupIssueType.SubTypeSelectionMode)">
+                            <label class="form-check-label" for="@inputId">@lookupIssueType.IssueTypeName</label>
                         </div>
                     }
 
