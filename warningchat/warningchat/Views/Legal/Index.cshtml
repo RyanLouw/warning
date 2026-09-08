@@ -27,7 +27,7 @@
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
     var issueStatus = ValOrDash(Model.Status);
-    var issueType = ValOrDash(Model.Type);
+    var issueTypeDisplay = ValOrDash(Model.Type);
     var warningCategory = ValOrDash(Model.WarningSubtype);
     var canValidate = Model.IssueStatusGroup == WarningSystems.Core.Models.Enum.IssueStatusGroup.LegalValidation;
     var canRecordDecision = Model.IssueStatusGroup == WarningSystems.Core.Models.Enum.IssueStatusGroup.LegalDecision;
@@ -136,7 +136,7 @@
                             </div>
                             <div class="ws-ov-row">
                                 <div class="ws-ov-label">Type:</div>
-                                <div class="ws-ov-value">@issueType</div>
+                                <div class="ws-ov-value">@issueTypeDisplay</div>
                             </div>
                             @if (string.Equals(Model.Type, "Warning", StringComparison.OrdinalIgnoreCase))
                             {
