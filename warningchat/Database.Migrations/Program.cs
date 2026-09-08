@@ -67,7 +67,9 @@ public class Program
             {
                 rb.AddSqlServer()
                     .WithGlobalConnectionString(connection)
-                    .ScanIn(typeof(Program).Assembly).For.Migrations();
+                    .ScanIn(typeof(Program).Assembly)
+                        .For.Migrations()
+                        .For.EmbeddedResources();
             })
             .AddLogging(lb => lb.AddFluentMigratorConsole())
             .Configure<RunnerOptions>(opt => opt.Tags = [migratorTag.Tag])
