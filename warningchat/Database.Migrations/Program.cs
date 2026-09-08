@@ -31,7 +31,7 @@ public class Program
             foreach (var tag in MigratorTags)
             {
                 Log.Information("Entered RunMigrations for {ConnectionKey}", tag.ConnectionKey);
-                using IHost host = CreateHost(tag, configSettings);
+                using IHost host = CreateHost(tag, configSettings, args);
 
                 using var scope = host.Services.CreateScope();
                 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
@@ -48,13 +48,23 @@ public class Program
         }
     }
 
-    private static IHost CreateHost(MigratorTag migratorTag, IConfigurationRoot configSettings)
+    private static IHost CreateHost(
+        MigratorTag migratorTag,
+        IConfigurationRoot configSettings,
+        string[] args)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration.AddConfiguration(configSettings);
 
+        // Add runtime configuration again after the packaged central-config
+        // defaults. Aspire supplies resource references through environment
+        // variables, so ConnectionStrings__PitstopDb must have the final say.
+        builder.Configuration
+            .AddEnvironmentVariables()
+            .AddCommandLine(args);
+
         Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(configSettings)
+            .ReadFrom.Configuration(builder.Configuration)
             .Enrich.FromLogContext()
             .CreateLogger();
 
