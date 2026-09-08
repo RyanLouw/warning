@@ -10,6 +10,6 @@ var migrations = builder.AddProject<Projects.Database_Migrations>("database-migr
     .WithReference(sql)
     .WaitFor(sql);
 
-builder.AddProject<Projects.WarningSystems>("WarningSystems").WithExplicitStart();//.WithReference(sql);
+builder.AddProject<Projects.WarningSystems>("WarningSystems").WithExplicitStart().WithReference(sql);
 
 await builder.Build().RunAsync();
