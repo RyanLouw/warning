@@ -25,7 +25,9 @@
 		<None Update="appsettings.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-		<EmbeddedResource Include="Migrations\Scripts\*.sql">
+		<!-- Use a platform-independent path so the scripts are embedded when the
+		     migrations project is built in the Linux Aspire container. -->
+		<EmbeddedResource Include="Migrations/Scripts/*.sql">
 			<!-- Keep the manifest name identical to the name passed to
 			     Execute.EmbeddedScript, regardless of root namespace or folder. -->
 			<LogicalName>%(Filename)%(Extension)</LogicalName>

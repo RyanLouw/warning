@@ -44,6 +44,7 @@ public class Program
         catch (Exception ex)
         {
             Log.Error(ex, "Main");
+            throw;
         }
     }
 
