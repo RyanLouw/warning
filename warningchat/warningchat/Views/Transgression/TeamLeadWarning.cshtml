@@ -4,10 +4,8 @@
 
 @{
 
-    var normalizedStatus = (Model.Status ?? "").Trim().ToLowerInvariant();
-
-    var canNotifyLegalCompleted =
-        normalizedStatus == "pending";
+    var canNotifyLegalCompleted = Model.IssueStatusGroup ==
+        WarningSystems.Core.Models.Enum.IssueStatusGroup.EmployeeAction;
     ViewData["Title"] = "Add More Information";
 
     string ValOrDash(string? value)

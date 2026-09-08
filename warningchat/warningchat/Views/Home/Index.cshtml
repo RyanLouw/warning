@@ -38,33 +38,12 @@
         new { Key = "Validated",   Label = "Validated",   CssClass = "validated" }
     };
 
-    var statusCounts = Model.StatusCounts
-        .ToDictionary(
-            x => x.Key.Trim(),
-            x => x.Value,
-            StringComparer.OrdinalIgnoreCase);
-
 }
 
 <div class="ws-page">
     <div class="ws-page-inner">
 
         <div class="status-bar">
-
-            <div class="status-pill">
-                <span class="label">Draft</span>
-                <span class="count count-draft">@Model.DraftCount</span>
-            </div>
-
-            <div class="status-pill">
-                <span class="label">New</span>
-                <span class="count count-new">@Model.New</span>
-            </div>
-
-            <div class="status-pill">
-                <span class="label">In Progress</span>
-                <span class="count count-progress">@Model.InProgress</span>
-            </div>
 
             <div class="status-pill">
                 <span class="label">Due</span>
@@ -76,6 +55,12 @@
                 <span class="count count-overdue">@Model.OverDue.ToString()</span>
             </div>
 
+            @foreach (var status in statusOrder)
+            {
+                var count = Model.TaskList.Count(row => string.Equals(
+                    row.Status?.Trim(),
+                    status.Key,
+                    StringComparison.OrdinalIgnoreCase));
                 <div class="status-pill status-@status.CssClass">
                     <span class="label">@status.Label</span>
                     <span class="count count-status">@count</span>

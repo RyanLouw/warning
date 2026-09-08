@@ -13,6 +13,6 @@ public class _0005_Categorys : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0005.sql");
+        Execute.EmbeddedScript("0005.sql");
     }
 }

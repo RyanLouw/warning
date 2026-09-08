@@ -14,6 +14,10 @@ public class Warning : IAutomaticallyAuditedEntity
     public string Type { get; set; } = "Issue";
     public string? WarningSubtype { get; set; }
 
+    public int? IssueStatusId { get; set; }
+    public int? IssueTypeId { get; set; }
+    public int? IssueSubTypeId { get; set; }
+
     public int CategoryId { get; set; }
 
     public DateTime? SubmittedOn { get; set; }
@@ -32,4 +36,7 @@ public class Warning : IAutomaticallyAuditedEntity
     public ICollection<WarningEvidence> Evidence { get; set; } = new List<WarningEvidence>();
     public ICollection<WarningCategory> WarningCategories { get; set; } = new List<WarningCategory>();
     public ICollection<WarningNote> Notes { get; set; } = new List<WarningNote>();
+    public LookupIssueStatus? IssueStatus { get; set; }
+    public LookupIssueType? IssueType { get; set; }
+    public LookupIssueSubType? IssueSubType { get; set; }
 }

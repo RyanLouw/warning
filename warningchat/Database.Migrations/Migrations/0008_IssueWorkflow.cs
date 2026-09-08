@@ -8,11 +8,11 @@ public class _0008_IssueWorkflow : Migration
 {
     public override void Down()
     {
-        // No down migration. Drop and recreate the database for local resets.
+        //No down. Drop db
     }
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0008.sql");
+        Execute.EmbeddedScript("0008.sql");
     }
 }

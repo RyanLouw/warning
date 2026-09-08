@@ -5,9 +5,8 @@ namespace WarningSystems.Models.DTO;
 public class CompleteTransgressionDto
 {
     public int WarningId { get; set; }
-    public string Status { get; set; } = "";
-    public string Type { get; set; } = "";
-    public string? WarningSubtype { get; set; }
+    public int IssueTypeId { get; set; }
+    public int? IssueSubTypeId { get; set; }
     public IFormFile? File { get; set; }
 }
 

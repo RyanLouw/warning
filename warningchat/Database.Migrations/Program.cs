@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
-
+using HW.CentralConfig.Package.Core;
 namespace HW.Database.Migrations;
 
 public class Program
@@ -16,7 +16,7 @@ public class Program
         new("PitstopDb", TagNames.Pitstop)
     ];
 
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         try
         {
@@ -31,7 +31,7 @@ public class Program
             foreach (var tag in MigratorTags)
             {
                 Log.Information("Entered RunMigrations for {ConnectionKey}", tag.ConnectionKey);
-                IServiceProvider serviceProvider = CreateServices(tag, configSettings);
+                IServiceProvider serviceProvider = await CreateServices(tag, configSettings);
 
                 using var scope = serviceProvider.CreateScope();
                 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
@@ -47,10 +47,13 @@ public class Program
         }
     }
 
-    private static IServiceProvider CreateServices(MigratorTag migratorTag, IConfigurationRoot configSettings)
+
+    private static async Task<IServiceProvider> CreateServices(MigratorTag migratorTag, IConfigurationRoot configSettings)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration.AddConfiguration(configSettings);
+
+        await builder.AddCentralConfigAsync();
 
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(configSettings)

@@ -45,7 +45,7 @@ public interface ITransgressionManager
     public Task<long?> SaveEvidenceAsync(long warningId, string? fileName, string? mediaType, long? fileSizeBytes, string? notes, int? typeid, bool leagle);
 
     public Task UpdateWarningStatusAsync(long warningId, DateOnly? duedate, string? status);
-    public Task ApplyLegalDecisionAsync(long warningId, string type, string? warningSubtype);
+    public Task ApplyLegalDecisionAsync(long warningId, int issueTypeId, int? issueSubTypeId);
     public Task ValidateWarningAsync(long warningId);
 
     public Task SendEmailToLegalAsync(long warningId, DateOnly? duedate, string? status);

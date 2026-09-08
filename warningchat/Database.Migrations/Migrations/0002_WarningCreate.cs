@@ -13,6 +13,6 @@ public class _0002_WarningCreate : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0002.sql");
+        Execute.EmbeddedScript("0002.sql");
     }
 }

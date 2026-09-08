@@ -1,4 +1,5 @@
-﻿using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
+using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
+using WarningSystems.Core.Models.Enum;
 
 namespace WarningSystems.Core.DataAccess.WarningSystemDataAccess;
 
@@ -48,15 +49,11 @@ public interface IWarningSystemDataAccess
 
     public Task<bool> QuestionExistsAsync(string questionText, string controlType);
 
-    public Task MarkWarningInProgressAsync(long warningId, string changedBy);
-
     public Task UpsertWarningAnswerAsync(long warningId, int questionId, string? answerText, string? answerJson);
 
     public Task<List<NoteTypeLookup>> GetActiveNoteTypesAsync();
 
-    public Task UpdateWarningStatusAsync(long warningId, DateOnly? dueDate, string? status, string user);
-
-    public Task UpdateWarningDecisionAsync(long warningId, string status, string type,string? warningSubtype, string user);
+    public Task UpdateWarningDueDateAsync(long warningId, DateOnly? dueDate, string user);
 
     public Task<long?> SaveEvidenceAsync(long warningId, string? fileName, string? mediaType, long? fileSizeBytes,
         string user, string? notes, int? noteTypeId);
@@ -72,4 +69,9 @@ public interface IWarningSystemDataAccess
     Task<bool?> SetHideFromTeamLeadAsync(long warningId, bool hideFromTeamLead);
     Task<List<Warning>> GetAllWarningsForTaskListAsync();
     Task<List<Warning>> GetAllWarningsForReportingAsync();
+    Task<List<LookupIssueType>> GetActiveIssueTypesAsync();
+    Task<LookupIssueStatus?> GetIssueStatusByGroupAsync(IssueStatusGroup group);
+    Task UpdateWarningDecisionAsync(long warningId, LookupIssueType issueType,
+        LookupIssueSubType? issueSubType, string user);
+    Task AdvanceWarningStatusAsync(long warningId, IssueStatusGroup requiredGroup, string user);
 }

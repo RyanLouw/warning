@@ -1,579 +1,907 @@
-﻿@using WarningSystems.Core.Services
-@using WarningSystems.Core.ViewModels
+﻿@using WarningSystems.Core.ViewModels
+@model WarningSystems.Core.ViewModels.TaskListVM
 
-@model WarningSystems.Core.ViewModels.LegalWizardVm
 
 @{
-    ViewData["Title"] = "Legal";
+    ViewData["Title"] = "Home";
 
-    string ValOrDash(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
-    }
-    string StripHtml(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return "—";
+    var roles = Model.CurrentUserRoles ?? Array.Empty<string>();
+    bool isUser = roles.Contains("User");
+    bool isLegal = roles.Contains("Legal");
 
-        var text = System.Text.RegularExpressions.Regex.Replace(value, "<.*?>", " ");
+    var currentUserId = (Model.CurrentUserId ?? string.Empty).Trim();
 
-        text = System.Net.WebUtility.HtmlDecode(text);
+    var creatorOptions = Model.TaskList
+        .Where(row => !string.IsNullOrWhiteSpace(row.CreatedBy))
+        .GroupBy(
+            row => row.CreatedBy.Trim(),
+            StringComparer.OrdinalIgnoreCase)
+        .Select(group => group.First())
+        .Where(row => !string.Equals(
+            row.CreatedBy.Trim(),
+            currentUserId,
+            StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row =>
+            string.IsNullOrWhiteSpace(row.CreatedByDisplayName)
+                ? row.CreatedBy
+                : row.CreatedByDisplayName)
+        .ToList();
 
-        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
 
-        return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
-    }
-    var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
-    var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
-    var issueCategory = ValOrDash(Model.CategoryName);
-    var issueStatus = ValOrDash(Model.Status);
-    var issueType = ValOrDash(Model.Type);
-    var warningCategory = ValOrDash(Model.WarningSubtype);
-    var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
-    var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
+    var statusOrder = new[]
+      {
+        new { Key = "Draft",       Label = "Draft",       CssClass = "draft" },
+        new { Key = "New",         Label = "New",         CssClass = "new" },
+        new { Key = "In Progress", Label = "In Progress", CssClass = "in-progress" },
+        new { Key = "Pending",     Label = "Pending",     CssClass = "pending" },
+        new { Key = "Issued",      Label = "Issued",      CssClass = "issued" },
+        new { Key = "Validated",   Label = "Validated",   CssClass = "validated" }
+    };
 
-    var issueCreatedOn = Model.CreatedOn == default
-        ? "—"
-        : Model.CreatedOn.ToString("yyyy/MM/dd HH:mm");
-
-    var issueSubmittedOn = Model.SubmittedOn.HasValue
-        ? Model.SubmittedOn.Value.ToString("yyyy/MM/dd HH:mm")
-        : "—";
-
-    var issueDueDate = Model.LegalExpiryDate.HasValue
-        ? Model.LegalExpiryDate.Value.ToString("yyyy/MM/dd")
-        : "—";
-
-    var descriptionQuestion = Model.Questions?
-        .FirstOrDefault(q => q.QuestionId == 2);
-
-    var issueDescriptionRaw = !string.IsNullOrWhiteSpace(descriptionQuestion?.AnswerText)
-        ? descriptionQuestion.AnswerText
-        : !string.IsNullOrWhiteSpace(descriptionQuestion?.AnswerJson)
-            ? descriptionQuestion.AnswerJson
-            : "—";
-
-    var issueDescription = StripHtml(issueDescriptionRaw);
-
-    var docsCount = Model.Evidence?
-        .Count(x => !string.IsNullOrWhiteSpace(x.FileName)) ?? 0;
-
-    var generalNotesCount = Model.Notes?.Count ?? 0;
-
-    var documentNotesCount = (Model.Evidence ?? new List<LegalEvidenceVm>())
-        .Where(e => e.Notes != null && e.Notes.Any())
-        .SelectMany(e => e.Notes)
-        .Count();
 }
 
 <div class="ws-page">
     <div class="ws-page-inner">
 
+        <div class="status-bar">
 
+            <div class="status-pill">
+                <span class="label">Due</span>
+                <span class="count count-due">@Model.Due.ToString()</span>
+            </div>
 
-        <div class="page-actions d-flex gap-2">
-            @if (canRecordDecision)
+            <div class="status-pill">
+                <span class="label">Overdue</span>
+                <span class="count count-overdue">@Model.OverDue.ToString()</span>
+            </div>
+
+            @foreach (var status in statusOrder)
             {
-                <button type="button"
-                        class="ws-btn-primary-pill"
-                        data-bs-toggle="modal"
-                        data-bs-target="#completeModal">
-                    Record Decision
-                </button>
+                var count = Model.TaskList.Count(row => string.Equals(
+                    row.Status?.Trim(),
+                    status.Key,
+                    StringComparison.OrdinalIgnoreCase));
+                <div class="status-pill status-@status.CssClass">
+                    <span class="label">@status.Label</span>
+                    <span class="count count-status">@count</span>
+                </div>
             }
+        </div>
 
-            @if (canValidate)
-            {
-                <button type="button"
-                        class="btn btn-success"
-                        style="border-radius:999px;"
-                        id="btnValidateIssue"
-                        onclick="validateIssue(this)">
-                    Validate
-                </button>
-            }
-
+        <div class="page-actions">
             <button type="button"
-                    class="ws-btn-primary-pill"
-                    style="border-radius:999px;"
-                    data-bs-toggle="modal"
-                    data-bs-target="#dueDateModal">
-                Change Due Date
+                    id="btnRequestWarning"
+                    class="btn btn-lg px-4"
+                    style="border-radius:999px; background:#0f6b7a; color:white;">
+                Create Issue
             </button>
 
+            <button type="button"
+                    id="btnRequestWarning"
+                    class="btn btn-lg px-4"
+                    style="border-radius:999px; background:#0f6b7a; color:white;">
+                    Absent Descution
+            </button>
         </div>
-        <div class="mb-4">
-            <h5 class="mb-2">Issue Recap</h5>
 
-            <div class="row g-3">
 
-                <div class="col-12 col-md-6 col-xl-3">
-                    <div class="ws-ov-card ws-ov-trans h-100">
-                        <div class="ws-ov-card-head">1. Issue</div>
-                        <div class="ws-ov-card-body">
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Warning ID:</div>
-                                <div class="ws-ov-value">#@Model.WarningId</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Employee:</div>
-                                <div class="ws-ov-value text-truncate" title="@issueEmployee">
-                                    @issueEmployee
-                                </div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Category:</div>
-                                <div class="ws-ov-value text-truncate" title="@issueCategory">
-                                    @issueCategory
-                                </div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Status:</div>
-                                <div class="ws-ov-value">@issueStatus</div>
-                            </div>
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Type:</div>
-                                <div class="ws-ov-value">@issueType</div>
-                            </div>
-                            @if (string.Equals(Model.Type, "Warning", StringComparison.OrdinalIgnoreCase))
-                            {
-                                <div class="ws-ov-row">
-                                    <div class="ws-ov-label">Warning category:</div>
-                                    <div class="ws-ov-value">@warningCategory</div>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-md-6 col-xl-3">
-                    <div class="ws-ov-card ws-ov-dates h-100">
-                        <div class="ws-ov-card-head">2. Dates</div>
-                        <div class="ws-ov-card-body">
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Created:</div>
-                                <div class="ws-ov-value">@issueCreatedOn</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Submitted:</div>
-                                <div class="ws-ov-value">@issueSubmittedOn</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Due Date:</div>
-                                <div class="ws-ov-value">@issueDueDate</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-md-6 col-xl-3">
-                    <div class="ws-ov-card ws-ov-desc h-100">
-                        <div class="ws-ov-card-head">3. Description</div>
-
-                        <div class="ws-ov-card-body">
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Description:</div>
-
-                                <div class="ws-ov-value description-text">
-                                    @issueDescription
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-12 col-md-6 col-xl-3">
-                    <div class="ws-ov-card ws-ov-att h-100">
-                        <div class="ws-ov-card-head">4. Evidence / Interactions</div>
-                        <div class="ws-ov-card-body">
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Documents:</div>
-                                <div class="ws-ov-value">@docsCount</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">General:</div>
-                                <div class="ws-ov-value">@generalNotesCount</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Document:</div>
-                                <div class="ws-ov-value">@documentNotesCount</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Created By:</div>
-                                <div class="ws-ov-value text-truncate" title="@issueCreatedBy">
-                                    @issueCreatedBy
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
         <div class="main-panel">
 
-            <ul class="nav nav-tabs hw-tabs" id="legalTabs" role="tablist">
+            <!-- Tabs -->
+            <ul class="nav nav-tabs hw-tabs" id="homeTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active"
-                            id="notes-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#notes"
-                            type="button"
-                            role="tab"
-                            aria-controls="notes"
-                            aria-selected="true">
-                        Interactions
+                    <button class="nav-link active" id="tasklist-tab" data-bs-toggle="tab" data-bs-target="#tasklist"
+                            type="button" role="tab" aria-controls="tasklist" aria-selected="true">
+                        Task List
                     </button>
                 </li>
 
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link"
-                            id="history-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#history"
-                            type="button"
-                            role="tab"
-                            aria-controls="history"
-                            aria-selected="false">
-                        Issue History
+                    <button class="nav-link" id="employee-tab" data-bs-toggle="tab" data-bs-target="#employee"
+                            type="button" role="tab" aria-controls="employee" aria-selected="false">
+                        Employee
                     </button>
                 </li>
 
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link"
-                            id="docs-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#docs"
-                            type="button"
-                            role="tab"
-                            aria-controls="docs"
-                            aria-selected="false">
-                        Documents
+                    <button class="nav-link" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports"
+                            type="button" role="tab" aria-controls="reports" aria-selected="false">
+                        Reports
                     </button>
                 </li>
             </ul>
 
+
             <div class="tab-content">
 
-                <!-- NOTES TAB -->
-                <div class="tab-pane fade"
-                     id="notes"
-                     role="tabpanel"
-                     aria-labelledby="notes-tab">
-
+                <!-- TASK LIST  -->
+                <div class="tab-pane fade show active" id="tasklist" role="tabpanel" aria-labelledby="tasklist-tab">
                     <div class="panel-body">
 
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                <h5 class="mb-1">Interactions</h5>
-                                <div class="text-muted">
-                                    General interactions and interactions linked to uploaded evidence.
+                        <div class="filters-row mb-3">
+                            <div class="filters-left d-flex gap-2 flex-wrap">
+                                <div class="search-box">
+                                    <input id="taskListSearch"
+                                           type="search"
+                                           class="form-control form-control-lg"
+                                           style="border-radius:999px;"
+                                           placeholder="Search employee, created by or status..."
+                                           autocomplete="off" />
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle"
+                                   id="taskListTable">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Employee Name</th>
+                                        <th>Created By</th>
+                                        <th>Created Date</th>
+                                        <th>Due Date</th>
+                                        <th>Last Actioned Date</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @if (Model.TaskList == null || !Model.TaskList.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="6"
+                                                class="text-center text-muted py-4">
+                                                No warnings found.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var row in Model.TaskList)
+                                        {
+                                            var status = (row.Status ?? string.Empty).Trim();
+                                            var statusKey = status.ToLowerInvariant();
+
+                                            var employeeName =
+                                            (row.EmployeeDisplayName ?? string.Empty).Trim();
+
+                                            var createdById =
+                                            (row.CreatedBy ?? string.Empty).Trim();
+
+                                            var createdByName =
+                                            (row.CreatedByDisplayName ?? string.Empty).Trim();
+
+                                            bool isUserNewOrInProgress =
+                                            isUser &&
+                                            (statusKey == "new" ||
+                                            statusKey == "in progress");
+
+                                            bool canClick =
+                                            (isUser && statusKey == "draft") ||
+                                            isUserNewOrInProgress ||
+                                            (isLegal &&
+                                            (statusKey == "new" ||
+                                            statusKey == "in progress"));
+
+                                            string? rowUrl = null;
+
+                                            if (canClick)
+                                            {
+                                                rowUrl = Url.Action(
+                                                                                "Redirect",
+                                                                                "Home",
+                                                new
+                                                {
+                                                    warningId = row.WarningId,
+                                                    status = statusKey
+                                                });
+                                            }
+
+                                            <tr class="task-list-row @(canClick ? "clickable-row" : "disabled-row")"
+                                                data-url="@(rowUrl ?? string.Empty)"
+                                                data-employee="@employeeName"
+                                                data-created-by-id="@createdById"
+                                                data-created-by-name="@createdByName"
+                                                data-status="@status">
+
+                                                <td>
+                                                    @(canClick ? "🔓" : "🔒")
+                                                    @status
+                                                </td>
+
+                                                <td>@employeeName</td>
+                                                <td>@createdByName</td>
+                                                <td>@row.CreatedOn.ToString("yyyy/MM/dd")</td>
+                                                <td>@(row.LegalExpiryDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                                <td>@(row.LastStatusChangedOn?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                            </tr>
+                                        }
+
+                                        <tr id="taskListNoResults"
+                                            class="d-none">
+                                            <td colspan="6"
+                                                class="text-center text-muted py-4">
+                                                No issues match your filters.
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+
+                        <div class="table-footer">
+                            <div class="pager-buttons btn-group" role="group" aria-label="Pagination">
+                                <button class="btn btn-outline-secondary" disabled>1</button>
+                            </div>
+
+                            <div class="page-size btn-group" role="group" aria-label="Page size">
+                                <button class="btn btn-outline-secondary" disabled>All</button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- EMPLOYEE  -->
+                <div class="tab-pane fade" id="employee" role="tabpanel" aria-labelledby="employee-tab">
+                    <div class="panel-body">
+                        <h5 class="mb-3">Employees under me</h5>
+
+                        @if (Model.EmployeeRows == null || !Model.EmployeeRows.Any())
+                        {
+                            <div class="text-muted">
+                                No employees found under your reporting line.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="filters-row mb-3">
+                                <div class="filters-left d-flex gap-2 flex-wrap">
+                                    <div class="search-box">
+                                        <input id="employeeSearch"
+                                               class="form-control form-control-lg"
+                                               style="border-radius:999px;"
+                                               placeholder="Search employee, department, team lead, manager, status" />
+                                    </div>
+
+                                    <div class="assigned-box">
+                                        <select id="employeeSort" class="form-select form-select-lg" style="border-radius:999px;">
+                                            <option value="desc" selected>Last Actioned Date (Newest first)</option>
+                                            <option value="asc">Last Actioned Date (Oldest first)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
-                            <button type="button"
-                                    class="ws-btn-primary-pill"
-                                    style="border-radius:999px;"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#uploadDocsModal">
-                                Add Evidence
-                            </button>
-                        </div>
-
-                        @{
-                            var allInteractions = new List<dynamic>();
-
-                            if (Model.Notes != null && Model.Notes.Any())
-                            {
-                                allInteractions.AddRange(Model.Notes.Select(n => new
-                                {
-                                    NoteText = n.NoteText,
-                                    CreatedOnUtc = n.CreatedOnUtc,
-                                    CreatedBy = string.IsNullOrWhiteSpace(n.CreatedByDisplayName)
-                                ? n.CreatedBy
-                                : n.CreatedByDisplayName,
-                                    DocumentName = "",
-                                    DocumentType = "",
-                                    DocumentSize = ""
-                                }));
-                            }
-
-                            var evidenceWithNotes = (Model.Evidence ?? new List<LegalEvidenceVm>())
-                            .Where(e => e.Notes != null && e.Notes.Any())
-                            .ToList();
-
-                            foreach (var evidence in evidenceWithNotes)
-                            {
-                                foreach (var note in evidence.Notes)
-                                {
-                                    allInteractions.Add(new
-                                    {
-                                        NoteText = note.NoteText,
-                                        CreatedOnUtc = note.CreatedOnUtc,
-                                        CreatedBy = string.IsNullOrWhiteSpace(note.CreatedByDisplayName)
-                                    ? note.CreatedBy
-                                    : note.CreatedByDisplayName,
-                                        DocumentName = FileNameHelper.GetDisplayFileName(evidence.FileName),
-                                        DocumentType = evidence.FileType ?? "",
-                                        DocumentSize = $"{evidence.FileSizeBytes:N0} bytes"
-                                    });
-                                }
-                            }
-
-                            var orderedInteractions = allInteractions
-                            .OrderByDescending(x => x.CreatedOnUtc)
-                            .ToList();
-                        }
-
-                        <div>
-                            <h5 class="mb-2">All Interactions</h5>
-
                             <div class="table-responsive">
-                                <table class="table table-hover align-middle" id="interactionsTable">
-                                    <thead>
+                                <table class="table table-sm align-middle" id="employeeTable">
+                                    <thead class="table-light">
                                         <tr>
-                                            <th style="width:45%;">Interaction</th>
-                                            <th style="width:18%;">Added On</th>
-                                            <th style="width:18%;">Added By</th>
-                                            <th style="width:19%;">Document</th>
+                                            <th>Employee Name</th>
+                                            <th>Department</th>
+                                            <th>Team Leader</th>
+                                            <th>Manager</th>
+                                            <th>No Issue</th>
+                                            <th>Last Actioned Date</th>
+                                            <th>Current State</th>
                                         </tr>
                                     </thead>
-
                                     <tbody>
-                                        @if (!orderedInteractions.Any())
+                                        @foreach (var row in Model.EmployeeRows)
                                         {
-                                            <tr>
-                                                <td colspan="4" class="text-center text-muted py-4">
-                                                    No interactions yet.
-                                                </td>
+                                            var employeeId = row.EmployeeId ?? "";
+                                            var employeeName = row.EmployeeName ?? "";
+                                            var department = row.Department ?? "";
+                                            var teamLeader = row.TeamLeader ?? "";
+                                            var manager = row.Manager ?? "";
+                                            var currentState = row.CurrentState ?? "";
+                                            var lastActionedDate = row.LastActionedDate?.ToString("yyyy-MM-dd") ?? "";
+
+                                            <tr class="employee-row"
+                                                data-employee-id="@employeeId"
+                                                data-employee="@employeeName"
+                                                data-department="@department"
+                                                data-teamleader="@teamLeader"
+                                                data-manager="@manager"
+                                                data-currentstate="@currentState"
+                                                data-lastactioned="@lastActionedDate">
+                                                <td>@employeeName</td>
+                                                <td>@department</td>
+                                                <td>@teamLeader</td>
+                                                <td>@manager</td>
+                                                <td>@row.NoWarnings</td>
+                                                <td>@(row.LastActionedDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                                <td>@currentState</td>
                                             </tr>
-                                        }
-                                        else
-                                        {
-                                            foreach (var interaction in orderedInteractions)
-                                            {
-                                                <tr>
-                                                    <td>
-                                                        @interaction.NoteText
-                                                    </td>
-
-                                                    <td>
-                                                        @interaction.CreatedOnUtc.ToString("yyyy/MM/dd HH:mm")
-                                                    </td>
-
-                                                    <td>
-                                                        @interaction.CreatedBy
-                                                    </td>
-
-                                                    <td>
-                                                        @if (string.IsNullOrWhiteSpace(interaction.DocumentName))
-                                                        {
-                                                            <span class="text-muted">General</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <div class="fw-semibold">
-                                                                @interaction.DocumentName
-                                                            </div>
-
-                                                            <div class="text-muted small">
-                                                                @interaction.DocumentType • @interaction.DocumentSize
-                                                            </div>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
                                         }
                                     </tbody>
                                 </table>
                             </div>
-
-                            <div class="table-footer mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <div class="text-muted small" id="interactionsPageInfo"></div>
-
-                                <div class="pager-buttons btn-group" role="group" aria-label="Interactions pagination">
-                                    <button type="button"
-                                            class="btn btn-outline-secondary btn-sm"
-                                            id="interactionsPrevBtn">
-                                        Previous
-                                    </button>
-
-                                    <button type="button"
-                                            class="btn btn-outline-secondary btn-sm"
-                                            id="interactionsNextBtn">
-                                        Next
-                                    </button>
-                                </div>
-                            </div>
-
-
-                        </div>
-
+                        }
                     </div>
                 </div>
 
+                <!-- REPORTS TAB -->
+                <div class="tab-pane fade"
+                     id="reports"
+                     role="tabpanel"
+                     aria-labelledby="reports-tab">
 
-
-
-
-
-
-
-
-
-
-
-                <!-- HISTORY TAB -->
-                <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
                     <div class="panel-body">
-                        <h5 class="mb-2">Issue History</h5>
-                        <div class="text-muted mb-3">
-                            All warnings for this employee, most recent first.
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Created On</th>
-                                        <th>Status</th>
-                                        <th>Last Changed By</th>
-                                        <th>Category</th>
-                                        <th class="text-end">Issue</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody>
-                                    @if (Model.TransgretionHistory == null || !Model.TransgretionHistory.Any())
-                                    {
-                                        <tr>
-                                            <td colspan="5" class="text-center text-muted py-4">
-                                                No history data available.
-                                            </td>
-                                        </tr>
-                                    }
-                                    else
-                                    {
-                                        foreach (var h in Model.TransgretionHistory)
-                                        {
-                                            <tr>
-                                                <td>@h.CreatedOn.ToString("yyyy/MM/dd")</td>
-                                                <td>@h.Status</td>
-                                                <td>
-                                                    @(string.IsNullOrWhiteSpace(h.LastStatusChangedByDisplayName)
-                                                                                                ? "-"
-                                                                                                : h.LastStatusChangedByDisplayName)
-                                                </td>
-                                                <td>@h.CategoryName</td>
-                                                <td class="text-end">
-                                                    <a class="btn btn-outline-secondary btn-sm"
-                                                       style="border-radius:999px;"
-                                                       href="@Url.Action("Index", "Legal", new { id = h.WarningId })">
-                                                        View
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-
-                    </div>
-                </div>
-
-                <!-- DOCUMENTS TAB -->
-                <div class="tab-pane fade" id="docs" role="tabpanel" aria-labelledby="docs-tab">
-                    <div class="panel-body">
-
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                <h5 class="mb-1">Documents</h5>
-                                <div class="text-muted">
-                                    Showing uploaded evidence documents.
-                                </div>
-                            </div>
-
-                            <button type="button"
-                                    class="ws-btn-primary-pill"
-                                    style="border-radius:999px;"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#uploadDocsModal">
-                                Upload Document
-                            </button>
-                        </div>
-
                         @{
-                            var docs = (Model.Evidence ?? new List<LegalEvidenceVm>())
-                            .Where(x => !string.IsNullOrWhiteSpace(x.FileName))
-                            .GroupBy(x => x.FileName)
-                            .Select(g => g.OrderByDescending(x => x.UploadedOn).First())
-                            .OrderByDescending(x => x.UploadedOn)
-                            .ToList();
+                            var reportRows =
+                                Model.ReportRows
+                                ?? new List<TransgretionsVM>();
+
+                            var departments = reportRows
+                                .Select(row => row.Department?.Trim())
+                                .Where(value =>
+                                    !string.IsNullOrWhiteSpace(value))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .OrderBy(value => value)
+                                .ToList();
+
+                            var issueTypes = reportRows
+                                .SelectMany(row =>
+                                    row.CategoryNames
+                                    ?? new List<string>())
+                                .Select(value => value?.Trim())
+                                .Where(value =>
+                                    !string.IsNullOrWhiteSpace(value))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .OrderBy(value => value)
+                                .ToList();
+
+                            var noteTypes = reportRows
+                                .Select(row =>
+                                    row.LatestNoteType?.Trim())
+                                .Where(value =>
+                                    !string.IsNullOrWhiteSpace(value))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .OrderBy(value => value)
+                                .ToList();
                         }
 
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>File</th>
-                                        <th>Type</th>
-                                        <th>Size</th>
-                                        <th>Uploaded By</th>
-                                        <th>Uploaded On</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
+                        <div class="mb-4">
+                            <h4 class="mb-1">Issue Reporting</h4>
 
-                                <tbody>
-                                    @if (!docs.Any())
-                                    {
-                                        <tr>
-                                            <td colspan="6" class="text-center text-muted py-4">
-                                                No documents found.
-                                            </td>
-                                        </tr>
-                                    }
-                                    else
-                                    {
-                                        foreach (var d in docs)
-                                        {
-                                            <tr>
-                                                <td class="fw-semibold">
-                                                    @FileNameHelper.GetDisplayFileName(d.FileName)
-                                                </td>
-                                                <td>@d.FileType</td>
-                                                <td>@d.FileSizeBytes.ToString("N0")</td>
-                                                <td>
-                                                    @(string.IsNullOrWhiteSpace(d.UploadedByDisplayName)
-                                                                                                ? d.UploadedBy
-                                                                                                : d.UploadedByDisplayName)
-                                                </td>
-                                                <td>@d.UploadedOn.ToString("yyyy/MM/dd HH:mm")</td>
-                                                <td class="text-end">
-                                                    <a class="btn btn-outline-secondary"
-                                                       style="border-radius:999px;"
-                                                       href="@Url.Action("Download", "Legal", new { warningId = Model.WarningId, fileName = d.FileName })">
-                                                        Download
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                </tbody>
-                            </table>
+                            <div class="text-muted">
+                                Filter issues by department, manager, employee,
+                                status, issue type and latest action.
+                            </div>
                         </div>
 
+                        <div class="row g-3">
+
+                            <!-- FILTERS -->
+                            <div class="col-12 col-xl-3">
+                                <div class="card border-0 shadow-sm h-100">
+                                    <div class="card-body">
+
+                                        <h5 class="card-title mb-3">
+                                            Filters
+                                        </h5>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Search
+                                            </label>
+
+                                            <input type="search"
+                                                   id="reportSearch"
+                                                   class="form-control report-filter"
+                                                   placeholder="Search report..."
+                                                   autocomplete="off" />
+                                        </div>
+
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-12 col-md-6 col-xl-12">
+                                                <label class="form-label">
+                                                    Start date
+                                                </label>
+
+                                                <input type="date"
+                                                       id="reportStartDate"
+                                                       class="form-control report-filter" />
+                                            </div>
+
+                                            <div class="col-12 col-md-6 col-xl-12">
+                                                <label class="form-label">
+                                                    End date
+                                                </label>
+
+                                                <input type="date"
+                                                       id="reportEndDate"
+                                                       class="form-control report-filter" />
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Department
+                                            </label>
+
+                                            <select id="reportDepartment"
+                                                    class="form-select report-filter">
+
+                                                <option value="">
+                                                    All departments
+                                                </option>
+
+                                                @foreach (var department in departments)
+                                                {
+                                                    <option value="@department">
+                                                        @department
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Manager
+                                            </label>
+
+                                            <select id="reportManager"
+                                                    class="form-select report-filter">
+
+                                                <option value="">
+                                                    All managers
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Employee
+                                            </label>
+
+                                            <select id="reportEmployee"
+                                                    class="form-select report-filter">
+
+                                                <option value="">
+                                                    All employees
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Status
+                                            </label>
+
+                                            <select id="reportStatus"
+                                                    class="form-select report-filter">
+
+                                                <option value="">
+                                                    All statuses
+                                                </option>
+
+                                                <option value="draft">
+                                                    Draft
+                                                </option>
+
+                                                <option value="in progress">
+                                                    In Progress
+                                                </option>
+
+                                                <option value="completed">
+                                                    Completed
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Issue type
+                                            </label>
+
+                                            <select id="reportIssueType"
+                                                    class="form-select report-filter">
+
+                                                <option value="">
+                                                    All issue types
+                                                </option>
+
+                                                @foreach (var reportIssueType in issueTypes)
+                                                {
+                                                    <option value="@reportIssueType">
+                                                        @reportIssueType
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">
+                                                Latest action
+                                            </label>
+
+                                            <select id="reportLatestAction"
+                                                    class="form-select report-filter">
+
+                                                <option value="">
+                                                    All latest actions
+                                                </option>
+
+                                                @foreach (var noteType in noteTypes)
+                                                {
+                                                    <option value="@noteType">
+                                                        @noteType
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <button type="button"
+                                                id="btnClearReportFilters"
+                                                class="btn btn-outline-secondary w-100">
+                                            Clear filters
+                                        </button>
+
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CONTENT -->
+                            <div class="col-12 col-xl-9">
+
+                                <!-- SIMPLE NUMBERS -->
+                                <div class="row g-3 mb-4">
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">
+                                                    Departments
+                                                </div>
+
+                                                <div class="fs-3 fw-bold"
+                                                     id="reportDepartmentCount">
+                                                    0
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">
+                                                    Total Issues
+                                                </div>
+
+                                                <div class="fs-3 fw-bold"
+                                                     id="reportIssueCount">
+                                                    0
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">
+                                                    Draft
+                                                </div>
+
+                                                <div class="fs-3 fw-bold"
+                                                     id="reportDraftCount">
+                                                    0
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">
+                                                    In Progress
+                                                </div>
+
+                                                <div class="fs-3 fw-bold"
+                                                     id="reportInProgressCount">
+                                                    0
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">
+                                                    Completed
+                                                </div>
+
+                                                <div class="fs-3 fw-bold"
+                                                     id="reportCompletedCount">
+                                                    0
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                <div class="row g-3 mb-4">
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">
+                                                    Discussion
+                                                </div>
+
+                                                <div class="fs-3 fw-bold"
+                                                     id="reportDiscussionCount">
+                                                    0
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">
+                                                    Warning
+                                                </div>
+
+                                                <div class="fs-3 fw-bold"
+                                                     id="reportWarningTypeCount">
+                                                    0
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+
+                                </div>
+
+                                <!-- DEPARTMENT BREAKDOWN -->
+                                <div class="card border-0 shadow-sm mb-4">
+                                    <div class="card-body">
+
+                                        <h5 class="card-title">
+                                            Department Breakdown
+                                        </h5>
+
+                                        <div class="table-responsive">
+                                            <table class="table table-sm align-middle">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Department</th>
+                                                        <th>Total</th>
+                                                        <th>Draft</th>
+                                                        <th>In Progress</th>
+                                                        <th>Completed</th>
+
+                                                     
+                                                        <th>Warning</th>
+
+                                                    </tr>
+                                                </thead>
+
+                                                <tbody id="reportDepartmentBreakdown">
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                    </div>
+                                </div>
+
+                                <!-- COLLAPSIBLE ISSUE DETAILS -->
+                                <div class="card border-0 shadow-sm">
+
+                                    <div class="card-header bg-white border-0 p-0">
+                                        <button type="button"
+                                                class="btn w-100 d-flex align-items-center justify-content-between text-start p-3 collapsed"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#reportIssueDetailsCollapse"
+                                                aria-expanded="false"
+                                                aria-controls="reportIssueDetailsCollapse">
+
+                                            <span>
+                                                <span class="fw-semibold">
+                                                    Issue Details
+                                                </span>
+
+                                                <span class="badge bg-secondary ms-2"
+                                                      id="reportVisibleDetailCount">
+                                                    0
+                                                </span>
+
+                                                <span class="text-muted small ms-2">
+                                                    filtered records
+                                                </span>
+                                            </span>
+
+                                            <span class="report-collapse-arrow">
+                                                ▼
+                                            </span>
+                                        </button>
+                                    </div>
+
+                                    <div id="reportIssueDetailsCollapse"
+                                         class="collapse">
+
+                                        <div class="card-body border-top">
+
+                                            <div class="text-muted small mb-3">
+                                                These records already reflect the selected report filters.
+                                            </div>
+
+                                            <div class="table-responsive">
+                                                <table class="table table-hover align-middle"
+                                                       id="reportsTable">
+
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Status</th>
+                                                            <th>Issue Type</th>
+                                                            <th>Employee</th>
+                                                            <th>Department</th>
+                                                            <th>Manager</th>
+                                                            <th>Created By</th>
+                                                            <th>Created Date</th>
+                                                            <th>Due Date</th>
+                                                            <th>Latest Action</th>
+                                                            <th>Latest Action Date</th>
+                                                        </tr>
+                                                    </thead>
+
+                                                    <tbody>
+                                                        @if (!reportRows.Any())
+                                                        {
+                                                            <tr>
+                                                                <td colspan="10"
+                                                                    class="text-center text-muted py-4">
+                                                                    No report data found.
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                        else
+                                                        {
+                                                            @foreach (var row in reportRows)
+                                                            {
+                                                                var employeeName =
+                                                                row.EmployeeDisplayName?.Trim()
+                                                                ?? string.Empty;
+
+                                                                var department =
+                                                                row.Department?.Trim()
+                                                                ?? string.Empty;
+
+                                                                var manager =
+                                                                row.Manager?.Trim()
+                                                                ?? string.Empty;
+
+                                                                var createdBy =
+                                                                row.CreatedByDisplayName?.Trim()
+                                                                ?? string.Empty;
+
+                                                                var status =
+                                                                row.Status?.Trim()
+                                                                ?? string.Empty;
+
+                                                                var latestAction =
+                                                                row.LatestNoteType?.Trim()
+                                                                ?? string.Empty;
+
+                                                                var rowIssueTypes =
+                                                                row.CategoryNames
+                                                                ?? new List<string>();
+
+                                                                var issueTypeText =
+                                                                rowIssueTypes.Count > 0
+                                                                ? string.Join(
+                                                                ", ",
+                                                                rowIssueTypes)
+                                                                : row.IssueType
+                                                                ?? string.Empty;
+
+                                                                var issueTypeData =
+                                                                string.Join(
+                                                                "|",
+                                                                rowIssueTypes
+                                                                .Where(value =>
+                                                                !string.IsNullOrWhiteSpace(value))
+                                                                .Select(value =>
+                                                                value.Trim()
+                                                                .ToLowerInvariant()));
+
+                                                                <tr class="report-row"
+                                                                    data-employee="@employeeName"
+                                                                    data-department="@department"
+                                                                    data-manager="@manager"
+                                                                    data-created-by="@createdBy"
+                                                                    data-status="@status"
+                                                                    data-issue-types="@issueTypeData"
+                                                                    data-latest-action="@latestAction"
+                                                                    data-created="@row.CreatedOn.ToString("yyyy-MM-dd")"
+                                                                    data-issued-to-employee="@row.IssuedToEmployee.ToString().ToLowerInvariant()">
+
+                                                                    <td>@status</td>
+
+                                                                    <td>
+                                                                        @(string.IsNullOrWhiteSpace(issueTypeText)
+                                                                                                                                        ? "-"
+                                                                                                                                        : issueTypeText)
+                                                                    </td>
+
+                                                                    <td>@employeeName</td>
+
+                                                                    <td>
+                                                                        @(string.IsNullOrWhiteSpace(department)
+                                                                                                                                        ? "-"
+                                                                                                                                        : department)
+                                                                    </td>
+
+                                                                    <td>
+                                                                        @(string.IsNullOrWhiteSpace(manager)
+                                                                                                                                        ? "-"
+                                                                                                                                        : manager)
+                                                                    </td>
+
+                                                                    <td>
+                                                                        @(string.IsNullOrWhiteSpace(createdBy)
+                                                                                                                                        ? "-"
+                                                                                                                                        : createdBy)
+                                                                    </td>
+
+                                                                    <td>
+                                                                        @row.CreatedOn.ToString("yyyy/MM/dd")
+                                                                    </td>
+
+                                                                    <td>
+                                                                        @(row.LegalExpiryDate?
+                                                                                                                                        .ToString("yyyy/MM/dd")
+                                                                                                                                        ?? "-")
+                                                                    </td>
+
+                                                                    <td>
+                                                                        @(string.IsNullOrWhiteSpace(latestAction)
+                                                                                                                                        ? "-"
+                                                                                                                                        : latestAction)
+                                                                    </td>
+
+                                                                    <td>
+                                                                        @(row.LatestNoteDate?
+                                                                                                                                        .ToString("yyyy/MM/dd HH:mm")
+                                                                                                                                        ?? "-")
+                                                                    </td>
+                                                                </tr>
+                                                            }
+
+                                                            <tr id="reportNoResults"
+                                                                class="d-none">
+
+                                                                <td colspan="10"
+                                                                    class="text-center text-muted py-4">
+                                                                    No report records match the selected filters.
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+
+
 
             </div>
         </div>
@@ -581,622 +909,1056 @@
     </div>
 </div>
 
-<!-- ADD NOTE MODAL -->
-<div class="modal fade" id="addNoteModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
 
+<div class="modal fade" id="employeeDashboardModal" tabindex="-1" aria-labelledby="employeeDashboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add New Note</h5>
+                <h5 class="modal-title" id="employeeDashboardModalLabel">Employee Dashboard</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-
-            <div class="modal-body">
-
-                <input type="hidden" id="addNoteWarningId" value="@Model.WarningId" />
-
-                <div class="mb-3">
-                    <label class="form-label">Note Type</label>
-
-                    <select class="form-select" id="addNoteTypeId">
-                        <option value="">Select Interactions type</option>
-
-                        @foreach (var type in Model.NoteTypes)
-                        {
-                            <option value="@type.NoteTypeId">@type.Name</option>
-                        }
-                    </select>
-
-                    <div class="form-text text-muted">
-                        Choose what type of Interactions this is.
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Link to Document</label>
-
-                    <select class="form-select" id="addNoteEvidenceId">
-                        <option value="">General Interactions - not linked to a document</option>
-
-                        @foreach (var e in (Model.Evidence ?? new List<LegalEvidenceVm>())
-                                                .Where(x => !string.IsNullOrWhiteSpace(x.FileName))
-                                                .OrderByDescending(x => x.UploadedOn))
-                        {
-                            <option value="@e.EvidenceId">
-                                @FileNameHelper.GetDisplayFileName(e.FileName)
-                            </option>
-                        }
-                    </select>
-
-                    <div class="form-text text-muted">
-                        Leave this as general Interactions if the Interactions is not about a specific document.
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Note</label>
-                    <textarea class="form-control"
-                              id="addNoteText"
-                              rows="4"
-                              placeholder="Type your Interactions..."></textarea>
-                    <div class="form-text text-muted">
-                        This will be appended and saved as a new Interactions.
-                    </div>
-                </div>
-
+            <div class="modal-body" id="employeeDashboardModalBody">
+                <div class="text-center py-4">Loading...</div>
             </div>
-
-            <div class="modal-footer">
-                <button type="button"
-                        class="btn btn-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel
-                </button>
-
-                <button type="button"
-                        class="btn btn-primary"
-                        id="btnAddNote"
-                        onclick="addEvidenceNote(this)">
-                    Add Interactions
-                </button>
-            </div>
-
         </div>
     </div>
 </div>
 
-<!-- UPLOAD DOCS MODAL -->
-<div class="modal fade" id="uploadDocsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-
-            <div class="modal-header">
-                <h5 class="modal-title">Upload Documents</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <div class="modal-body">
-                <input type="hidden" id="uploadWarningId" value="@Model.WarningId" />
-
-                <div class="mb-3">
-                    <label class="form-label">Files</label>
-                    <input class="form-control" type="file" id="uploadFiles" multiple />
-                    <div class="form-text text-muted">Select one or more files.</div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Notes (optional)</label>
-                    <textarea class="form-control"
-                              id="uploadNotes"
-                              rows="3"
-                              placeholder="Optional Interactions..."></textarea>
-                    <div class="form-text text-muted">
-                        Interactions added with documents will be saved as Investigation Interactions.
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button type="button"
-                        class="btn btn-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel
-                </button>
-
-                <button type="button"
-                        class="btn btn-primary"
-                        id="btnUploadDocs"
-                        onclick="uploadDocuments(this)">
-                    Upload
-                </button>
-            </div>
-
-        </div>
-    </div>
-</div>
-
-<!-- COMPLETE MODAL -->
-<div class="modal fade" id="completeModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-
-            <div class="modal-header">
-                <h5 class="modal-title">Record Legal Decision</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <div class="modal-body">
-
-                <input type="hidden" id="completeWarningId" value="@Model.WarningId" />
-
-                <div class="d-flex justify-content-between mb-3">
-                    <div><strong>Employee Name:</strong> @Model.EmployeeIdDesplayName</div>
-                    <div><strong>Submitter Name:</strong> @Model.CreatedByDesplayName</div>
-                </div>
-
-                <div class="border rounded p-3">
-
-                    <div class="fw-semibold mb-2">Select legal decision</div>
-
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stInvalid"
-                               value="Invalid"
-                               checked>
-                        <label class="form-check-label" for="stInvalid">Invalid</label>
-                    </div>
-
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stDiscussion"
-                               value="Discussion">
-                        <label class="form-check-label" for="stDiscussion">Discussion</label>
-                    </div>
-
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stWarning"
-                               value="Warning">
-                        <label class="form-check-label" for="stWarning">Warning</label>
-                    </div>
-
-                    <div class="form-check mb-3">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stHearing"
-                               value="Hearing">
-                        <label class="form-check-label" for="stHearing">Hearing</label>
-                    </div>
-
-                    <div class="mb-3 d-none" id="warningSubtypeGroup">
-                        <label class="form-label" for="warningSubtype">Warning category</label>
-                        <select class="form-select" id="warningSubtype">
-                            <option value="">Select warning category</option>
-                            <option value="Verbal warning">Verbal warning</option>
-                            <option value="1st written warning">1st written warning</option>
-                            <option value="2nd written warning">2nd written warning</option>
-                            <option value="Final warning">Final warning</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Upload supporting document (optional)</label>
-                        <input class="form-control" type="file" id="completeFile" />
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button type="button"
-                        class="btn btn-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel
-                </button>
-
-                <button type="button"
-                        class="btn btn-primary"
-                        id="btnComplete"
-                        onclick="completeTransgression(this)">
-                    Submit
-                </button>
-            </div>
-
-        </div>
-    </div>
-</div>
-
-<!-- DUE DATE MODAL -->
-<div class="modal fade" id="dueDateModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-
-            <div class="modal-header">
-                <h5 class="modal-title">Change Due Date</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <div class="modal-body">
-                <input type="hidden" id="dueDateWarningId" value="@Model.WarningId" />
-
-                <div class="mb-3">
-                    <label class="form-label">New due date</label>
-                    <input type="date" class="form-control" id="dueDateValue" />
-                    <div class="form-text text-muted">
-                        Must be in the future and not on a weekend.
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Reason</label>
-                    <textarea class="form-control"
-                              id="dueDateReason"
-                              rows="3"
-                              placeholder="Why are you changing the due date?"></textarea>
-                    <div class="form-text text-muted">
-                        This will be saved into the audit log.
-                    </div>
-                </div>
-
-                <div class="text-muted mt-2" id="dueDateSaveMsg" style="display:none;"></div>
-            </div>
-
-            <div class="modal-footer">
-                <button type="button"
-                        class="btn btn-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel
-                </button>
-
-                <button type="button"
-                        class="btn btn-primary"
-                        id="btnSaveDueDate"
-                        onclick="updateDueDate(this)">
-                    Save Due Date
-                </button>
-            </div>
-
-        </div>
-    </div>
-</div>
 
 <script>
-    async function addEvidenceNote(btn) {
-        debugger;
-        const warningEl = document.getElementById("addNoteWarningId");
-        const typeEl = document.getElementById("addNoteTypeId");
-        const evidenceEl = document.getElementById("addNoteEvidenceId");
-        const textEl = document.getElementById("addNoteText");
+    function filterTaskList() {
+        const searchValue = (
+            document.getElementById("taskListSearch")?.value || ""
+        )
+            .trim()
+            .toLowerCase();
 
-        if (!warningEl || !typeEl || !evidenceEl || !textEl) {
-            console.warn("Missing modal elements:", { warningEl, typeEl, evidenceEl, textEl });
-            alert("Modal inputs not found. Check element IDs.");
-            return;
-        }
+        const selectedCreatedById = (
+            document.getElementById("taskListCreatedByFilter")?.value || ""
+        )
+            .trim()
+            .toLowerCase();
 
-        const warningId = parseInt(warningEl.value || "0", 10);
-        const noteTypeId = parseInt(typeEl.value || "0", 10);
-
-        const evidenceValue = (evidenceEl.value || "").trim();
-        const evidenceId = evidenceValue ? parseInt(evidenceValue, 10) : null;
-
-        const noteText = (textEl.value || "").trim();
-
-        if (!warningId) {
-            alert("Missing WarningId.");
-            return;
-        }
-
-        if (!noteTypeId) {
-            alert("Please select a note type.");
-            return;
-        }
-
-        if (!noteText) {
-            alert("Please type a note.");
-            return;
-        }
-
-        btn.disabled = true;
-
-        try {
-            const res = await fetch("/Legal/AddEvidenceNote", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    warningId: warningId,
-                    evidenceId: evidenceId,
-                    noteTypeId: noteTypeId,
-                    noteText: noteText
-                })
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(txt || `HTTP ${res.status}`);
-            }
-
-            const modalEl = document.getElementById("addNoteModal");
-            let modal = bootstrap.Modal.getInstance(modalEl);
-            if (!modal) modal = new bootstrap.Modal(modalEl);
-            modal.hide();
-
-            typeEl.value = "";
-            evidenceEl.value = "";
-            textEl.value = "";
-
-            location.reload();
-
-        } catch (err) {
-            alert("Failed to add note: " + (err?.message || err));
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    async function uploadDocuments(btn) {
-
-        const warningId = parseInt(document.getElementById("uploadWarningId")?.value || "0", 10);
-        const filesInput = document.getElementById("uploadFiles");
-        const notes = (document.getElementById("uploadNotes")?.value || "").trim();
-
-        if (!warningId) {
-            alert("Missing WarningId.");
-            return;
-        }
-
-        if (!filesInput || !filesInput.files || filesInput.files.length === 0) {
-            alert("Please select at least one file.");
-            return;
-        }
-
-        btn.disabled = true;
-
-        try {
-            const fd = new FormData();
-
-            fd.append("WarningId", warningId.toString());
-            fd.append("AttachmentType", "LegalEvidence");
-            fd.append("Notes", notes);
-
-            for (const file of filesInput.files) {
-                fd.append("Files", file, file.name);
-                fd.append("AttachmentNames", file.name);
-            }
-
-            const res = await fetch("/Legal/SaveEvidenceAttachment", {
-                method: "POST",
-                body: fd
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(txt || `HTTP ${res.status}`);
-            }
-
-            const modalEl = document.getElementById("uploadDocsModal");
-            let modal = bootstrap.Modal.getInstance(modalEl);
-            if (!modal) modal = new bootstrap.Modal(modalEl);
-            modal.hide();
-
-            filesInput.value = "";
-
-            const uploadNotesEl = document.getElementById("uploadNotes");
-            if (uploadNotesEl) {
-                uploadNotesEl.value = "";
-            }
-
-            location.reload();
-
-        } catch (err) {
-            alert("Upload failed: " + (err?.message || err));
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    async function completeTransgression(btn) {
-
-        const warningId = parseInt(document.getElementById("completeWarningId")?.value || "0", 10);
-
-        if (!warningId) {
-            alert("Missing WarningId.");
-            return;
-        }
-
-        const statusEl = document.querySelector('input[name="completeStatus"]:checked');
-        const status = statusEl ? statusEl.value : "";
-
-        if (!status) {
-            alert("Please select a status.");
-            return;
-        }
-
-        const type = status;
-        const warningSubtype = document.getElementById("warningSubtype")?.value || "";
-
-        if (type === "Warning" && !warningSubtype) {
-            alert("Please select a warning category.");
-            return;
-        }
-
-        const fileInput = document.getElementById("completeFile");
-        const file = (fileInput && fileInput.files && fileInput.files.length > 0)
-            ? fileInput.files[0]
-            : null;
-
-        btn.disabled = true;
-
-        try {
-            const fd = new FormData();
-            fd.append("WarningId", warningId.toString());
-            fd.append("Status", status);
-            fd.append("Type", type);
-            fd.append("WarningSubtype", warningSubtype);
-
-            if (file) {
-                fd.append("File", file, file.name);
-            }
-
-            const res = await fetch("/Legal/CompleteTransgression", {
-                method: "POST",
-                body: fd
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(txt || `HTTP ${res.status}`);
-            }
-
-            const modalEl = document.getElementById("completeModal");
-            let modal = bootstrap.Modal.getInstance(modalEl);
-            if (!modal) modal = new bootstrap.Modal(modalEl);
-            modal.hide();
-
-            if (fileInput) {
-                fileInput.value = "";
-            }
-
-            location.reload();
-
-        } catch (err) {
-            alert("Failed to complete: " + (err?.message || err));
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    async function validateIssue(btn) {
-        const warningId = @Model.WarningId;
-        const confirmed = confirm(
-            "Confirm that all required steps are complete and the Team Leader or Line Manager added the information to PaySpace."
+        const rows = Array.from(
+            document.querySelectorAll(
+                "#taskListTable tbody tr.task-list-row"
+            )
         );
 
-        if (!confirmed) return;
+        let visibleRowCount = 0;
 
-        btn.disabled = true;
-        const originalText = btn.textContent;
-        btn.textContent = "Validating...";
+        rows.forEach(row => {
+            const employeeName = (
+                row.dataset.employee || ""
+            ).toLowerCase();
 
-        try {
-            const res = await fetch("/Legal/ValidateTransgression", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ warningId: warningId })
-            });
-            const data = await res.json().catch(() => ({}));
+            const createdByName = (
+                row.dataset.createdByName || ""
+            ).toLowerCase();
 
-            if (!res.ok || data.success === false) {
-                throw new Error(data.message || "Failed to validate the issue.");
-            }
+            const createdById = (
+                row.dataset.createdById || ""
+            ).toLowerCase();
 
-            location.reload();
-        } catch (err) {
-            alert("Failed to validate: " + (err?.message || err));
-            btn.disabled = false;
-            btn.textContent = originalText;
-        }
-    }
+            const status = (
+                row.dataset.status || ""
+            ).toLowerCase();
 
-    document.querySelectorAll('input[name="completeStatus"][type="radio"]').forEach(input => {
-        input.addEventListener("change", function () {
-            const group = document.getElementById("warningSubtypeGroup");
-            const select = document.getElementById("warningSubtype");
-            const isWarning = this.value === "Warning";
-            group?.classList.toggle("d-none", !isWarning);
-            if (select) {
-                select.required = isWarning;
-                if (!isWarning) select.value = "";
+            const matchesSearch =
+                !searchValue ||
+                employeeName.includes(searchValue) ||
+                createdByName.includes(searchValue) ||
+                status.includes(searchValue);
+
+            const matchesCreatedBy =
+                !selectedCreatedById ||
+                createdById === selectedCreatedById;
+
+            const showRow =
+                matchesSearch &&
+                matchesCreatedBy;
+
+            row.classList.toggle(
+                "d-none",
+                !showRow
+            );
+
+            if (showRow) {
+                visibleRowCount++;
             }
         });
+
+        const noResultsRow =
+            document.getElementById("taskListNoResults");
+
+        if (noResultsRow) {
+            const showNoResults =
+                rows.length > 0 &&
+                visibleRowCount === 0;
+
+            noResultsRow.classList.toggle(
+                "d-none",
+                !showNoResults
+            );
+        }
+    }
+
+    document.addEventListener("input", function (e) {
+        if (e.target?.id === "taskListSearch") {
+            filterTaskList();
+        }
     });
 
-    function showDueDateMsg(text, isError) {
-        const el = document.getElementById("dueDateSaveMsg");
-        if (!el) return;
-
-        el.style.display = "block";
-        el.className = isError ? "text-danger mt-2" : "text-success mt-2";
-        el.textContent = text;
-
-        setTimeout(() => {
-            el.style.display = "none";
-        }, 3500);
-    }
-
-    function isWeekend(dateStr) {
-        const d = new Date(dateStr + "T00:00:00");
-        const day = d.getDay();
-        return day === 0 || day === 6;
-    }
-
-    async function updateDueDate(btn) {
-        const warningId = parseInt(document.getElementById("dueDateWarningId")?.value || "0", 10);
-        const dueDate = (document.getElementById("dueDateValue")?.value || "").trim();
-        const reason = (document.getElementById("dueDateReason")?.value || "").trim();
-
-        if (!warningId) {
-            showDueDateMsg("Missing WarningId.", true);
-            return;
+    document.addEventListener("change", function (e) {
+        if (e.target?.id === "taskListCreatedByFilter") {
+            filterTaskList();
         }
+    });
 
-        if (!dueDate) {
-            showDueDateMsg("Please select a due date.", true);
-            return;
-        }
+    document.addEventListener("DOMContentLoaded", function () {
+        filterTaskList();
+    });
 
-        if (isWeekend(dueDate)) {
-            showDueDateMsg("Due date cannot be on a weekend.", true);
-            return;
-        }
 
-        if (!reason) {
-            showDueDateMsg("Reason is required.", true);
-            return;
-        }
+    document.addEventListener("click", async function (e) {
+        const row = e.target.closest(".employee-row");
+        if (!row) return;
 
-        btn.disabled = true;
-        showDueDateMsg("Saving...", false);
+        const employeeId = row.dataset.employeeId;
+        const employeeName = row.dataset.employeeName || "Employee";
+
+        const modalElement = document.getElementById("employeeDashboardModal");
+        const modalBody = document.getElementById("employeeDashboardModalBody");
+        const modalTitle = document.getElementById("employeeDashboardModalLabel");
+
+        modalTitle.textContent = `Employee Dashboard - ${employeeName}`;
+        modalBody.innerHTML = `<div class="text-center py-4">Loading...</div>`;
+
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
 
         try {
-            const res = await fetch("/Legal/UpdateDueDate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    warningId: warningId,
-                    dueDate: dueDate,
-                    reason: reason
-                })
+            const response = await fetch(`/Home/EmployeeDashboard?employeeId=${encodeURIComponent(employeeId)}`, {
+                method: "GET",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
             });
 
-            const data = await res.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error("Failed to load employee dashboard.");
+            }
 
-            if (!res.ok || data.success === false) {
-                showDueDateMsg(data.message || "Save failed.", true);
+            const html = await response.text();
+            modalBody.innerHTML = html;
+        } catch (error) {
+            console.error(error);
+            modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        Could not load employee dashboard.
+                    </div>`;
+        }
+    });
+
+    function filterAndSortEmployeeTable() {
+        const searchValue = (document.getElementById("employeeSearch")?.value || "").toLowerCase().trim();
+        const sortValue = document.getElementById("employeeSort")?.value || "desc";
+
+        const tableBody = document.querySelector("#employeeTable tbody");
+        if (!tableBody) return;
+
+        const rows = Array.from(tableBody.querySelectorAll("tr"));
+
+        rows.forEach(row => {
+            const employee = (row.dataset.employee || "").toLowerCase();
+            const department = (row.dataset.department || "").toLowerCase();
+            const teamLeader = (row.dataset.teamleader || "").toLowerCase();
+            const manager = (row.dataset.manager || "").toLowerCase();
+            const currentState = (row.dataset.currentstate || "").toLowerCase();
+
+            const matchesSearch =
+                !searchValue ||
+                employee.includes(searchValue) ||
+                department.includes(searchValue) ||
+                teamLeader.includes(searchValue) ||
+                manager.includes(searchValue) ||
+                currentState.includes(searchValue);
+
+            row.style.display = matchesSearch ? "" : "none";
+        });
+
+        const visibleRows = rows.filter(r => r.style.display !== "none");
+
+        visibleRows.sort((a, b) => {
+            const aDateStr = a.dataset.lastactioned || "";
+            const bDateStr = b.dataset.lastactioned || "";
+
+            const aDate = aDateStr ? new Date(aDateStr) : null;
+            const bDate = bDateStr ? new Date(bDateStr) : null;
+
+            // Push empty dates to the bottom
+            if (!aDate && !bDate) return 0;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+
+            return sortValue === "asc"
+                ? aDate - bDate
+                : bDate - aDate;
+        });
+
+        visibleRows.forEach(row => tableBody.appendChild(row));
+    }
+
+    document.addEventListener("input", function (e) {
+        if (e.target && e.target.id === "employeeSearch") {
+            filterAndSortEmployeeTable();
+        }
+    });
+
+    document.addEventListener("change", function (e) {
+        if (e.target && e.target.id === "employeeSort") {
+            filterAndSortEmployeeTable();
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        filterAndSortEmployeeTable();
+    });
+
+
+
+
+
+    document.addEventListener("click", function (e) {
+        const row = e.target.closest("tr.clickable-row");
+        if (!row) return;
+
+        const url = row.dataset.url;
+        if (url) window.location.href = url;
+    });
+
+    document.getElementById("btnRequestWarning").addEventListener("click", function () {
+        window.location.href = '@Url.Action("Index", "Transgression")';
+    });
+
+
+    function getReportDate(value) {
+        if (!value) return null;
+
+        const date = new Date(value + "T00:00:00");
+        date.setHours(0, 0, 0, 0);
+
+        return date;
+    }
+
+    function normaliseReportValue(value) {
+        return (value || "")
+            .trim()
+            .toLowerCase();
+    }
+
+    function parseReportDate(value) {
+        if (!value) {
+            return null;
+        }
+
+        const date = new Date(`${value}T00:00:00`);
+
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+
+        date.setHours(0, 0, 0, 0);
+
+        return date;
+    }
+
+    function getReportRows() {
+        return Array.from(
+            document.querySelectorAll(
+                "#reportsTable tbody tr.report-row"
+            )
+        );
+    }
+
+    function populateReportSelect(
+        selectId,
+        values,
+        placeholder,
+        preferredValue = ""
+    ) {
+        const select =
+            document.getElementById(selectId);
+
+        if (!select) {
+            return;
+        }
+
+        const normalisedPreferredValue =
+            normaliseReportValue(preferredValue);
+
+        select.innerHTML = "";
+
+        const defaultOption =
+            document.createElement("option");
+
+        defaultOption.value = "";
+        defaultOption.textContent = placeholder;
+
+        select.appendChild(defaultOption);
+
+        const uniqueValues = new Map();
+
+        values.forEach(value => {
+            const cleanValue = (value || "").trim();
+
+            if (!cleanValue) {
                 return;
             }
 
-            showDueDateMsg("Saved ✅", false);
+            const key = normaliseReportValue(cleanValue);
 
-            setTimeout(() => {
-                const modalEl = document.getElementById("dueDateModal");
-                let modal = bootstrap.Modal.getInstance(modalEl);
-                if (!modal) modal = new bootstrap.Modal(modalEl);
-                modal.hide();
+            if (!uniqueValues.has(key)) {
+                uniqueValues.set(key, cleanValue);
+            }
+        });
 
-                location.reload();
-            }, 600);
+        Array.from(uniqueValues.values())
+            .sort((left, right) =>
+                left.localeCompare(right))
+            .forEach(value => {
+                const option =
+                    document.createElement("option");
 
-        } catch (err) {
-            showDueDateMsg("Network error: " + (err?.message || err), true);
-        } finally {
-            btn.disabled = false;
+                option.value = value;
+                option.textContent = value;
+
+                select.appendChild(option);
+            });
+
+        const matchingOption =
+            Array.from(select.options)
+                .find(option =>
+                    normaliseReportValue(option.value) ===
+                    normalisedPreferredValue);
+
+        if (matchingOption) {
+            select.value = matchingOption.value;
         }
     }
+
+    function rebuildReportManagers() {
+        const department =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportDepartment"
+                )?.value
+            );
+
+        const managerSelect =
+            document.getElementById(
+                "reportManager"
+            );
+
+        const previousManager =
+            managerSelect?.value || "";
+
+        const managers = getReportRows()
+            .filter(row => {
+                const rowDepartment =
+                    normaliseReportValue(
+                        row.dataset.department
+                    );
+
+                return !department ||
+                    rowDepartment === department;
+            })
+            .map(row =>
+                row.dataset.manager || "");
+
+        populateReportSelect(
+            "reportManager",
+            managers,
+            "All managers",
+            previousManager
+        );
+    }
+
+    function rebuildReportEmployees() {
+        const department =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportDepartment"
+                )?.value
+            );
+
+        const manager =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportManager"
+                )?.value
+            );
+
+        const employeeSelect =
+            document.getElementById(
+                "reportEmployee"
+            );
+
+        const previousEmployee =
+            employeeSelect?.value || "";
+
+        const employees = getReportRows()
+            .filter(row => {
+                const rowDepartment =
+                    normaliseReportValue(
+                        row.dataset.department
+                    );
+
+                const rowManager =
+                    normaliseReportValue(
+                        row.dataset.manager
+                    );
+
+                const matchesDepartment =
+                    !department ||
+                    rowDepartment === department;
+
+                const matchesManager =
+                    !manager ||
+                    rowManager === manager;
+
+                return matchesDepartment &&
+                    matchesManager;
+            })
+            .map(row =>
+                row.dataset.employee || "");
+
+        populateReportSelect(
+            "reportEmployee",
+            employees,
+            "All employees",
+            previousEmployee
+        );
+    }
+
+    function getReportIssueTypes(row) {
+        return (row.dataset.issueTypes || "")
+            .split("|")
+            .map(normaliseReportValue)
+            .filter(Boolean);
+    }
+
+    function rowHasIssueType(
+        row,
+        issueType
+    ) {
+        if (!issueType) {
+            return true;
+        }
+
+        return getReportIssueTypes(row)
+            .includes(issueType);
+    }
+
+    function setReportCount(
+        elementId,
+        value
+    ) {
+        const element =
+            document.getElementById(elementId);
+
+        if (element) {
+            element.textContent =
+                value.toString();
+        }
+    }
+
+    function buildDepartmentBreakdown(
+        visibleRows
+    ) {
+        const tableBody =
+            document.getElementById(
+                "reportDepartmentBreakdown"
+            );
+
+        if (!tableBody) {
+            return;
+        }
+
+        const departments = new Map();
+
+        visibleRows.forEach(row => {
+            const departmentName =
+                (row.dataset.department || "")
+                    .trim() || "Unknown";
+
+            const departmentKey =
+                normaliseReportValue(
+                    departmentName
+                );
+
+            if (!departments.has(departmentKey)) {
+                departments.set(
+                    departmentKey,
+                    {
+                        name: departmentName,
+                        total: 0,
+                        draft: 0,
+                        inProgress: 0,
+                        completed: 0,
+                        invalid: 0,
+                        discussion: 0,
+                        warning: 0,
+                        hearingNotice: 0,
+                        issued: 0
+                    }
+                );
+            }
+
+            const summary =
+                departments.get(
+                    departmentKey
+                );
+
+            const status =
+                normaliseReportValue(
+                    row.dataset.status
+                );
+
+            const issueTypes =
+                getReportIssueTypes(row);
+
+            summary.total++;
+
+            if (status === "draft") {
+                summary.draft++;
+            }
+
+            if (status === "in progress") {
+                summary.inProgress++;
+            }
+
+            if (status === "completed") {
+                summary.completed++;
+            }
+
+            if (issueTypes.includes("invalid")) {
+                summary.invalid++;
+            }
+
+            if (issueTypes.includes("discussion")) {
+                summary.discussion++;
+            }
+
+            if (
+                status === "warning" ||
+                issueTypes.includes("warning")) {
+                summary.warning++;
+            }
+
+            if (
+                issueTypes.includes(
+                    "hearing notice"
+                )
+            ) {
+                summary.hearingNotice++;
+            }
+
+            if (
+                row.dataset.issuedToEmployee ===
+                "true"
+            ) {
+                summary.issued++;
+            }
+        });
+
+        tableBody.innerHTML = "";
+
+        if (departments.size === 0) {
+            tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="10"
+                            class="text-center text-muted py-3">
+                            No department data found.
+                        </td>
+                    </tr>`;
+
+            return;
+        }
+
+        Array.from(departments.values())
+            .sort((left, right) =>
+                left.name.localeCompare(
+                    right.name))
+            .forEach(summary => {
+                const row =
+                    document.createElement("tr");
+
+                row.innerHTML = `
+                        <td>${escapeReportHtml(summary.name)}</td>
+                        <td>${summary.total}</td>
+                        <td>${summary.draft}</td>
+                        <td>${summary.inProgress}</td>
+                        <td>${summary.completed}</td>
+                        <td>${summary.warning}</td>
+                    `;
+
+          
+                tableBody.appendChild(row);
+            });
+    }
+
+    function escapeReportHtml(value) {
+        const element =
+            document.createElement("div");
+
+        element.textContent =
+            value || "";
+
+        return element.innerHTML;
+    }
+
+    function updateReportSummary(visibleRows) {
+        const departmentCount = new Set(
+            visibleRows
+                .map(row =>
+                    normaliseReportValue(
+                        row.dataset.department
+                    )
+                )
+                .filter(Boolean)
+        ).size;
+
+        const countStatus = (...statuses) => {
+            return visibleRows.filter(row => {
+                const rowStatus =
+                    normaliseReportValue(
+                        row.dataset.status
+                    );
+
+                return statuses.includes(rowStatus);
+            }).length;
+        };
+
+        const countIssueType = issueType => {
+            return visibleRows.filter(row =>
+                getReportIssueTypes(row)
+                    .includes(issueType)
+            ).length;
+        };
+
+        const issuedCount = visibleRows.filter(row =>
+            normaliseReportValue(
+                row.dataset.issuedToEmployee
+            ) === "true"
+        ).length;
+
+        setReportCount(
+            "reportVisibleDetailCount",
+            visibleRows.length
+        );
+
+        setReportCount(
+            "reportDepartmentCount",
+            departmentCount
+        );
+
+        setReportCount(
+            "reportIssueCount",
+            visibleRows.length
+        );
+
+        setReportCount(
+            "reportDraftCount",
+            countStatus("draft")
+        );
+
+        setReportCount(
+            "reportInProgressCount",
+            countStatus(
+                "new",
+                "in progress"
+            )
+        );
+
+        setReportCount(
+            "reportCompletedCount",
+            countStatus("completed")
+        );
+
+        setReportCount(
+            "reportInvalidCount",
+            countIssueType("invalid")
+        );
+
+        setReportCount(
+            "reportDiscussionCount",
+            countIssueType("discussion")
+        );
+
+        const warningCount = visibleRows.filter(row => {
+            const rowStatus = normaliseReportValue(
+                row.dataset.status
+            );
+
+            const rowIssueTypes =
+                getReportIssueTypes(row);
+
+            return (
+                rowStatus === "warning" ||
+                rowIssueTypes.includes("warning")
+            );
+        }).length;
+
+        setReportCount(
+            "reportWarningTypeCount",
+            warningCount
+        );
+
+  
+        buildDepartmentBreakdown(visibleRows);
+    }
+
+    function filterReportsTable() {
+        const search =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportSearch"
+                )?.value
+            );
+
+        const startDate =
+            parseReportDate(
+                document.getElementById(
+                    "reportStartDate"
+                )?.value
+            );
+
+        const endDate =
+            parseReportDate(
+                document.getElementById(
+                    "reportEndDate"
+                )?.value
+            );
+
+        const department =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportDepartment"
+                )?.value
+            );
+
+        const manager =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportManager"
+                )?.value
+            );
+
+        const employee =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportEmployee"
+                )?.value
+            );
+
+        const status =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportStatus"
+                )?.value
+            );
+
+        const issueType =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportIssueType"
+                )?.value
+            );
+
+        const latestAction =
+            normaliseReportValue(
+                document.getElementById(
+                    "reportLatestAction"
+                )?.value
+            );
+
+        const rows =
+            getReportRows();
+
+        const visibleRows = [];
+
+        rows.forEach(row => {
+            const rowEmployee =
+                normaliseReportValue(
+                    row.dataset.employee
+                );
+
+            const rowDepartment =
+                normaliseReportValue(
+                    row.dataset.department
+                );
+
+            const rowManager =
+                normaliseReportValue(
+                    row.dataset.manager
+                );
+
+            const rowCreatedBy =
+                normaliseReportValue(
+                    row.dataset.createdBy
+                );
+
+            const rowStatus =
+                normaliseReportValue(
+                    row.dataset.status
+                );
+
+            const rowLatestAction =
+                normaliseReportValue(
+                    row.dataset.latestAction
+                );
+
+            const rowCreatedDate =
+                parseReportDate(
+                    row.dataset.created
+                );
+
+            const rowIssueTypes =
+                getReportIssueTypes(row);
+
+            const searchText = [
+                rowEmployee,
+                rowDepartment,
+                rowManager,
+                rowCreatedBy,
+                rowStatus,
+                rowLatestAction,
+                ...rowIssueTypes
+            ].join(" ");
+
+            let show = true;
+
+            if (
+                search &&
+                !searchText.includes(search)
+            ) {
+                show = false;
+            }
+
+            if (
+                department &&
+                rowDepartment !== department
+            ) {
+                show = false;
+            }
+
+            if (
+                manager &&
+                rowManager !== manager
+            ) {
+                show = false;
+            }
+
+            if (
+                employee &&
+                rowEmployee !== employee
+            ) {
+                show = false;
+            }
+
+            if (
+                status &&
+                rowStatus !== status
+            ) {
+                show = false;
+            }
+
+            if (
+                issueType &&
+                !rowIssueTypes.includes(
+                    issueType
+                )
+            ) {
+                show = false;
+            }
+
+            if (
+                latestAction &&
+                rowLatestAction !==
+                latestAction
+            ) {
+                show = false;
+            }
+
+            if (
+                startDate &&
+                (
+                    !rowCreatedDate ||
+                    rowCreatedDate < startDate
+                )
+            ) {
+                show = false;
+            }
+
+            if (
+                endDate &&
+                (
+                    !rowCreatedDate ||
+                    rowCreatedDate > endDate
+                )
+            ) {
+                show = false;
+            }
+
+            row.classList.toggle(
+                "d-none",
+                !show
+            );
+
+            if (show) {
+                visibleRows.push(row);
+            }
+        });
+
+        const noResultsRow =
+            document.getElementById(
+                "reportNoResults"
+            );
+
+        if (noResultsRow) {
+            noResultsRow.classList.toggle(
+                "d-none",
+                visibleRows.length > 0
+            );
+        }
+
+        updateReportSummary(
+            visibleRows
+        );
+    }
+
+    function clearReportFilters() {
+        [
+            "reportSearch",
+            "reportStartDate",
+            "reportEndDate",
+            "reportDepartment",
+            "reportManager",
+            "reportEmployee",
+            "reportStatus",
+            "reportIssueType",
+            "reportLatestAction"
+        ].forEach(elementId => {
+            const element =
+                document.getElementById(
+                    elementId
+                );
+
+            if (element) {
+                element.value = "";
+            }
+        });
+
+        rebuildReportManagers();
+        rebuildReportEmployees();
+        filterReportsTable();
+    }
+
+    document.addEventListener(
+        "input",
+        function (event) {
+            if (
+                event.target?.id ===
+                "reportSearch"
+            ) {
+                filterReportsTable();
+            }
+        }
+    );
+
+    document.addEventListener(
+        "change",
+        function (event) {
+            const targetId =
+                event.target?.id;
+
+            if (targetId === "reportDepartment") {
+                const manager =
+                    document.getElementById(
+                        "reportManager"
+                    );
+
+                const employee =
+                    document.getElementById(
+                        "reportEmployee"
+                    );
+
+                if (manager) {
+                    manager.value = "";
+                }
+
+                if (employee) {
+                    employee.value = "";
+                }
+
+                rebuildReportManagers();
+                rebuildReportEmployees();
+                filterReportsTable();
+
+                return;
+            }
+
+            if (targetId === "reportManager") {
+                const employee =
+                    document.getElementById(
+                        "reportEmployee"
+                    );
+
+                if (employee) {
+                    employee.value = "";
+                }
+
+                rebuildReportEmployees();
+                filterReportsTable();
+
+                return;
+            }
+
+            if (
+                event.target?.classList
+                    .contains("report-filter")
+            ) {
+                filterReportsTable();
+            }
+        }
+    );
+
+    document
+        .getElementById(
+            "btnClearReportFilters"
+        )
+        ?.addEventListener(
+            "click",
+            clearReportFilters
+        );
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function () {
+            rebuildReportManagers();
+            rebuildReportEmployees();
+            filterReportsTable();
+        }
+    );
+
+    document.addEventListener("change", function (e) {
+        if (e.target && e.target.classList.contains("report-filter")) {
+            filterReportsTable();
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        filterReportsTable();
+    });
 </script>

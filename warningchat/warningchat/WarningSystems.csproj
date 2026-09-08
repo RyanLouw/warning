@@ -28,10 +28,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Folder Include="Logs\" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<ProjectReference Include="..\WarningSystems.Core\WarningSystems.Core.csproj" />
 	</ItemGroup>
 

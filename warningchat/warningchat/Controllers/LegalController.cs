@@ -10,6 +10,7 @@ using WarningSystems.Core.DataAccess.AzureFileStorage;
 using WarningSystems.Core.Manager;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Models.DTO;
+using WarningSystems.Core.Models.Enum;
 
 namespace WarningSystems.Controllers
 {
@@ -50,10 +51,10 @@ namespace WarningSystems.Controllers
             if (vm == null)
                 return NotFound();
 
-            if (string.Equals(vm.Status, "Draft", StringComparison.OrdinalIgnoreCase))
+            if (vm.IssueStatusGroup == IssueStatusGroup.Draft)
                 return Forbid();
 
-            if (string.Equals(vm.Status, "New", StringComparison.OrdinalIgnoreCase))
+            if (vm.IssueStatusGroup == IssueStatusGroup.LegalReview)
             {
                 await _transgressionManager.MarkWarningInProgressAsync(id);
 
@@ -151,13 +152,10 @@ namespace WarningSystems.Controllers
         public async Task<IActionResult> CompleteTransgression([FromForm] CompleteTransgressionDto dto)
         {
             if (dto.WarningId is 0) return BadRequest("Invalid warningId.");
-            if (string.IsNullOrWhiteSpace(dto.Status)) return BadRequest("Status required.");
+            if (dto.IssueTypeId <= 0) return BadRequest("Issue type required.");
 
             try
             {
-                if (string.IsNullOrWhiteSpace(dto.Type))
-                    return BadRequest("Type required.");
-
                 if (dto.File is not null && dto.File.Length is > 0)
                 {
                     var mediaType = _fileStorageService.GetAttachmentType(dto.File);
@@ -171,7 +169,7 @@ namespace WarningSystems.Controllers
                 }
 
                 await _transgressionManager.ApplyLegalDecisionAsync(
-                    dto.WarningId, dto.Type, dto.WarningSubtype);
+                    dto.WarningId, dto.IssueTypeId, dto.IssueSubTypeId);
                 await _transgressionManager.SendEmailToTeamLeadAsync(dto);
 
                 return Ok(new { success = true });
