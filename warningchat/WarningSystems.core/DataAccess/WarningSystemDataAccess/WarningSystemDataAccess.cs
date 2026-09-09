@@ -599,8 +599,9 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         var discussion = await _context.LookupIssueTypes
             .Include(type => type.IssueSubTypes)
             .SingleAsync(type => type.IsActive && type.IssueTypeName == "Discussion");
-        var issuedStatus = await _context.LookupIssueStatuses
-            .SingleAsync(status => status.IsActive && status.IssueStatusName == "Issued");
+        const int validatedStatusId = 6;
+        var validatedStatus = await _context.LookupIssueStatuses
+            .SingleAsync(status => status.IsActive && status.IssueStatusId == validatedStatusId);
         var subType = discussion.IssueSubTypes.SingleOrDefault(item =>
             item.IsActive && item.IssueSubTypeId == issueSubTypeId)
             ?? throw new ArgumentException("Please select a valid discussion subtype.", nameof(issueSubTypeId));
@@ -612,9 +613,9 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         warning.IssueSubTypeId = subType.IssueSubTypeId;
         warning.Type = discussion.IssueTypeName;
         warning.WarningSubtype = subType.IssueSubTypeName;
-        // Quick discussions are complete when saved and bypass the legal Pending stage.
-        warning.IssueStatusId = issuedStatus.IssueStatusId;
-        warning.Status = issuedStatus.IssueStatusName;
+        // Quick discussions are final when saved and bypass the legal workflow.
+        warning.IssueStatusId = validatedStatus.IssueStatusId;
+        warning.Status = validatedStatus.IssueStatusName;
         warning.LastStatusChangedOn = NowSast;
         warning.LastStatusChangedBy = user.Trim();
 
