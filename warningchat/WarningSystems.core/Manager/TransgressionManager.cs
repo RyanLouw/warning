@@ -242,6 +242,10 @@ public class TransgressionManager : ITransgressionManager
                     IssueType = string.Join(
                         ", ",
                         categoryNames),
+                    IssueTypeName = warning.IssueType?.IssueTypeName ?? string.Empty,
+                    IssueSubTypeName = warning.IssueSubType?.IssueSubTypeName ?? string.Empty,
+                    IsAbsenceDiscussion = warning.IssueTypeId == (int)LookupIssueTypeEnum.Discussion &&
+                        !warning.LegalExpiryDate.HasValue,
 
                     SubmittedOn = warning.SubmittedOn,
                     LegalExpiryDate = warning.LegalExpiryDate,
@@ -393,6 +397,16 @@ public class TransgressionManager : ITransgressionManager
 
                     CategoryName = warning.Category?.Name
                         ?? string.Empty,
+
+                    IssueTypeName = warning.IssueType?.IssueTypeName
+                        ?? string.Empty,
+
+                    IssueSubTypeName = warning.IssueSubType?.IssueSubTypeName
+                        ?? string.Empty,
+
+                    IsAbsenceDiscussion = warning.IssueTypeId ==
+                        (int)LookupIssueTypeEnum.Discussion &&
+                        !warning.LegalExpiryDate.HasValue,
 
                     CreatedByDisplayName = warning.CreatedBy
                         ?? string.Empty,

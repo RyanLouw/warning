@@ -400,9 +400,7 @@
                                 .ToList();
 
                             var issueTypes = reportRows
-                                .SelectMany(row =>
-                                    row.CategoryNames
-                                    ?? new List<string>())
+                                .Select(row => row.IssueTypeName)
                                 .Select(value => value?.Trim())
                                 .Where(value =>
                                     !string.IsNullOrWhiteSpace(value))
@@ -550,6 +548,15 @@
                                         </div>
 
                                         <div class="mb-3">
+                                            <label class="form-label">Record type</label>
+                                            <select id="reportRecordKind" class="form-select report-filter">
+                                                <option value="">All records</option>
+                                                <option value="issue">Issues</option>
+                                                <option value="absence-discussion">Absence discussions</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
                                             <label class="form-label">
                                                 Issue type
                                             </label>
@@ -618,6 +625,15 @@
                                                      id="reportDepartmentCount">
                                                     0
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-6 col-md-4 col-xl">
+                                        <div class="card border-0 shadow-sm h-100">
+                                            <div class="card-body text-center">
+                                                <div class="small text-muted">Absence Discussions</div>
+                                                <div class="fs-3 fw-bold" id="reportAbsenceDiscussionCount">0</div>
                                             </div>
                                         </div>
                                     </div>
@@ -798,8 +814,11 @@
 
                                                     <thead>
                                                         <tr>
+                                                            <th>Record</th>
                                                             <th>Status</th>
                                                             <th>Issue Type</th>
+                                                            <th>Issue Subtype</th>
+                                                            <th>Category</th>
                                                             <th>Employee</th>
                                                             <th>Department</th>
                                                             <th>Manager</th>
@@ -815,7 +834,7 @@
                                                         @if (!reportRows.Any())
                                                         {
                                                             <tr>
-                                                                <td colspan="10"
+                                                                <td colspan="13"
                                                                     class="text-center text-muted py-4">
                                                                     No report data found.
                                                                 </td>
@@ -849,17 +868,21 @@
                                                                 row.LatestNoteType?.Trim()
                                                                 ?? string.Empty;
 
-                                                                var rowIssueTypes =
-                                                                row.CategoryNames
-                                                                ?? new List<string>();
+                                                                var rowIssueTypes = string.IsNullOrWhiteSpace(row.IssueTypeName)
+                                                                ? new List<string>()
+                                                                : new List<string> { row.IssueTypeName };
 
                                                                 var issueTypeText =
                                                                 rowIssueTypes.Count > 0
                                                                 ? string.Join(
                                                                 ", ",
                                                                 rowIssueTypes)
-                                                                : row.IssueType
+                                                                : row.IssueTypeName
                                                                 ?? string.Empty;
+
+                                                                var categoryText = row.CategoryNames != null && row.CategoryNames.Any()
+                                                                ? string.Join(", ", row.CategoryNames)
+                                                                : "Other/Unknown";
 
                                                                 var issueTypeData =
                                                                 string.Join(
@@ -877,11 +900,13 @@
                                                                     data-manager="@manager"
                                                                     data-created-by="@createdBy"
                                                                     data-status="@status"
+                                                                    data-record-kind="@(row.IsAbsenceDiscussion ? "absence-discussion" : "issue")"
                                                                     data-issue-types="@issueTypeData"
                                                                     data-latest-action="@latestAction"
                                                                     data-created="@row.CreatedOn.ToString("yyyy-MM-dd")"
                                                                     data-issued-to-employee="@row.IssuedToEmployee.ToString().ToLowerInvariant()">
 
+                                                                    <td>@(row.IsAbsenceDiscussion ? "Absence Discussion" : "Issue")</td>
                                                                     <td>@status</td>
 
                                                                     <td>
@@ -889,6 +914,10 @@
                                                                                                                                         ? "-"
                                                                                                                                         : issueTypeText)
                                                                     </td>
+
+                                                                    <td>@(string.IsNullOrWhiteSpace(row.IssueSubTypeName) ? "-" : row.IssueSubTypeName)</td>
+
+                                                                    <td>@categoryText</td>
 
                                                                     <td>@employeeName</td>
 
@@ -937,7 +966,7 @@
                                                             <tr id="reportNoResults"
                                                                 class="d-none">
 
-                                                                <td colspan="10"
+                                                                <td colspan="13"
                                                                     class="text-center text-muted py-4">
                                                                     No report records match the selected filters.
                                                                 </td>
@@ -1698,7 +1727,12 @@
 
         setReportCount(
             "reportIssueCount",
-            visibleRows.length
+            visibleRows.filter(row => row.dataset.recordKind === "issue").length
+        );
+
+        setReportCount(
+            "reportAbsenceDiscussionCount",
+            visibleRows.filter(row => row.dataset.recordKind === "absence-discussion").length
         );
 
         setReportCount(
@@ -1809,6 +1843,10 @@
                 )?.value
             );
 
+        const recordKind = normaliseReportValue(
+            document.getElementById("reportRecordKind")?.value
+        );
+
         const latestAction =
             normaliseReportValue(
                 document.getElementById(
@@ -1860,6 +1898,10 @@
             const rowIssueTypes =
                 getReportIssueTypes(row);
 
+            const rowRecordKind = normaliseReportValue(
+                row.dataset.recordKind
+            );
+
             const searchText = [
                 rowEmployee,
                 rowDepartment,
@@ -1904,6 +1946,10 @@
                 status &&
                 rowStatus !== status
             ) {
+                show = false;
+            }
+
+            if (recordKind && rowRecordKind !== recordKind) {
                 show = false;
             }
 
@@ -1980,6 +2026,7 @@
             "reportManager",
             "reportEmployee",
             "reportStatus",
+            "reportRecordKind",
             "reportIssueType",
             "reportLatestAction"
         ].forEach(elementId => {
