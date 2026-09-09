@@ -739,51 +739,44 @@
 
                     <div class="fw-semibold mb-2">Select legal decision</div>
 
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stInvalid"
-                               value="Invalid"
-                               checked>
-                        <label class="form-check-label" for="stInvalid">Invalid</label>
-                    </div>
+                    @for (var index = 0; index < Model.IssueTypes.Count; index++)
+                    {
+                        var issueType = Model.IssueTypes[index];
+                        <div class="form-check @(index == Model.IssueTypes.Count - 1 ? "mb-3" : string.Empty)">
+                            <input class="form-check-input"
+                                   type="radio"
+                                   name="completeIssueType"
+                                   id="issueType-@issueType.IssueTypeId"
+                                   value="@issueType.IssueTypeId"
+                                   data-subtype-mode="@((int)issueType.SubTypeSelectionMode)"
+                                   checked="@(index == 0)">
+                            <label class="form-check-label" for="issueType-@issueType.IssueTypeId">
+                                @issueType.IssueTypeName
+                            </label>
+                        </div>
+                    }
 
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stDiscussion"
-                               value="Discussion">
-                        <label class="form-check-label" for="stDiscussion">Discussion</label>
-                    </div>
+                    @if (!Model.IssueTypes.Any())
+                    {
+                        <div class="alert alert-warning mb-3">
+                            No legal decision types are configured.
+                        </div>
+                    }
 
-                    <div class="form-check">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stWarning"
-                               value="Warning">
-                        <label class="form-check-label" for="stWarning">Warning</label>
-                    </div>
-
-                    <div class="form-check mb-3">
-                        <input class="form-check-input"
-                               type="radio"
-                               name="completeStatus"
-                               id="stHearing"
-                               value="Hearing">
-                        <label class="form-check-label" for="stHearing">Hearing</label>
-                    </div>
-
-                    <div class="mb-3 d-none" id="warningSubtypeGroup">
-                        <label class="form-label" for="warningSubtype">Warning category</label>
-                        <select class="form-select" id="warningSubtype">
-                            <option value="">Select warning category</option>
-                            <option value="Verbal warning">Verbal warning</option>
-                            <option value="1st written warning">1st written warning</option>
-                            <option value="2nd written warning">2nd written warning</option>
-                            <option value="Final warning">Final warning</option>
+                    <div class="mb-3 d-none" id="issueSubtypeGroup">
+                        <label class="form-label" for="issueSubtype">Decision subtype</label>
+                        <select class="form-select" id="issueSubtype">
+                            <option value="">Select a subtype</option>
+                            @foreach (var issueType in Model.IssueTypes)
+                            {
+                                foreach (var subType in issueType.SubTypes)
+                                {
+                                    <option value="@subType.IssueSubTypeId"
+                                            data-issue-type-id="@issueType.IssueTypeId">
+                                        @subType.IssueSubTypeName
+                                    </option>
+                                }
+                            }
                         </select>
                     </div>
 
@@ -1011,19 +1004,20 @@
             return;
         }
 
-        const statusEl = document.querySelector('input[name="completeStatus"]:checked');
-        const status = statusEl ? statusEl.value : "";
+        const issueTypeEl = document.querySelector('input[name="completeIssueType"]:checked');
+        const issueTypeId = parseInt(issueTypeEl?.value || "0", 10);
 
-        if (!status) {
-            alert("Please select a status.");
+        if (!issueTypeId) {
+            alert("Please select an issue type.");
             return;
         }
 
-        const type = status;
-        const warningSubtype = document.getElementById("warningSubtype")?.value || "";
+        const subtypeMode = parseInt(issueTypeEl.dataset.subtypeMode || "0", 10);
+        const issueSubtypeValue = document.getElementById("issueSubtype")?.value || "";
+        const issueSubtypeId = issueSubtypeValue ? parseInt(issueSubtypeValue, 10) : null;
 
-        if (type === "Warning" && !warningSubtype) {
-            alert("Please select a warning category.");
+        if (subtypeMode === 2 && !issueSubtypeId) {
+            alert("Please select a decision subtype.");
             return;
         }
 
@@ -1037,9 +1031,11 @@
         try {
             const fd = new FormData();
             fd.append("WarningId", warningId.toString());
-            fd.append("Status", status);
-            fd.append("Type", type);
-            fd.append("WarningSubtype", warningSubtype);
+            fd.append("IssueTypeId", issueTypeId.toString());
+
+            if (issueSubtypeId) {
+                fd.append("IssueSubTypeId", issueSubtypeId.toString());
+            }
 
             if (file) {
                 fd.append("File", file, file.name);
@@ -1105,18 +1101,39 @@
         }
     }
 
-    document.querySelectorAll('input[name="completeStatus"][type="radio"]').forEach(input => {
+    function updateIssueSubtypeOptions(issueTypeInput) {
+        const group = document.getElementById("issueSubtypeGroup");
+        const select = document.getElementById("issueSubtype");
+        if (!group || !select || !issueTypeInput) return;
+
+        const issueTypeId = issueTypeInput.value;
+        const subtypeMode = parseInt(issueTypeInput.dataset.subtypeMode || "0", 10);
+        let hasSubtypes = false;
+
+        Array.from(select.options).forEach((option, index) => {
+            if (index === 0) return;
+
+            const belongsToType = option.dataset.issueTypeId === issueTypeId;
+            option.hidden = !belongsToType;
+            option.disabled = !belongsToType;
+            hasSubtypes ||= belongsToType;
+        });
+
+        select.value = "";
+        select.required = subtypeMode === 2;
+        group.classList.toggle("d-none", subtypeMode === 0 || !hasSubtypes);
+    }
+
+    const issueTypeInputs = document.querySelectorAll('input[name="completeIssueType"][type="radio"]');
+    issueTypeInputs.forEach(input => {
         input.addEventListener("change", function () {
-            const group = document.getElementById("warningSubtypeGroup");
-            const select = document.getElementById("warningSubtype");
-            const isWarning = this.value === "Warning";
-            group?.classList.toggle("d-none", !isWarning);
-            if (select) {
-                select.required = isWarning;
-                if (!isWarning) select.value = "";
-            }
+            updateIssueSubtypeOptions(this);
         });
     });
+
+    updateIssueSubtypeOptions(
+        document.querySelector('input[name="completeIssueType"]:checked')
+    );
 
     function showDueDateMsg(text, isError) {
         const el = document.getElementById("dueDateSaveMsg");
