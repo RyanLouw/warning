@@ -76,7 +76,10 @@ namespace WarningSystems.Controllers
                     return NotFound();
             }
 
-            return View(vm);
+            // Use a dedicated view name rather than relying on the action-name convention.
+            // This keeps the single-warning legal workflow isolated from task-list views,
+            // which use a different model type.
+            return View("LegalReview", vm);
         }
 
         [Authorize(Roles = "Legal")]
