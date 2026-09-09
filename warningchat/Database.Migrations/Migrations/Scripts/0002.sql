@@ -134,6 +134,8 @@ BEGIN
         CreatedBy VARCHAR(100) NOT NULL,
         CreatedOn DATETIME2(0) NOT NULL,
         Status VARCHAR(20) NOT NULL,
+         [Type] VARCHAR(20) NOT NULL CONSTRAINT DF_Warning_Type DEFAULT ('Issue'),
+        WarningSubtype VARCHAR(30) NULL,
         CategoryId INT NOT NULL,
         SubmittedOn DATETIME2(0) NULL,
         LegalExpiryDate DATE NULL,

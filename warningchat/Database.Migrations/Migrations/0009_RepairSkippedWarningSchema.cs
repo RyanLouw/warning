@@ -19,13 +19,13 @@ public class _0009_RepairSkippedWarningSchema : Migration
 
     public override void Up()
     {
-        Execute.EmbeddedScript("0002.sql");
-        Execute.EmbeddedScript("0003.sql");
-        Execute.EmbeddedScript("0004.sql");
-        Execute.Sql("EXEC ws.sp_EnsureDefaultCategoryQuestions @CreatedBy = 'seed';");
-        Execute.EmbeddedScript("0005.sql");
-        Execute.EmbeddedScript("0006.sql");
-        Execute.EmbeddedScript("0007.sql");
-        Execute.EmbeddedScript("0008.sql");
+        //Execute.EmbeddedScript("0002.sql");
+        //Execute.EmbeddedScript("0003.sql");
+        //Execute.EmbeddedScript("0004.sql");
+        //Execute.Sql("EXEC ws.sp_EnsureDefaultCategoryQuestions @CreatedBy = 'seed';");
+        //Execute.EmbeddedScript("0005.sql");
+        //Execute.EmbeddedScript("0006.sql");
+        //Execute.EmbeddedScript("0007.sql");
+        //Execute.EmbeddedScript("0008.sql");
     }
 }

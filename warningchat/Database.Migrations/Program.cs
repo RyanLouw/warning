@@ -47,13 +47,13 @@ public class Program
         }
     }
 
-
-    private static async Task<IServiceProvider> CreateServices(MigratorTag migratorTag, IConfigurationRoot configSettings)
+    private static IHost CreateHost(MigratorTag migratorTag, IConfigurationRoot configSettings, string[] args)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration.AddConfiguration(configSettings);
-
-        await builder.AddCentralConfigAsync();
+        builder.Configuration
+            .AddEnvironmentVariables()
+            .AddCommandLine(args);
 
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(configSettings)
@@ -77,7 +77,35 @@ public class Program
 
         var app = builder.Build();
         Log.Information("Application services built successfully");
-        return app.Services;
+        return host;
+    }
+
+    private static string GetConnectionString(IConfiguration configuration, string connectionKey)
+    {
+        var connection = configuration.GetConnectionString(connectionKey);
+
+        if (string.IsNullOrWhiteSpace(connection))
+        {
+            throw new InvalidOperationException(
+                $"Connection string 'ConnectionStrings:{connectionKey}' is not configured.");
+        }
+
+        connection = connection.Trim();
+
+        if (connection.Length >= 2 &&
+            ((connection[0] == '"' && connection[^1] == '"') ||
+             (connection[0] == '\'' && connection[^1] == '\'')))
+        {
+            connection = connection[1..^1].Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(connection))
+        {
+            throw new InvalidOperationException(
+                $"Connection string 'ConnectionStrings:{connectionKey}' is empty.");
+        }
+
+        return connection;
     }
 
     private static void MigrateUp(IServiceProvider serviceProvider)

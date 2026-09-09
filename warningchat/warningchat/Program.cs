@@ -4,8 +4,6 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
-using Microsoft.Graph.Models;
-using Microsoft.Identity.Client;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using Microsoft.IdentityModel.Logging;
@@ -28,9 +26,11 @@ using WarningSystems.Core.Services.Interface;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Middleware;
 using WarningSystems.Services.Interface;
+using HW.CentralConfig.Package.Core;
+
 
 var builder = WebApplication.CreateBuilder(args);
-
+await builder.AddCentralConfigAsync();
 builder.Host.UseSerilog((ctx, services, config) =>
 {
     config.ReadFrom.Configuration(ctx.Configuration);
