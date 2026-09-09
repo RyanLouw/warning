@@ -77,11 +77,68 @@
             </button>
 
             <button type="button"
-                    id="btnRequestWarning"
+                    id="btnAbsenceDiscussion"
                     class="btn btn-lg px-4"
                     style="border-radius:999px; background:#0f6b7a; color:white;">
-                    Absent Descution
+                    Absence Discussion
             </button>
+        </div>
+
+        <div class="modal fade" id="absenceDiscussionModal" tabindex="-1"
+             aria-labelledby="absenceDiscussionModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <form id="absenceDiscussionForm">
+                        @Html.AntiForgeryToken()
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="absenceDiscussionModalLabel">Create absence discussion</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="absenceDiscussionMessage" class="alert alert-danger d-none" role="alert"></div>
+                            <div class="mb-3">
+                                <label for="absenceEmployeeId" class="form-label">Employee</label>
+                                <select id="absenceEmployeeId" class="form-select" required>
+                                    <option value="">-- Select employee --</option>
+                                    @foreach (var employee in Model.UnderME.OrderBy(user => user.DisplayName))
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(employee.Id))
+                                        {
+                                            <option value="@employee.Id">@(employee.DisplayName ?? employee.UserPrincipalName ?? employee.Id)</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="absenceSubType" class="form-label">Discussion subtype</label>
+                                <input id="absenceSubType" class="form-control" list="absenceSubTypeOptions"
+                                       maxlength="100" placeholder="Select or enter a subtype" required />
+                                <datalist id="absenceSubTypeOptions">
+                                    <option value="Unauthorised absence"></option>
+                                    <option value="Late arrival"></option>
+                                    <option value="Early departure"></option>
+                                    <option value="Other absence"></option>
+                                </datalist>
+                            </div>
+                            <div class="mb-3">
+                                <label for="absenceDates" class="form-label">Date(s)</label>
+                                <input id="absenceDates" class="form-control" type="date" multiple required />
+                                <div class="form-text">The date defaults to today. Add additional dates one at a time.</div>
+                                <button type="button" id="addAbsenceDate" class="btn btn-sm btn-outline-secondary mt-2">Add date</button>
+                                <div id="selectedAbsenceDates" class="d-flex flex-wrap gap-2 mt-2"></div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="absenceDescription" class="form-label">Description</label>
+                                <textarea id="absenceDescription" class="form-control" rows="5" required></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" id="saveAbsenceDiscussion" class="btn px-4" style="background:#0f6b7a;color:white;">Save discussion</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
 
 
@@ -1140,6 +1197,83 @@
     document.getElementById("btnRequestWarning").addEventListener("click", function () {
         window.location.href = '@Url.Action("Index", "Transgression")';
     });
+
+    (function initialiseAbsenceDiscussion() {
+        const form = document.getElementById("absenceDiscussionForm");
+        const dateInput = document.getElementById("absenceDates");
+        const dateList = document.getElementById("selectedAbsenceDates");
+        const message = document.getElementById("absenceDiscussionMessage");
+        const modalElement = document.getElementById("absenceDiscussionModal");
+        const dates = new Set();
+
+        function today() {
+            const now = new Date();
+            return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        }
+
+        function renderDates() {
+            dateList.innerHTML = "";
+            [...dates].sort().forEach(date => {
+                const badge = document.createElement("button");
+                badge.type = "button";
+                badge.className = "btn btn-sm btn-outline-secondary";
+                badge.textContent = `${date} ×`;
+                badge.setAttribute("aria-label", `Remove ${date}`);
+                badge.addEventListener("click", () => { dates.delete(date); renderDates(); });
+                dateList.appendChild(badge);
+            });
+        }
+
+        document.getElementById("btnAbsenceDiscussion").addEventListener("click", function () {
+            form.reset();
+            dates.clear();
+            dateInput.value = today();
+            dateInput.max = today();
+            dates.add(dateInput.value);
+            renderDates();
+            message.classList.add("d-none");
+            bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        });
+
+        document.getElementById("addAbsenceDate").addEventListener("click", function () {
+            if (dateInput.value) dates.add(dateInput.value);
+            renderDates();
+        });
+
+        form.addEventListener("submit", async function (event) {
+            event.preventDefault();
+            if (dateInput.value) dates.add(dateInput.value);
+            if (!form.reportValidity() || dates.size === 0) return;
+
+            const saveButton = document.getElementById("saveAbsenceDiscussion");
+            saveButton.disabled = true;
+            message.classList.add("d-none");
+
+            const response = await fetch('@Url.Action("CreateAbsenceDiscussion", "Home")', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "RequestVerificationToken": form.querySelector('input[name="__RequestVerificationToken"]').value
+                },
+                body: JSON.stringify({
+                    employeeId: document.getElementById("absenceEmployeeId").value,
+                    subType: document.getElementById("absenceSubType").value,
+                    dates: [...dates],
+                    description: document.getElementById("absenceDescription").value
+                })
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success) {
+                window.location.reload();
+                return;
+            }
+
+            message.textContent = result.message || "The discussion could not be saved.";
+            message.classList.remove("d-none");
+            saveButton.disabled = false;
+        });
+    })();
 
 
     function getReportDate(value) {

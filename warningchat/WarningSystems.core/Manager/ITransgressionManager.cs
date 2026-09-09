@@ -38,6 +38,8 @@ public interface ITransgressionManager
 
     public Task<SaveIssueStepResult> SaveIssueStepAsync(CreateTransgressionDTO dto);
 
+    public Task<SaveIssueStepResult> CreateAbsenceDiscussionAsync(CreateAbsenceDiscussionDto dto);
+
     public Task SaveAnswerAsync(SaveAnswerDto dto);
 
     public Task AddWarningNoteAsync(long warningId, long? evidenceId, int noteTypeId, string noteText);

@@ -594,6 +594,27 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         await _context.SaveChangesAsync();
     }
 
+    public async Task CompleteDiscussionAsync(long warningId, string subType, string user)
+    {
+        var discussion = await _context.LookupIssueTypes
+            .Include(type => type.ResultIssueStatus)
+            .SingleAsync(type => type.IsActive && type.IssueTypeName == "Discussion");
+
+        var warning = await _context.Warnings
+            .SingleAsync(item => item.WarningId == warningId && !item.IsDeleted);
+
+        warning.IssueTypeId = discussion.IssueTypeId;
+        warning.IssueSubTypeId = null;
+        warning.Type = discussion.IssueTypeName;
+        warning.WarningSubtype = subType.Trim();
+        warning.IssueStatusId = discussion.ResultIssueStatusId;
+        warning.Status = discussion.ResultIssueStatus.IssueStatusName;
+        warning.LastStatusChangedOn = NowSast;
+        warning.LastStatusChangedBy = user.Trim();
+
+        await _context.SaveChangesAsync();
+    }
+
     public async Task AdvanceWarningStatusAsync(
         long warningId,
         IssueStatusGroup requiredGroup,

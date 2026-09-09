@@ -1722,6 +1722,44 @@ public class TransgressionManager : ITransgressionManager
         return SaveIssueStepResult.Ok(warningId);
     }
 
+    public async Task<SaveIssueStepResult> CreateAbsenceDiscussionAsync(
+        CreateAbsenceDiscussionDto dto)
+    {
+        const int otherUnknownCategoryId = 31;
+
+        if (string.IsNullOrWhiteSpace(dto.SubType))
+            return SaveIssueStepResult.Fail("Please select or enter a discussion subtype.");
+        if (dto.Dates.Count == 0)
+            return SaveIssueStepResult.Fail("Please select at least one date.");
+        if (dto.Dates.Any(date => date > DateOnly.FromDateTime(NowSast)))
+            return SaveIssueStepResult.Fail("Discussion dates cannot be in the future.");
+        if (string.IsNullOrWhiteSpace(dto.Description))
+            return SaveIssueStepResult.Fail("Please enter a description.");
+
+        var createResult = await SaveIssueStepAsync(new CreateTransgressionDTO
+        {
+            EmployeeId = dto.EmployeeId,
+            CategoryId = otherUnknownCategoryId,
+            CategoryIds = [otherUnknownCategoryId]
+        });
+
+        if (!createResult.Success)
+            return createResult;
+
+        var dates = dto.Dates.Distinct().OrderBy(date => date)
+            .Select(date => date.ToString("yyyy-MM-dd")).ToList();
+
+        await _data.UpsertWarningAnswerAsync(createResult.WarningId, 1,
+            string.Join(", ", dates),
+            $"{{\"dates\":[{string.Join(",", dates.Select(date => $"\"{date}\""))}]}}");
+        await _data.UpsertWarningAnswerAsync(createResult.WarningId, 2,
+            dto.Description.Trim(), null);
+        await _data.CompleteDiscussionAsync(createResult.WarningId, dto.SubType,
+            _currentUser.ObjectId);
+
+        return createResult;
+    }
+
 
 
     public async Task SaveAnswerAsync(SaveAnswerDto dto)
