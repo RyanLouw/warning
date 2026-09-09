@@ -27,7 +27,9 @@
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
     var issueStatus = ValOrDash(Model.Status);
-    var issueTypeDisplay = ValOrDash(Model.Type);
+    // Razor emits the inline blocks below into this same generated method, so keep
+    // this name distinct from the legal-decision loop variables.
+    var displayedDecision = ValOrDash(Model.Type);
     var warningCategory = ValOrDash(Model.WarningSubtype);
     var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
     var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
@@ -136,7 +138,7 @@
                             </div>
                             <div class="ws-ov-row">
                                 <div class="ws-ov-label">Type:</div>
-                                <div class="ws-ov-value">@issueTypeDisplay</div>
+                                <div class="ws-ov-value">@displayedDecision</div>
                             </div>
                             @if (string.Equals(Model.Type, "Warning", StringComparison.OrdinalIgnoreCase))
                             {
@@ -741,17 +743,17 @@
 
                     @for (var index = 0; index < Model.IssueTypes.Count; index++)
                     {
-                        var decisionType = Model.IssueTypes[index];
+                        var legalDecision = Model.IssueTypes[index];
                         <div class="form-check @(index == Model.IssueTypes.Count - 1 ? "mb-3" : string.Empty)">
                             <input class="form-check-input"
                                    type="radio"
                                    name="completeIssueType"
-                                   id="issueType-@decisionType.IssueTypeId"
-                                   value="@decisionType.IssueTypeId"
-                                   data-subtype-mode="@((int)decisionType.SubTypeSelectionMode)"
+                                   id="issueType-@legalDecision.IssueTypeId"
+                                   value="@legalDecision.IssueTypeId"
+                                   data-subtype-mode="@((int)legalDecision.SubTypeSelectionMode)"
                                    checked="@(index == 0)">
-                            <label class="form-check-label" for="issueType-@decisionType.IssueTypeId">
-                                @decisionType.IssueTypeName
+                            <label class="form-check-label" for="issueType-@legalDecision.IssueTypeId">
+                                @legalDecision.IssueTypeName
                             </label>
                         </div>
                     }
@@ -767,12 +769,12 @@
                         <label class="form-label" for="issueSubtype">Decision subtype</label>
                         <select class="form-select" id="issueSubtype">
                             <option value="">Select a subtype</option>
-                            @foreach (var subtypeOwner in Model.IssueTypes)
+                            @foreach (var decisionWithSubtypes in Model.IssueTypes)
                             {
-                                foreach (var subType in subtypeOwner.SubTypes)
+                                foreach (var subType in decisionWithSubtypes.SubTypes)
                                 {
                                     <option value="@subType.IssueSubTypeId"
-                                            data-issue-type-id="@subtypeOwner.IssueTypeId">
+                                            data-issue-type-id="@decisionWithSubtypes.IssueTypeId">
                                         @subType.IssueSubTypeName
                                     </option>
                                 }
