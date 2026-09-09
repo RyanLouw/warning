@@ -6,6 +6,7 @@ using System.Security.Claims;
 using WarningSystems.Core;
 using WarningSystems.Core.Manager;
 using WarningSystems.Core.Models.Enum;
+using WarningSystems.Models.DTO;
 
 namespace WarningSystems.Controllers
 {
@@ -29,6 +30,22 @@ namespace WarningSystems.Controllers
             var vm = await _transgression.BuildTaskListAsync();
 
             return View(vm);
+        }
+
+        [Authorize(Roles = "User")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateAbsenceDiscussion(
+            [FromBody] CreateAbsenceDiscussionDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(new { success = false, message = "Please complete all required fields." });
+
+            var result = await _transgression.CreateAbsenceDiscussionAsync(dto);
+
+            return result.Success
+                ? Ok(new { success = true, warningId = result.WarningId })
+                : BadRequest(new { success = false, message = result.Message });
         }
 
         public async Task<IActionResult> Redirect(int warningId, string status)

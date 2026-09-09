@@ -23,6 +23,8 @@ public class TaskListVM
 
     public List<CategoryVM> Category { get; set; } = [];
 
+    public List<IssueSubTypeLookupVm> DiscussionSubTypes { get; set; } = [];
+
     public IReadOnlyList<string> CurrentUserRoles { get; set; }
         = [];
 
