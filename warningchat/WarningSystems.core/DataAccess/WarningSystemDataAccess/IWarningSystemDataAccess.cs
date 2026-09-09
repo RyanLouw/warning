@@ -73,6 +73,6 @@ public interface IWarningSystemDataAccess
     Task<LookupIssueStatus?> GetIssueStatusByGroupAsync(IssueStatusGroup group);
     Task UpdateWarningDecisionAsync(long warningId, LookupIssueType issueType,
         LookupIssueSubType? issueSubType, string user);
-    Task CompleteDiscussionAsync(long warningId, string subType, string user);
+    Task CompleteDiscussionAsync(long warningId, int issueSubTypeId, string user);
     Task AdvanceWarningStatusAsync(long warningId, IssueStatusGroup requiredGroup, string user);
 }

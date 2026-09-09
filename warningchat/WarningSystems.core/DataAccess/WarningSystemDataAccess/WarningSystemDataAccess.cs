@@ -594,19 +594,23 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         await _context.SaveChangesAsync();
     }
 
-    public async Task CompleteDiscussionAsync(long warningId, string subType, string user)
+    public async Task CompleteDiscussionAsync(long warningId, int issueSubTypeId, string user)
     {
         var discussion = await _context.LookupIssueTypes
             .Include(type => type.ResultIssueStatus)
+            .Include(type => type.IssueSubTypes)
             .SingleAsync(type => type.IsActive && type.IssueTypeName == "Discussion");
+        var subType = discussion.IssueSubTypes.SingleOrDefault(item =>
+            item.IsActive && item.IssueSubTypeId == issueSubTypeId)
+            ?? throw new ArgumentException("Please select a valid discussion subtype.", nameof(issueSubTypeId));
 
         var warning = await _context.Warnings
             .SingleAsync(item => item.WarningId == warningId && !item.IsDeleted);
 
         warning.IssueTypeId = discussion.IssueTypeId;
-        warning.IssueSubTypeId = null;
+        warning.IssueSubTypeId = subType.IssueSubTypeId;
         warning.Type = discussion.IssueTypeName;
-        warning.WarningSubtype = subType.Trim();
+        warning.WarningSubtype = subType.IssueSubTypeName;
         warning.IssueStatusId = discussion.ResultIssueStatusId;
         warning.Status = discussion.ResultIssueStatus.IssueStatusName;
         warning.LastStatusChangedOn = NowSast;

@@ -7,8 +7,8 @@ public class CreateAbsenceDiscussionDto
     [Required]
     public string EmployeeId { get; set; } = string.Empty;
 
-    [Required, StringLength(100)]
-    public string SubType { get; set; } = string.Empty;
+    [Range(1, int.MaxValue)]
+    public int IssueSubTypeId { get; set; }
 
     [Required, MinLength(1)]
     public List<DateOnly> Dates { get; set; } = [];

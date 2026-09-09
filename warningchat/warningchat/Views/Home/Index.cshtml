@@ -111,14 +111,13 @@
                             </div>
                             <div class="mb-3">
                                 <label for="absenceSubType" class="form-label">Discussion subtype</label>
-                                <input id="absenceSubType" class="form-control" list="absenceSubTypeOptions"
-                                       maxlength="100" placeholder="Select or enter a subtype" required />
-                                <datalist id="absenceSubTypeOptions">
-                                    <option value="Unauthorised absence"></option>
-                                    <option value="Late arrival"></option>
-                                    <option value="Early departure"></option>
-                                    <option value="Other absence"></option>
-                                </datalist>
+                                <select id="absenceSubType" class="form-select" required>
+                                    <option value="">-- Select discussion subtype --</option>
+                                    @foreach (var subType in Model.DiscussionSubTypes)
+                                    {
+                                        <option value="@subType.IssueSubTypeId">@subType.IssueSubTypeName</option>
+                                    }
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label for="absenceDates" class="form-label">Date(s)</label>
@@ -1257,7 +1256,7 @@
                 },
                 body: JSON.stringify({
                     employeeId: document.getElementById("absenceEmployeeId").value,
-                    subType: document.getElementById("absenceSubType").value,
+                    issueSubTypeId: Number(document.getElementById("absenceSubType").value),
                     dates: [...dates],
                     description: document.getElementById("absenceDescription").value
                 })
