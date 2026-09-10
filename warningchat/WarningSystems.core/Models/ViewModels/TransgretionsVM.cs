@@ -26,6 +26,9 @@ public class TransgretionsVM
     public string TeamLeader { get; set; } = string.Empty;
 
     public string IssueType { get; set; } = string.Empty;
+    public string IssueTypeName { get; set; } = string.Empty;
+    public string IssueSubTypeName { get; set; } = string.Empty;
+    public bool IsAbsenceDiscussion { get; set; }
 
     public string LatestNoteType { get; set; } = string.Empty;
     public string LatestNoteText { get; set; } = string.Empty;

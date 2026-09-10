@@ -4,6 +4,14 @@
     string ValText(string? s) => string.IsNullOrWhiteSpace(s) ? "—" : s.Trim();
     string ValDate(DateTime? d) => d.HasValue ? d.Value.ToString("yyyy/MM/dd") : "—";
     var noteCount = Model.Notes?.Count ?? 0;
+    var absenceDiscussions = (Model.Warnings ?? new List<WarningSystems.Core.ViewModels.EmployeeWarningCardVm>())
+        .Where(warning => warning.IsAbsenceDiscussion)
+        .OrderByDescending(warning => warning.LastActionedDate ?? warning.CreatedOn)
+        .ToList();
+    var issues = (Model.Warnings ?? new List<WarningSystems.Core.ViewModels.EmployeeWarningCardVm>())
+        .Where(warning => !warning.IsAbsenceDiscussion)
+        .OrderByDescending(warning => warning.LastActionedDate ?? warning.CreatedOn)
+        .ToList();
 }
 
 <div class="empdash-wrap">
@@ -145,6 +153,32 @@
             </div>
         </section>
 
+        <section class="empdash-card empdash-card-absence">
+            <div class="empdash-card-head">Absence Discussions</div>
+            <div class="empdash-card-body">
+                <div class="empdash-row">
+                    <div class="empdash-label">Total Discussions</div>
+                    <div class="empdash-value">@absenceDiscussions.Count</div>
+                </div>
+                @if (absenceDiscussions.Any())
+                {
+                    var latestDiscussion = absenceDiscussions.First();
+                    <div class="empdash-row">
+                        <div class="empdash-label">Latest Subtype</div>
+                        <div class="empdash-value">@ValText(latestDiscussion.IssueSubTypeName)</div>
+                    </div>
+                    <div class="empdash-row">
+                        <div class="empdash-label">Latest Discussion</div>
+                        <div class="empdash-value">@latestDiscussion.CreatedOn.ToString("yyyy/MM/dd")</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="empdash-empty">No absence discussions</div>
+                }
+            </div>
+        </section>
+
     </div>
 
     <section class="empdash-section">
@@ -155,6 +189,8 @@
                     <tr>
                         <th>Status</th>
                         <th>Category</th>
+                        <th>Type</th>
+                        <th>Subtype</th>
                         <th>Created By</th>
                         <th>Created</th>
                         <th>Due</th>
@@ -163,19 +199,21 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (Model.Warnings == null || !Model.Warnings.Any())
+                    @if (!issues.Any())
                     {
                         <tr>
-                            <td colspan="7" class="text-center text-muted">No warnings found.</td>
+                            <td colspan="9" class="text-center text-muted">No issues found.</td>
                         </tr>
                     }
                     else
                     {
-                        @foreach (var warning in Model.Warnings.OrderByDescending(x => x.LastActionedDate ?? x.CreatedOn))
+                        @foreach (var warning in issues)
                         {
                             <tr>
                                 <td>@warning.Status</td>
-                                <td>@warning.CategoryName</td>
+                                <td>@(string.IsNullOrWhiteSpace(warning.CategoryName) ? "Other/Unknown" : warning.CategoryName)</td>
+                                <td>@ValText(warning.IssueTypeName)</td>
+                                <td>@ValText(warning.IssueSubTypeName)</td>
                                 <td>@warning.CreatedByDisplayName</td>
                                 <td>@warning.CreatedOn.ToString("yyyy/MM/dd")</td>
                                 <td>@(warning.DueDate?.ToString("yyyy/MM/dd") ?? "-")</td>

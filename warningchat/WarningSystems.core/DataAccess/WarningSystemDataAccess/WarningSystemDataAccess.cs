@@ -340,6 +340,8 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         return await _context.Warnings
             .AsNoTracking()
             .Include(w => w.Category)
+            .Include(w => w.IssueType)
+            .Include(w => w.IssueSubType)
             .Where(w => w.EmployeeId == employeeId)
             .OrderByDescending(w =>
                 w.LastStatusChangedOn ?? w.CreatedOn)

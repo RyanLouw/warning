@@ -227,27 +227,27 @@
 
    
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active"
+                    <button class="nav-link"
                             id="docs-tab"
                             data-bs-toggle="tab"
                             data-bs-target="#docs"
                             type="button"
                             role="tab"
                             aria-controls="docs"
-                            aria-selected="true">
+                            aria-selected="false">
                         Documents
                     </button>
                 </li>
 
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link"
+                    <button class="nav-link active"
                             id="notes-tab"
                             data-bs-toggle="tab"
                             data-bs-target="#notes"
                             type="button"
                             role="tab"
                             aria-controls="notes"
-                            aria-selected="false">
+                            aria-selected="true">
                         Interactions
                     </button>
                 </li>
@@ -258,7 +258,7 @@
               
 
                 <!-- DOCUMENTS TAB -->
-                <div class="tab-pane fade show active"
+                <div class="tab-pane fade"
                      id="docs"
                      role="tabpanel"
                      aria-labelledby="docs-tab">
@@ -340,10 +340,11 @@
 
  
                 <!-- INTERACTIONS TAB -->
-                <div class="tab-pane fade"
+                <div class="tab-pane fade show active"
                      id="notes"
                      role="tabpanel"
-                     aria-labelledby="notes-tab">
+                     aria-labelledby="notes-tab"
+                     tabindex="0">
 
                     <div class="panel-body">
 
