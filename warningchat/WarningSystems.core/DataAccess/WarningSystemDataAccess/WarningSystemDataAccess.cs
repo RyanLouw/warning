@@ -594,6 +594,34 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         await _context.SaveChangesAsync();
     }
 
+    public async Task CompleteDiscussionAsync(long warningId, int issueSubTypeId, string user)
+    {
+        var discussion = await _context.LookupIssueTypes
+            .Include(type => type.IssueSubTypes)
+            .SingleAsync(type => type.IsActive && type.IssueTypeName == "Discussion");
+        const int validatedStatusId = 6;
+        var validatedStatus = await _context.LookupIssueStatuses
+            .SingleAsync(status => status.IsActive && status.IssueStatusId == validatedStatusId);
+        var subType = discussion.IssueSubTypes.SingleOrDefault(item =>
+            item.IsActive && item.IssueSubTypeId == issueSubTypeId)
+            ?? throw new ArgumentException("Please select a valid discussion subtype.", nameof(issueSubTypeId));
+
+        var warning = await _context.Warnings
+            .SingleAsync(item => item.WarningId == warningId && !item.IsDeleted);
+
+        warning.IssueTypeId = discussion.IssueTypeId;
+        warning.IssueSubTypeId = subType.IssueSubTypeId;
+        warning.Type = discussion.IssueTypeName;
+        warning.WarningSubtype = subType.IssueSubTypeName;
+        // Quick discussions are final when saved and bypass the legal workflow.
+        warning.IssueStatusId = validatedStatus.IssueStatusId;
+        warning.Status = validatedStatus.IssueStatusName;
+        warning.LastStatusChangedOn = NowSast;
+        warning.LastStatusChangedBy = user.Trim();
+
+        await _context.SaveChangesAsync();
+    }
+
     public async Task AdvanceWarningStatusAsync(
         long warningId,
         IssueStatusGroup requiredGroup,

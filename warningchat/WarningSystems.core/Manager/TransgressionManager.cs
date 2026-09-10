@@ -94,6 +94,17 @@ public class TransgressionManager : ITransgressionManager
             .Select(category => new CategoryVM(category))
             .ToList();
 
+        var discussionSubTypes = (await _data.GetActiveIssueTypesAsync())
+            .Where(type => type.IssueTypeId == (int)LookupIssueTypeEnum.Discussion)
+            .SelectMany(type => type.IssueSubTypes)
+            .OrderBy(subType => subType.IssueSubTypeId)
+            .Select(subType => new IssueSubTypeLookupVm
+            {
+                IssueSubTypeId = subType.IssueSubTypeId,
+                IssueSubTypeName = subType.IssueSubTypeName
+            })
+            .ToList();
+
         var me = await _graphUserDataAccess.GetMeAsync();
 
         var roles = await _roles.GetCurrentUserRolesAsync();
@@ -130,7 +141,8 @@ public class TransgressionManager : ITransgressionManager
             Category = categories,
             CurrentUserRoles = roles,
             CurrentUserId = me?.Id ?? string.Empty,
-            ReportRows = reportRows
+            ReportRows = reportRows,
+            DiscussionSubTypes = discussionSubTypes
         };
 
         ApplyStatusAndDueCounts(vm, rows);
@@ -1720,6 +1732,52 @@ public class TransgressionManager : ITransgressionManager
         }
 
         return SaveIssueStepResult.Ok(warningId);
+    }
+
+    public async Task<SaveIssueStepResult> CreateAbsenceDiscussionAsync(
+        CreateAbsenceDiscussionDto dto)
+    {
+        const int otherUnknownCategoryId = 31;
+
+        if (dto.IssueSubTypeId <= 0)
+            return SaveIssueStepResult.Fail("Please select a discussion subtype.");
+        if (dto.Dates.Count == 0)
+            return SaveIssueStepResult.Fail("Please select at least one date.");
+        if (dto.Dates.Any(date => date > DateOnly.FromDateTime(NowSast)))
+            return SaveIssueStepResult.Fail("Discussion dates cannot be in the future.");
+        if (string.IsNullOrWhiteSpace(dto.Description))
+            return SaveIssueStepResult.Fail("Please enter a description.");
+
+        var discussionType = (await _data.GetActiveIssueTypesAsync())
+            .SingleOrDefault(type => type.IssueTypeId == (int)LookupIssueTypeEnum.Discussion);
+        var isValidSubType = discussionType?.IssueSubTypes.Any(subType =>
+            subType.IssueSubTypeId == dto.IssueSubTypeId && subType.IsActive) == true;
+
+        if (!isValidSubType)
+            return SaveIssueStepResult.Fail("Please select a valid discussion subtype.");
+
+        var createResult = await SaveIssueStepAsync(new CreateTransgressionDTO
+        {
+            EmployeeId = dto.EmployeeId,
+            CategoryId = otherUnknownCategoryId,
+            CategoryIds = [otherUnknownCategoryId]
+        });
+
+        if (!createResult.Success)
+            return createResult;
+
+        var dates = dto.Dates.Distinct().OrderBy(date => date)
+            .Select(date => date.ToString("yyyy-MM-dd")).ToList();
+
+        await _data.UpsertWarningAnswerAsync(createResult.WarningId, 1,
+            string.Join(", ", dates),
+            $"{{\"dates\":[{string.Join(",", dates.Select(date => $"\"{date}\""))}]}}");
+        await _data.UpsertWarningAnswerAsync(createResult.WarningId, 2,
+            dto.Description.Trim(), null);
+        await _data.CompleteDiscussionAsync(createResult.WarningId, dto.IssueSubTypeId,
+            _currentUser.ObjectId);
+
+        return createResult;
     }
 
 
