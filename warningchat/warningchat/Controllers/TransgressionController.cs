@@ -259,6 +259,7 @@ namespace WarningSystems.Controllers
 
         [Authorize(Roles = "User")]
         [HttpGet]
+        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public async Task<IActionResult> GetOverview(long warningId)
         {
             var vm = await _transgression.GetWarningWizardAsync(warningId);

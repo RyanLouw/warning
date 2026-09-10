@@ -1327,8 +1327,7 @@
 
                 console.log("Warning answers saved successfully.");
 
-                const nextStep = document.querySelector('.ws-step[data-step="4"]');
-                nextStep?.click();
+                window.warningWizard?.reloadAtStep(4);
             } catch (error) {
                 console.error("Error saving warning answers:", error);
                 alert(error?.message || "An error occurred while saving.");

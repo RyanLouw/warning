@@ -10,7 +10,16 @@
     }
 
     async function loadOverviewPane(warningId) {
-        const res = await fetch(`/Transgression/GetOverview?warningId=${warningId}`);
+        const overviewEndpoint = window.wsEndpoints?.getOverview ||
+            "/Transgression/GetOverview";
+        const url = new URL(overviewEndpoint, window.location.origin);
+        url.searchParams.set("warningId", warningId);
+        url.searchParams.set("_", Date.now());
+
+        const res = await fetch(url, {
+            cache: "no-store",
+            credentials: "same-origin"
+        });
 
         if (!res.ok) {
             throw new Error("Failed to load overview");
