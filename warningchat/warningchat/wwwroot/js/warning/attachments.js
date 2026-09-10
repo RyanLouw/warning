@@ -1,13 +1,16 @@
 ﻿(function () {
-    function getWarningIdFromUrl() {
-        const path = window.location.pathname;
-        const parts = path.split('/').filter(p => p);
-        const last = parts[parts.length - 1];
-        const id = parseInt(last, 10) || 0;
-        return id;
+    function getWarningId() {
+        const formValue = document.querySelector(
+            '#frmSaveAttachment input[name="WarningId"]'
+        )?.value;
+
+        const queryValue = new URL(window.location.href)
+            .searchParams.get("id");
+
+        return parseInt(formValue || queryValue || "0", 10) || 0;
     }
 
-    const warningId = getWarningIdFromUrl();
+    const warningId = getWarningId();
     console.log("FINAL WARNING ID:", warningId);
 
     function getInput() {

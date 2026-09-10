@@ -98,8 +98,7 @@
 
                 showSaveMessage("Dates saved successfully ✅", false);
 
-                const nextStep = document.querySelector('.ws-step[data-step="3"]');
-                if (nextStep) nextStep.click();
+                window.warningWizard?.reloadAtStep(3);
             } catch (e) {
                 alert("Network/error while saving.");
             }

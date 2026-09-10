@@ -154,12 +154,7 @@
 
             console.log("Saved successfullyyyyyyy", answers);
 
-            const nextStep = document.querySelector('.ws-step[data-step="4"]');
-            if (nextStep) {
-                nextStep.click();
-            } else {
-                console.warn("Step 4 not found in wsStepper");
-            }
+            window.warningWizard?.reloadAtStep(4);
         } catch (err) {
             console.error(err);
             alert("Network/error while saving.");

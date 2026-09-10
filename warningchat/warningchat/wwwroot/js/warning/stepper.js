@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     const stepper = document.getElementById('wsStepper');
     if (!stepper) return;
 
@@ -22,6 +22,9 @@
 
         if (overviewPane) {
             overviewPane.innerHTML = html;
+            document.dispatchEvent(
+                new CustomEvent("warning:overview-updated")
+            );
         }
     }
 
@@ -65,14 +68,16 @@
 
 
     window.warningWizard = {
-        goToStep: setActive
-    };
+        goToStep: setActive,
+        reloadAtStep: function (stepNo) {
+            sessionStorage.setItem(
+                "warningWizardActiveStep",
+                String(stepNo)
+            );
 
-    steps.forEach(s => {
-        s.addEventListener('click', async () => {
-            await setActive(s.dataset.step);
-        });
-    });
+            window.location.reload();
+        }
+    };
 
     steps.forEach(s => {
         s.addEventListener('click', async () => {

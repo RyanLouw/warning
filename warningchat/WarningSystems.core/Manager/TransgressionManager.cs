@@ -1158,8 +1158,16 @@ public class TransgressionManager : ITransgressionManager
         existingVm.SOPs = sopDocuments;
         existingVm.UnderMe = underMe;
 
-        existingVm.EvidenceStored =
-            await _fileStorage.ListWarningFilesAsync(id.Value);
+        var storedFiles = await _fileStorage.ListWarningFilesAsync(id.Value);
+        var recordedFiles = (existingVm.Evidence ?? [])
+            .Select(evidence => evidence.FileName)
+            .Where(fileName => !string.IsNullOrWhiteSpace(fileName))
+            .Select(fileName => fileName!);
+
+        existingVm.EvidenceStored = storedFiles
+            .Concat(recordedFiles)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         existingVm.HasAccess =
             existingVm.CreatedBy == _currentUser.ObjectId;
@@ -1272,6 +1280,78 @@ public class TransgressionManager : ITransgressionManager
             .ThenBy(x => x.QuestionText)
             .ToList();
 
+        // Older databases can be missing category links for the three core
+        // wizard questions. Never discard an answer that was successfully
+        // saved just because its CategoryQuestion row is absent or inactive.
+        var missingAnsweredQuestionIds = answerMap.Keys
+            .Where(questionId => questionVms.All(question =>
+                question.QuestionId != questionId))
+            .ToHashSet();
+
+        if (missingAnsweredQuestionIds.Count > 0)
+        {
+            var questions = await _data.GetAllQuestionsAsync();
+
+            questionVms.AddRange(questions
+                .Where(question => missingAnsweredQuestionIds.Contains(question.QuestionId))
+                .Select(question =>
+                {
+                    var answer = answerMap[question.QuestionId];
+
+                    return new WarningQuestionVm
+                    {
+                        QuestionId = question.QuestionId,
+                        QuestionText = question.QuestionText,
+                        ControlType = question.ControlType,
+                        DefaultConfigJson = question.DefaultConfigJson,
+                        IsQuestionActive = question.IsActive,
+                        IsCategoryLinkActive = true,
+                        SortOrder = question.QuestionId,
+                        AnswerText = answer.AnswerText,
+                        AnswerJson = answer.AnswerJson
+                    };
+                }));
+
+            questionVms = questionVms
+                .OrderBy(question => question.SortOrder)
+                .ThenBy(question => question.QuestionText)
+                .ToList();
+        }
+
+        var isSopNotApplicable = false;
+        int? selectedSopDocumentId = null;
+        var sopAnswerJson = questionVms
+            .FirstOrDefault(question => question.QuestionId == 3)
+            ?.AnswerJson;
+
+        if (!string.IsNullOrWhiteSpace(sopAnswerJson))
+        {
+            try
+            {
+                using var sopAnswer = System.Text.Json.JsonDocument.Parse(sopAnswerJson);
+                var root = sopAnswer.RootElement;
+
+                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                    (notApplicable.ValueKind == System.Text.Json.JsonValueKind.True ||
+                     notApplicable.ValueKind == System.Text.Json.JsonValueKind.False))
+                {
+                    isSopNotApplicable = notApplicable.GetBoolean();
+                }
+
+                if (root.TryGetProperty("sopDocumentId", out var documentId) &&
+                    documentId.ValueKind == System.Text.Json.JsonValueKind.Number &&
+                    documentId.TryGetInt32(out var parsedDocumentId) &&
+                    parsedDocumentId > 0)
+                {
+                    selectedSopDocumentId = parsedDocumentId;
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Keep the SOP controls empty when an older answer is malformed.
+            }
+        }
+
         var noteEntities =
             await _data.GetWarningNotesByWarningIdAsync(warningId);
 
@@ -1340,6 +1420,8 @@ public class TransgressionManager : ITransgressionManager
             LastStatusChangedBy = warning.LastStatusChangedBy,
 
             Questions = questionVms,
+            IsSopNonCompliance = isSopNotApplicable,
+            SelectedSOPDocumentId = selectedSopDocumentId,
             Evidence = evidenceVms,
 
             Notes = noteVms

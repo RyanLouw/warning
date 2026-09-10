@@ -125,8 +125,7 @@
             const data = await postJson(saveUrl, dto);
 
             if (data?.success) {
-                const nextStep = document.querySelector('.ws-step[data-step="5"]');
-                if (nextStep) nextStep.click();
+                window.warningWizard?.reloadAtStep(5);
             } else {
                 showSopMsg(data?.message || "Save failed.", true);
             }

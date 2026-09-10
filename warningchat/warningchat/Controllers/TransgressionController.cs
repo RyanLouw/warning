@@ -257,11 +257,15 @@ namespace WarningSystems.Controllers
             return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
         }
 
+        [Authorize(Roles = "User")]
         [HttpGet]
         public async Task<IActionResult> GetOverview(long warningId)
         {
             var vm = await _transgression.GetWarningWizardAsync(warningId);
-            return PartialView("_WarningOverview", vm);
+            if (vm.HasAccess == false)
+                return Forbid();
+
+            return PartialView("Partials/_Overview", vm);
         }
 
         [AuthorizeForScopes(Scopes = new[] { "User.Read.All" })]
