@@ -1327,7 +1327,14 @@
 
                 console.log("Warning answers saved successfully.");
 
-                window.warningWizard?.reloadAtStep(4);
+                if (typeof window.warningWizard?.reloadAtStep === "function") {
+                    window.warningWizard.reloadAtStep(4);
+                } else {
+                    // Support clients that still have an older stepper.js in
+                    // cache: persist the next step and reload directly.
+                    sessionStorage.setItem("warningWizardActiveStep", "4");
+                    window.location.reload();
+                }
             } catch (error) {
                 console.error("Error saving warning answers:", error);
                 alert(error?.message || "An error occurred while saving.");

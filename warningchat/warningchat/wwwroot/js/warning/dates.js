@@ -98,7 +98,12 @@
 
                 showSaveMessage("Dates saved successfully ✅", false);
 
-                window.warningWizard?.reloadAtStep(3);
+                if (typeof window.warningWizard?.reloadAtStep === "function") {
+                    window.warningWizard.reloadAtStep(3);
+                } else {
+                    sessionStorage.setItem("warningWizardActiveStep", "3");
+                    window.location.reload();
+                }
             } catch (e) {
                 alert("Network/error while saving.");
             }
