@@ -125,8 +125,12 @@
             const data = await postJson(saveUrl, dto);
 
             if (data?.success) {
-                const nextStep = document.querySelector('.ws-step[data-step="5"]');
-                if (nextStep) nextStep.click();
+                if (typeof window.warningWizard?.reloadAtStep === "function") {
+                    window.warningWizard.reloadAtStep(5);
+                } else {
+                    sessionStorage.setItem("warningWizardActiveStep", "5");
+                    window.location.reload();
+                }
             } else {
                 showSopMsg(data?.message || "Save failed.", true);
             }

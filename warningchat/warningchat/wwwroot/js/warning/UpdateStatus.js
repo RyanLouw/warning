@@ -1,7 +1,4 @@
-﻿(function () {
-    const btn = document.getElementById("btnMarkNew");
-    if (!btn) return;
-
+(function () {
     const saveUrl = '/Transgression/UpdateStatus';
 
     function showMsg(text, isError) {
@@ -77,14 +74,15 @@
         return data;
     }
 
-    function getWarningIdFromUrl() {
-        const segments = window.location.pathname.split("/").filter(Boolean);
-        const last = segments[segments.length - 1];
-        const id = Number.parseInt(last, 10);
+    function getWarningId(btn) {
+        const buttonValue = btn?.dataset?.warningId;
+        const queryValue = new URL(window.location.href)
+            .searchParams.get("id");
+        const id = Number.parseInt(buttonValue || queryValue || "0", 10);
         return Number.isInteger(id) && id > 0 ? id : 0;
     }
 
-    async function markAsNew() {
+    async function markAsNew(btn) {
         const missing = getMissingRequired();
         if (missing.length > 0) {
             btn.disabled = true;
@@ -92,7 +90,7 @@
             return;
         }
 
-        const warningId = getWarningIdFromUrl();
+        const warningId = getWarningId(btn);
         if (!warningId) {
             showMsg("WarningId not found in URL.", true);
             return;
@@ -125,136 +123,21 @@
         }
     }
 
-    (function initButtonState() {
-        const missing = getMissingRequired();
-        btn.disabled = missing.length > 0;
-    })();
-
-    btn.addEventListener("click", markAsNew);
-})();
-(function () {
-    function getWarningId() {
-        return parseInt(document.getElementById("WarningId")?.value || "0", 10);
-    }
-
-    function setHidden(qid, answerText, answerJson) {
-        const txt = document.getElementById(`Q${qid}_AnswerText`);
-        const json = document.getElementById(`Q${qid}_AnswerJson`);
-
-        if (txt) txt.value = answerText ?? "";
-        if (json) json.value = answerJson ?? "";
-    }
-
-    async function loadOverviewStep(warningId) {
-        const res = await fetch(`/Transgression/GetOverview?warningId=${warningId}`);
-        if (!res.ok) {
-            throw new Error("Failed to load overview");
-        }
-
-        const html = await res.text();
-        const container = document.getElementById("wsStepContent");
-        if (container) {
-            container.innerHTML = html;
-        }
-    }
-
-    function collectAnswers() {
-        const warningId = getWarningId();
-        if (!warningId || warningId <= 0) return { warningId: 0, answers: [] };
-
-        const qidEls = document.querySelectorAll(`input[type="hidden"][id^="Q"][id$="_QuestionId"]`);
-        const answers = [];
-
-        qidEls.forEach(qEl => {
-            const qid = parseInt(qEl.value || "0", 10);
-            if (!qid) return;
-
-            let answerText = "";
-            let answerJson = "";
-
-            if (qid === 2) {
-                const txtEl = document.getElementById("Q2_AnswerText");
-                const jsonEl = document.getElementById("Q2_AnswerJson");
-
-                answerText = txtEl ? (txtEl.value ?? "") : "";
-                answerJson = jsonEl ? (jsonEl.value ?? "") : "";
-            } else {
-                const textInput = document.querySelector(`.ws-text[data-qid="${qid}"]`);
-                const singleSelect = document.querySelector(`.ws-single[data-qid="${qid}"]`);
-                const multiSelect = document.querySelector(`.ws-multi[data-qid="${qid}"]`);
-                const radioChecked = document.querySelector(`input[name="Q${qid}_Radio"]:checked`);
-
-                if (textInput) {
-                    answerText = textInput.value ?? "";
-                } else if (singleSelect) {
-                    answerText = singleSelect.value ?? "";
-                } else if (multiSelect) {
-                    const selected = Array.from(multiSelect.selectedOptions).map(o => o.value);
-                    answerText = selected.join(", ");
-                    answerJson = JSON.stringify({ selected });
-                } else if (radioChecked) {
-                    answerText = radioChecked.value ?? "";
-                } else {
-                    const txtEl = document.getElementById(`Q${qid}_AnswerText`);
-                    const jsonEl = document.getElementById(`Q${qid}_AnswerJson`);
-                    answerText = txtEl ? (txtEl.value ?? "") : "";
-                    answerJson = jsonEl ? (jsonEl.value ?? "") : "";
-                }
-            }
-
-            answers.push({ warningId, questionId: qid, answerText, answerJson });
-        });
-
-        return { warningId, answers };
-    }
-
-    async function saveAll() {
-        const warningId = getWarningId();
-        if (!warningId || warningId <= 0) {
-            alert("Please create/save the warning first (Step 1) before saving this step.");
-            return;
-        }
-
-        const { answers } = collectAnswers();
-
-        if (!answers.length) {
-            alert("Nothing to save.");
-            return;
-        }
-
-        try {
-            const res = await fetch("/Transgression/SaveAnswers", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(answers)
-            });
-
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok || data.success === false) {
-                alert(data.message || "Failed to save answers.");
-                return;
-            }
-
-            await loadOverviewStep(warningId);
-
-            const nextStep = document.querySelector('.ws-step[data-step="4"]');
-            if (nextStep) {
-                nextStep.click();
-            } else {
-                console.warn("Step 4 not found in wsStepper");
-            }
-        } catch (err) {
-            console.error(err);
-            alert("Network/error while saving.");
-        }
-    }
-
-    document.addEventListener("click", function (e) {
-        const btn = e.target.closest("#wsSaveDescriptionBtn");
+    function updateButtonState() {
+        const btn = document.getElementById("btnMarkNew");
         if (!btn) return;
 
-        e.preventDefault();
-        saveAll();
+        btn.disabled = getMissingRequired().length > 0;
+    }
+
+    document.addEventListener("click", function (event) {
+        const btn = event.target.closest("#btnMarkNew");
+        if (!btn) return;
+
+        event.preventDefault();
+        markAsNew(btn);
     });
+
+    document.addEventListener("warning:overview-updated", updateButtonState);
+    updateButtonState();
 })();
