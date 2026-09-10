@@ -15,20 +15,30 @@
         setTimeout(() => { el.style.display = "none"; }, 3500);
     }
 
-    function addWorkingDays(startDate, workingDaysToAdd) {
-        const d = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-        let added = 0;
+  function addWorkingDays(startDate, workingDaysToAdd) {
+    const d = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate()
+    );
 
-        while (added < workingDaysToAdd) {
-            d.setDate(d.getDate() + 1);
+    let added = 0;
 
-            const day = d.getDay(); // 0=Sun, 6=Sat
-            const isWeekend = (day === 0 || day === 6);
-            if (!isWeekend) added++;
+    while (added < workingDaysToAdd) {
+        d.setDate(d.getDate() + 1);
+
+        const day = d.getDay();
+        const isWeekend = day === 0 || day === 6;
+        if (!isWeekend ) {
+            added++;
         }
-
-        return d;
     }
+
+    return d;
+}
+
+  
+
     function isFlagTrue(id) {
         const el = document.getElementById(id);
         return el && el.value === "1";
@@ -88,7 +98,7 @@
             return;
         }
 
-        const due = addWorkingDays(new Date(), 5);
+        const due = addWorkingDays(new Date(), 2);
         const dto = {
             warningId: warningId,
             status: "New",

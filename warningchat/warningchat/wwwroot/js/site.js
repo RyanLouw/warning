@@ -6,6 +6,7 @@
 
     let pendingOperations = 0;
     let showTimer = null;
+    let navigationInProgress = false;
 
     function render() {
         const isBusy = pendingOperations > 0;
@@ -39,7 +40,20 @@
 
     function reset() {
         pendingOperations = 0;
+        navigationInProgress = false;
         render();
+    }
+
+    function beginNavigation() {
+        if (navigationInProgress) return;
+
+        navigationInProgress = true;
+        show();
+
+
+        clearTimeout(showTimer);
+        showTimer = null;
+        loader.classList.add("app-loader--visible");
     }
 
     window.appLoader = {
@@ -79,14 +93,10 @@
         }
     };
 
-    // Submit only fires after native validation succeeds. Waiting until event
-    // dispatch completes avoids leaving the loader open for AJAX forms that
-    // call preventDefault and then use the fetch/XHR hooks below.
+
     document.addEventListener("submit", event => {
-        queueMicrotask(() => {
-            if (!event.defaultPrevented) show();
-        });
-    }, true);
+        if (!event.defaultPrevented) beginNavigation();
+    });
 
     document.addEventListener("click", event => {
         const link = event.target.closest("a[href]");
@@ -101,11 +111,12 @@
         const destination = new URL(link.href, window.location.href);
         if (destination.origin !== window.location.origin) return;
 
-        queueMicrotask(() => {
-            if (!event.defaultPrevented) show();
-        });
-    }, true);
+        if (!event.defaultPrevented) beginNavigation();
+    });
 
-    // A page restored from the back-forward cache can retain its old busy DOM.
+
+    window.addEventListener("beforeunload", beginNavigation);
+
+
     window.addEventListener("pageshow", reset);
 })();

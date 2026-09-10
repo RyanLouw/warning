@@ -28,18 +28,6 @@
     async function setActive(stepNo) {
         const step = String(stepNo);
 
-        if (step === "6") {
-            const warningId = getWarningId();
-
-            if (warningId > 0) {
-                try {
-                    await loadOverviewPane(warningId);
-                } catch (err) {
-                    console.error("Failed to refresh overview:", err);
-                }
-            }
-        }
-
         steps.forEach(s => {
             s.classList.toggle('active', s.dataset.step === step);
         });
@@ -55,12 +43,36 @@
             badge.textContent = step;
         }
 
-        const label = stepper.querySelector(`.ws-step[data-step="${step}"] .ws-step-label`);
+        const label = stepper.querySelector(
+            `.ws-step[data-step="${step}"] .ws-step-label`
+        );
 
         if (title) {
             title.textContent = label ? label.textContent : "Wizard";
         }
+
+        if (step === "6") {
+            const warningId = getWarningId();
+
+            if (warningId > 0) {
+                loadOverviewPane(warningId)
+                    .catch(err =>
+                        console.error("Failed to refresh overview:", err)
+                    );
+            }
+        }
     }
+
+
+    window.warningWizard = {
+        goToStep: setActive
+    };
+
+    steps.forEach(s => {
+        s.addEventListener('click', async () => {
+            await setActive(s.dataset.step);
+        });
+    });
 
     steps.forEach(s => {
         s.addEventListener('click', async () => {

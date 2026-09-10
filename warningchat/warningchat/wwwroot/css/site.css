@@ -1,4 +1,4 @@
-html {
+﻿html {
     font-size: 14px;
 }
 
@@ -143,11 +143,68 @@ body {
    STATUS BAR
    =============================== */
 
+.status-draft .count-status {
+    color: #6b7280;
+}
+
+.status-new .count-status {
+    color: #2563eb;
+}
+
+.status-in-progress .count-status {
+    color: #d97706;
+}
+
+.status-pending .count-status {
+    color: #9333ea;
+}
+
+.status-issued .count-status {
+    color: #059669;
+}
+
+.status-validated .count-status {
+    color: #0f766e;
+}
+
+.status-due .count-due {
+    color: #ea580c;
+}
+
+.status-overdue .count-overdue {
+    color: #dc2626;
+}
+
 .status-bar {
     display: flex;
+    flex-wrap: wrap;
     gap: 1.75rem;
     justify-content: space-between;
     margin-bottom: 1.75rem;
+}
+
+.status-draft .count-status {
+    background: #6b7280;
+}
+
+.status-new .count-status {
+    background: #2563eb;
+}
+
+.status-in-progress .count-status {
+    background: #d97706;
+}
+
+.status-pending .count-status {
+    background: #9333ea;
+}
+
+.status-issued .count-status {
+    background: #059669;
+}
+
+.status-validated .count-status {
+    background: #0f766e;
 }
 
 .status-pill {
@@ -1751,10 +1808,10 @@ body {
     transition: opacity 120ms ease, visibility 120ms ease;
 }
 
-.app-loader.app-loader--visible {
-    visibility: visible;
-    opacity: 1;
-}
+    .app-loader.app-loader--visible {
+        visibility: visible;
+        opacity: 1;
+    }
 
 .app-is-loading .app-loader {
     pointer-events: all;
@@ -1787,7 +1844,9 @@ body {
 }
 
 @keyframes app-loader-spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
