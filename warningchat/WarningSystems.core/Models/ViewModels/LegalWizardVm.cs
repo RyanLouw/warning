@@ -18,6 +18,9 @@ public class LegalWizardVm
     public  string CreatedByDesplayName { get; set; }
     public int CategoryId { get; set; }
     public  string CategoryName { get; set; }
+    public List<int> CategoryIds { get; set; } = [];
+    public List<string> CategoryNames { get; set; } = [];
+    public List<CategoryVM> Categories { get; set; } = [];
 
     public DateTime? SubmittedOn { get; set; }
     public DateOnly? LegalExpiryDate { get; set; }

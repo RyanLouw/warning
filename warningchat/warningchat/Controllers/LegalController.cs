@@ -235,6 +235,25 @@ namespace WarningSystems.Controllers
             return Ok(new { success = true });
         }
 
+        [Authorize(Roles = "Legal")]
+        [HttpPost]
+        public async Task<IActionResult> UpdateIssueDetails(
+            [FromBody] UpdateLegalIssueDetailsDto dto)
+        {
+            if (dto is null || !ModelState.IsValid)
+                return BadRequest(new { success = false, message = "Invalid update request." });
+
+            var changedBy = User.Identity?.Name;
+            if (string.IsNullOrWhiteSpace(changedBy))
+                return Unauthorized(new { success = false, message = "Unable to determine the logged-in user." });
+
+            var result = await _transgressionManager.UpdateLegalIssueDetailsAsync(dto, changedBy);
+            if (!result.Success)
+                return BadRequest(new { success = false, message = result.Message });
+
+            return Ok(new { success = true });
+        }
+
 
 
 

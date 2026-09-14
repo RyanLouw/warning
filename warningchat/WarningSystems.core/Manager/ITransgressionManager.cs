@@ -41,6 +41,8 @@ public interface ITransgressionManager
     public Task<SaveIssueStepResult> CreateAbsenceDiscussionAsync(CreateAbsenceDiscussionDto dto);
 
     public Task SaveAnswerAsync(SaveAnswerDto dto);
+    public Task<(bool Success, string? Message)> UpdateLegalIssueDetailsAsync(
+        UpdateLegalIssueDetailsDto dto, string changedBy);
 
     public Task AddWarningNoteAsync(long warningId, long? evidenceId, int noteTypeId, string noteText);
 
