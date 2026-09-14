@@ -27,8 +27,6 @@
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
     var issueStatus = ValOrDash(Model.Status);
-    // Razor emits the inline blocks below into this same generated method, so keep
-    // this name distinct from the legal-decision loop variables.
     var displayedDecision = ValOrDash(Model.Type);
     var warningCategory = ValOrDash(Model.WarningSubtype);
     var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
@@ -74,6 +72,15 @@
 
 
         <div class="page-actions d-flex gap-2">
+
+            <button type="button"
+                    id="btnTeamLeadVisibility"
+                    class="btn @(Model.HideFromTeamLead ? "ws-sensitive-hidden" : "btn-outline-warning")"
+                    style="border-radius:999px;"
+                    data-hidden="@(Model.HideFromTeamLead ? "true" : "false")"
+                    onclick="toggleTeamLeadVisibility(this)">
+                @(Model.HideFromTeamLead ? "Show to Team Leads" : "Hide from Team Leads")
+            </button>
             @if (canRecordDecision)
             {
                 <button type="button"
@@ -94,6 +101,7 @@
                     Validate
                 </button>
             }
+       
 
             <button type="button"
                     class="ws-btn-primary-pill"
@@ -203,10 +211,10 @@
                                 <div class="ws-ov-value">@generalNotesCount</div>
                             </div>
 
-                            <div class="ws-ov-row">
+                            @* <div class="ws-ov-row">
                                 <div class="ws-ov-label">Document:</div>
                                 <div class="ws-ov-value">@documentNotesCount</div>
-                            </div>
+                            </div> *@
 
                             <div class="ws-ov-row">
                                 <div class="ws-ov-label">Created By:</div>
@@ -449,7 +457,7 @@
                                         <th>Created On</th>
                                         <th>Status</th>
                                         <th>Last Changed By</th>
-                                        <th>Category</th>
+                                        <th>Issue Category</th>
                                         <th class="text-end">Issue</th>
                                     </tr>
                                 </thead>
@@ -564,6 +572,7 @@
                                                 <td class="text-end">
                                                     <a class="btn btn-outline-secondary"
                                                        style="border-radius:999px;"
+                                                       download
                                                        href="@Url.Action("Download", "Legal", new { warningId = Model.WarningId, fileName = d.FileName })">
                                                         Download
                                                     </a>
@@ -766,7 +775,7 @@
                     }
 
                     <div class="mb-3 d-none" id="issueSubtypeGroup">
-                        <label class="form-label" for="issueSubtype">Decision subtype</label>
+                        <label class="form-label" for="issueSubtype">Subtype</label>
                         <select class="form-select" id="issueSubtype">
                             <option value="">Select a subtype</option>
                             @foreach (var decisionWithSubtypes in Model.IssueTypes)
@@ -1102,6 +1111,58 @@
             btn.textContent = originalText;
         }
     }
+
+
+    async function toggleTeamLeadVisibility(btn) {
+    const warningId = @Model.WarningId;
+    const currentlyHidden = btn.dataset.hidden === "true";
+    const hideFromTeamLead = !currentlyHidden;
+
+    const actionText = hideFromTeamLead
+        ? "hide this issue from Team Leads"
+        : "make this issue visible to Team Leads";
+
+    if (!confirm(`Are you sure you want to ${actionText}?`)) {
+        return;
+    }
+
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = "Saving...";
+
+    try {
+        const res = await fetch("@Url.Action("SetTeamLeadVisibility", "Legal")", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                warningId: warningId,
+                hideFromTeamLead: hideFromTeamLead
+            })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || data.success === false) {
+            throw new Error(data.message || "Could not update Team Lead visibility.");
+        }
+
+        btn.dataset.hidden = data.hideFromTeamLead.toString();
+        btn.textContent = data.hideFromTeamLead
+            ? "Show to Team Leads"
+            : "Hide from Team Leads";
+
+        btn.classList.toggle("ws-sensitive-hidden", data.hideFromTeamLead);
+        btn.classList.toggle("btn-outline-warning", !data.hideFromTeamLead);
+
+    } catch (err) {
+        alert(err.message || "Could not update Team Lead visibility.");
+        btn.textContent = originalText;
+    } finally {
+        btn.disabled = false;
+    }
+}
 
     function updateIssueSubtypeOptions(issueTypeInput) {
         const group = document.getElementById("issueSubtypeGroup");

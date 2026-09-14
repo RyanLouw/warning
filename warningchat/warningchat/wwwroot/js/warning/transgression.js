@@ -72,7 +72,17 @@
                         `Failed to save.HTTP ${response.status} `
                     );
                 }
-                window.warningWizard?.goToStep(2);
+                const savedWarningId = data.warningId || warningId;
+
+                // Reload the wizard from the server after the Issue step is
+                // updated. Category changes determine which questions appear
+                // in later steps, so moving through the existing DOM would
+                // leave those steps (and the overview) with stale data.
+                const url = new URL(window.location.href);
+                url.searchParams.set("id", savedWarningId);
+
+                sessionStorage.setItem("warningWizardActiveStep", "2");
+                window.location.assign(url.toString());
             } catch (error) {
                 console.error(
                     "Could not save transgression details:",

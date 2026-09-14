@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     const stepper = document.getElementById('wsStepper');
     if (!stepper) return;
 
@@ -10,7 +10,16 @@
     }
 
     async function loadOverviewPane(warningId) {
-        const res = await fetch(`/Transgression/GetOverview?warningId=${warningId}`);
+        const overviewEndpoint = window.wsEndpoints?.getOverview ||
+            "/Transgression/GetOverview";
+        const url = new URL(overviewEndpoint, window.location.origin);
+        url.searchParams.set("warningId", warningId);
+        url.searchParams.set("_", Date.now());
+
+        const res = await fetch(url, {
+            cache: "no-store",
+            credentials: "same-origin"
+        });
 
         if (!res.ok) {
             throw new Error("Failed to load overview");
@@ -22,6 +31,9 @@
 
         if (overviewPane) {
             overviewPane.innerHTML = html;
+            document.dispatchEvent(
+                new CustomEvent("warning:overview-updated")
+            );
         }
     }
 
@@ -65,14 +77,16 @@
 
 
     window.warningWizard = {
-        goToStep: setActive
-    };
+        goToStep: setActive,
+        reloadAtStep: function (stepNo) {
+            sessionStorage.setItem(
+                "warningWizardActiveStep",
+                String(stepNo)
+            );
 
-    steps.forEach(s => {
-        s.addEventListener('click', async () => {
-            await setActive(s.dataset.step);
-        });
-    });
+            window.location.reload();
+        }
+    };
 
     steps.forEach(s => {
         s.addEventListener('click', async () => {

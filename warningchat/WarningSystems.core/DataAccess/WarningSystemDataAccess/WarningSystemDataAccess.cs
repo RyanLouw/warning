@@ -273,8 +273,10 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
             .Include(warning => warning.IssueType)
             .Include(warning => warning.IssueSubType)
             .Include(warning => warning.Category)
+            .Include(warning => warning.Answers)
             .Include(warning => warning.Evidence)
-                .ThenInclude(evidence => evidence.Notes)
+           
+            .ThenInclude(evidence => evidence.Notes)
             .Include(warning => warning.Notes)
             .SingleOrDefaultAsync(warning =>
                 warning.WarningId == warningId);

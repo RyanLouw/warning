@@ -240,8 +240,7 @@ namespace WarningSystems.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Legal")]
-        public async Task<IActionResult> SetTeamLeadVisibility(
-    [FromBody] SetTeamLeadVisibilityDto dto)
+        public async Task<IActionResult> SetTeamLeadVisibility([FromBody] SetTeamLeadVisibilityDto dto)
         {
             if (dto == null || dto.WarningId <= 0)
             {
@@ -256,12 +255,7 @@ namespace WarningSystems.Controllers
                 User.Identity?.Name ?? "Unknown";
 
             var result =
-                await _transgressionManager
-                    .SetHideFromTeamLeadAsync(
-                        dto.WarningId,
-                        dto.HideFromTeamLead,
-                        changedBy
-                    );
+                await _transgressionManager.SetHideFromTeamLeadAsync(dto.WarningId,dto.HideFromTeamLead,changedBy );
 
             if (!result.HasValue)
             {

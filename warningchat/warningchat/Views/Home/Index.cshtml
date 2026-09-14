@@ -34,7 +34,7 @@
         new { Key = "New",         Label = "New",         CssClass = "new" },
         new { Key = "In Progress", Label = "In Progress", CssClass = "in-progress" },
         new { Key = "Pending",     Label = "Pending",     CssClass = "pending" },
-        new { Key = "Issued",      Label = "Issued",      CssClass = "issued" },
+        new { Key = "Completed",      Label = "Completed",      CssClass = "issued" },
         new { Key = "Validated",   Label = "Validated",   CssClass = "validated" }
     };
 
@@ -45,15 +45,6 @@
 
         <div class="status-bar">
 
-            <div class="status-pill">
-                <span class="label">Due</span>
-                <span class="count count-due">@Model.Due.ToString()</span>
-            </div>
-
-            <div class="status-pill">
-                <span class="label">Overdue</span>
-                <span class="count count-overdue">@Model.OverDue.ToString()</span>
-            </div>
 
             @foreach (var status in statusOrder)
             {
@@ -111,9 +102,9 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="absenceSubType" class="form-label">Discussion subtype</label>
+                                <label for="absenceSubType" class="form-label">Subtype</label>
                                 <select id="absenceSubType" class="form-select" required>
-                                    <option value="">-- Select discussion subtype --</option>
+                                    <option value="">-- Select subtype --</option>
                                     @foreach (var subType in Model.DiscussionSubTypes)
                                     {
                                         <option value="@subType.IssueSubTypeId">@subType.IssueSubTypeName</option>
@@ -235,19 +226,17 @@
                                             statusKey == "in progress");
 
                                             bool canClick =
-                                            (isUser && statusKey == "draft") ||
-                                            isUserNewOrInProgress ||
-                                            (isLegal &&
-                                            (statusKey == "new" ||
-                                            statusKey == "in progress"));
+                                                  (isUser &&
+                                                   statusKey != "issued" &&
+                                                   statusKey != "validated") ||
+                                                  (isLegal &&
+                                                   statusKey != "validated");
 
                                             string? rowUrl = null;
 
                                             if (canClick)
                                             {
-                                                rowUrl = Url.Action(
-                                                                                "Redirect",
-                                                                                "Home",
+                                                rowUrl = Url.Action("Redirect","Home",
                                                 new
                                                 {
                                                     warningId = row.WarningId,
@@ -553,7 +542,7 @@
                                             <select id="reportRecordKind" class="form-select report-filter">
                                                 <option value="">All records</option>
                                                 <option value="issue">Issues</option>
-                                                <option value="absence-discussion">Absence discussions</option>
+                                                <option value="absence-discussion">Discussions</option>
                                             </select>
                                         </div>
 
@@ -633,7 +622,7 @@
                                     <div class="col-6 col-md-4 col-xl">
                                         <div class="card border-0 shadow-sm h-100">
                                             <div class="card-body text-center">
-                                                <div class="small text-muted">Absence Discussions</div>
+                                                <div class="small text-muted"> Discussions</div>
                                                 <div class="fs-3 fw-bold" id="reportAbsenceDiscussionCount">0</div>
                                             </div>
                                         </div>
@@ -907,7 +896,7 @@
                                                                     data-created="@row.CreatedOn.ToString("yyyy-MM-dd")"
                                                                     data-issued-to-employee="@row.IssuedToEmployee.ToString().ToLowerInvariant()">
 
-                                                                    <td>@(row.IsAbsenceDiscussion ? "Absence Discussion" : "Issue")</td>
+                                                                    <td>@(row.IsAbsenceDiscussion ? "Discussion" : "Issue")</td>
                                                                     <td>@status</td>
 
                                                                     <td>
