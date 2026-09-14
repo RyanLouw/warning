@@ -143,6 +143,12 @@ body {
    STATUS BAR
    =============================== */
 
+
+.ws-sensitive-hidden {
+    background: #198754 !important;
+    border-color: #198754 !important;
+    color: #fff !important;
+}
 .status-draft .count-status {
     color: #6b7280;
 }

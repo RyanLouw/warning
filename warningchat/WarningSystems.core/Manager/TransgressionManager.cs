@@ -1,7 +1,8 @@
 ﻿using Microsoft.AspNetCore.Http;
-
 using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
+using System.Net;
+using System.Text.RegularExpressions;
 using WarningSystems.core.Models.DTO;
 using WarningSystems.core.Services.Interface;
 using WarningSystems.Core.Auth.Interface;
@@ -16,7 +17,6 @@ using WarningSystems.Core.Services.Interface;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Models.DTO;
 using WarningSystems.Models.Validation;
-
 using EmailSettings = WarningSystems.Core.ViewModels.EmailSettings;
 
 namespace WarningSystems.Core.Manager;
@@ -1485,7 +1485,7 @@ public class TransgressionManager : ITransgressionManager
                     SortOrder = categoryQuestion.SortOrder,
                     DefaultConfigJson = question.DefaultConfigJson,
                     CategoryConfigJson = categoryQuestion.ConfigJson,
-                    AnswerText = answer?.AnswerText,
+                    AnswerText = HtmlToPlainText(answer?.AnswerText),
                     AnswerJson = answer?.AnswerJson
                 };
             })
@@ -1670,6 +1670,26 @@ public class TransgressionManager : ITransgressionManager
         };
     }
 
+    public static string HtmlToPlainText(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var withLineBreaks = Regex.Replace(
+            html,
+            @"<\s*br\s*/?\s*>|</\s*p\s*>|</\s*li\s*>|</\s*h[1-6]\s*>",
+            "\n",
+            RegexOptions.IgnoreCase);
+
+        var plainText = Regex.Replace(
+            withLineBreaks,
+            @"<[^>]+>",
+            string.Empty);
+
+        return WebUtility.HtmlDecode(plainText).Trim();
+    }
     private static string ResolveDisplayName(
         string? userIdentifier,
         IReadOnlyDictionary<string, string> userLookup)
