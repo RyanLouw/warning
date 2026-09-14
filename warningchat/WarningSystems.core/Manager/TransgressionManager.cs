@@ -1487,8 +1487,16 @@ public class TransgressionManager : ITransgressionManager
         var questions = categoryQuestions
             .Where(categoryQuestion =>
                 categoryQuestion.Question is not null)
-            .Select(categoryQuestion =>
+            .GroupBy(categoryQuestion => categoryQuestion.QuestionId)
+            .Select(group =>
             {
+                // A question can be linked to several of the warning's
+                // categories. Legal should see the saved answer once, rather
+                // than one identical row for every category link.
+                var categoryQuestion = group
+                    .OrderBy(link => link.SortOrder)
+                    .ThenBy(link => link.CategoryId)
+                    .First();
                 var question = categoryQuestion.Question!;
 
                 answerLookup.TryGetValue(
@@ -1500,8 +1508,8 @@ public class TransgressionManager : ITransgressionManager
                     QuestionId = question.QuestionId,
                     QuestionText = question.QuestionText,
                     ControlType = question.ControlType,
-                    IsRequired = categoryQuestion.IsRequired,
-                    SortOrder = categoryQuestion.SortOrder,
+                    IsRequired = group.Any(link => link.IsRequired),
+                    SortOrder = group.Min(link => link.SortOrder),
                     DefaultConfigJson = question.DefaultConfigJson,
                     CategoryConfigJson = categoryQuestion.ConfigJson,
                     AnswerText = HtmlToPlainText(answer?.AnswerText),
