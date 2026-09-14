@@ -51,6 +51,10 @@ public interface IWarningSystemDataAccess
 
     public Task UpsertWarningAnswerAsync(long warningId, int questionId, string? answerText, string? answerJson);
 
+    public Task SaveLegalIssueDetailsAsync(long warningId,
+        IReadOnlyCollection<WarningCategory>? categories, WarningAnswer? answer,
+        WarningNote auditNote);
+
     public Task<List<NoteTypeLookup>> GetActiveNoteTypesAsync();
 
     public Task UpdateWarningDueDateAsync(long warningId, DateOnly? dueDate, string user);

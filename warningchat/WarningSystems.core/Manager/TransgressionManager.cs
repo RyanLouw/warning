@@ -1444,12 +1444,31 @@ public class TransgressionManager : ITransgressionManager
             return null;
         }
 
-        var categoryIds = new List<int>();
+        var warningCategories =
+            await _data.GetWarningCategoriesByWarningIdAsync(warningId);
+        var categoryIds = warningCategories
+            .Select(link => link.CategoryId)
+            .Distinct()
+            .ToList();
+        var categoryNames = warningCategories
+            .Select(link => link.Category?.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .Distinct()
+            .ToList();
 
-        if (warning.CategoryId > 0)
+        if (categoryIds.Count == 0 && warning.CategoryId > 0)
         {
             categoryIds.Add(warning.CategoryId);
+            if (!string.IsNullOrWhiteSpace(warning.Category?.Name))
+                categoryNames.Add(warning.Category.Name);
         }
+
+        var categories = (await _data.GetAllCategoriesAsync())
+            .Where(category => category.IsActive || categoryIds.Contains(category.CategoryId))
+            .OrderBy(category => category.Name)
+            .Select(category => new CategoryVM(category))
+            .ToList();
 
         var categoryQuestions =
             await _data.GetActiveCategoryQuestionsAsync(categoryIds);
@@ -1492,6 +1511,43 @@ public class TransgressionManager : ITransgressionManager
             .OrderBy(question => question.SortOrder)
             .ThenBy(question => question.QuestionText)
             .ToList();
+
+        // Keep previously saved answers visible even when an administrator has
+        // since disabled the question or removed it from this category.
+        var includedQuestionIds = questions
+            .Select(question => question.QuestionId)
+            .ToHashSet();
+        var missingAnsweredQuestionIds = answerLookup.Keys
+            .Where(questionId => !includedQuestionIds.Contains(questionId))
+            .ToHashSet();
+
+        if (missingAnsweredQuestionIds.Count > 0)
+        {
+            var allQuestions = await _data.GetAllQuestionsAsync();
+
+            questions.AddRange(allQuestions
+                .Where(question => missingAnsweredQuestionIds.Contains(question.QuestionId))
+                .Select(question =>
+                {
+                    var answer = answerLookup[question.QuestionId];
+
+                    return new LegalQuestionVm
+                    {
+                        QuestionId = question.QuestionId,
+                        QuestionText = question.QuestionText,
+                        ControlType = question.ControlType,
+                        SortOrder = question.QuestionId,
+                        DefaultConfigJson = question.DefaultConfigJson,
+                        AnswerText = HtmlToPlainText(answer.AnswerText),
+                        AnswerJson = answer.AnswerJson
+                    };
+                }));
+
+            questions = questions
+                .OrderBy(question => question.SortOrder)
+                .ThenBy(question => question.QuestionText)
+                .ToList();
+        }
 
         var evidence = warning.Evidence
             .OrderByDescending(item => item.UploadedOn)
@@ -1657,8 +1713,12 @@ public class TransgressionManager : ITransgressionManager
             CreatedByDesplayName = createdByDisplayName,
             CategoryId = warning.CategoryId,
             CategoryName =
-                warning.Category?.Name
-                ?? string.Empty,
+                categoryNames.Count > 0
+                    ? string.Join(", ", categoryNames)
+                    : warning.Category?.Name ?? string.Empty,
+            CategoryIds = categoryIds,
+            CategoryNames = categoryNames,
+            Categories = categories,
             SubmittedOn = warning.SubmittedOn,
             LegalExpiryDate = warning.LegalExpiryDate,
             Questions = questions,
@@ -1668,6 +1728,151 @@ public class TransgressionManager : ITransgressionManager
             IssueTypes = issueTypes,
             TransgretionHistory = history
         };
+    }
+
+    public async Task<(bool Success, string? Message)> UpdateLegalIssueDetailsAsync(
+        UpdateLegalIssueDetailsDto dto,
+        string changedBy)
+    {
+        if (dto.WarningId <= 0)
+            return (false, "Missing warning id.");
+
+        var warning = await _data.GetWarningByIdAsync(dto.WarningId);
+        if (warning is null)
+            return (false, "The issue could not be found.");
+
+        var status = warning.IssueStatus?.IssueStatusName ?? warning.Status;
+        if (status is not ("New" or "In Progress" or "Pending"))
+            return (false, "Categories and dates can only be changed while the issue is New, In Progress, or Pending.");
+
+        var updateType = dto.UpdateType?.Trim().ToLowerInvariant();
+        var user = string.IsNullOrWhiteSpace(changedBy) ? "System" : changedBy.Trim();
+        var changedOn = NowSast;
+        string auditDescription;
+        IReadOnlyCollection<WarningCategory>? categoriesToSave = null;
+        WarningAnswer? answerToSave = null;
+
+        if (updateType == "categories")
+        {
+            var categoryIds = dto.CategoryIds
+                .Where(categoryId => categoryId > 0)
+                .Distinct()
+                .ToList();
+            if (categoryIds.Count == 0)
+                return (false, "Select at least one category.");
+
+            var allCategories = await _data.GetAllCategoriesAsync();
+            var categoryLookup = allCategories.ToDictionary(category => category.CategoryId);
+            var oldLinks = await _data.GetWarningCategoriesByWarningIdAsync(dto.WarningId);
+            var oldCategoryIds = oldLinks.Select(link => link.CategoryId).ToHashSet();
+            if (categoryIds.Any(categoryId =>
+                    !categoryLookup.TryGetValue(categoryId, out var category) ||
+                    (!category.IsActive && !oldCategoryIds.Contains(categoryId))))
+                return (false, "One or more selected categories are not available.");
+
+            var oldNames = oldLinks
+                .Select(link => link.Category?.Name)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+                .OrderBy(name => name)
+                .ToList();
+            if (oldNames.Count == 0 && !string.IsNullOrWhiteSpace(warning.Category?.Name))
+                oldNames.Add(warning.Category.Name);
+
+            var newNames = categoryIds
+                .Select(categoryId => categoryLookup[categoryId].Name)
+                .OrderBy(name => name)
+                .ToList();
+            if (oldNames.SequenceEqual(newNames, StringComparer.OrdinalIgnoreCase))
+                return (false, "The selected categories have not changed.");
+
+            auditDescription = $"Legal changed categories from [{string.Join(", ", oldNames)}] to [{string.Join(", ", newNames)}].";
+            categoriesToSave = categoryIds
+                .Select(categoryId => new WarningCategory
+                {
+                    WarningId = dto.WarningId,
+                    CategoryId = categoryId,
+                    CreatedBy = user,
+                    CreatedOn = changedOn
+                })
+                .ToList();
+        }
+        else if (updateType == "dates")
+        {
+            var newDates = dto.Dates.Distinct().OrderBy(date => date).ToList();
+            var answer = (await _data.GetWarningAnswersByWarningIdAsync(dto.WarningId))
+                .OrderByDescending(item => item.CreatedOn)
+                .FirstOrDefault(item => item.QuestionId == 1);
+            var oldDates = ParseAnsweredDates(answer?.AnswerJson);
+
+            if (oldDates.SequenceEqual(newDates))
+                return (false, "The selected dates have not changed.");
+
+            var oldDisplay = oldDates.Count == 0 ? "none" : string.Join(", ", oldDates.Select(date => date.ToString("yyyy-MM-dd")));
+            var newDisplay = newDates.Count == 0 ? "none" : string.Join(", ", newDates.Select(date => date.ToString("yyyy-MM-dd")));
+            auditDescription = $"Legal changed applicable dates from [{oldDisplay}] to [{newDisplay}].";
+            answerToSave = new WarningAnswer
+            {
+                WarningId = dto.WarningId,
+                QuestionId = 1,
+                AnswerText = string.Join(", ", newDates.Select(date => date.ToString("yyyy-MM-dd"))),
+                AnswerJson = System.Text.Json.JsonSerializer.Serialize(new { dates = newDates }),
+                CreatedOn = changedOn
+            };
+        }
+        else
+        {
+            return (false, "Select whether to update categories or dates.");
+        }
+
+        var auditNote = new WarningNote
+        {
+            WarningId = dto.WarningId,
+            NoteText = auditDescription,
+            CreatedBy = user,
+            CreatedOn = changedOn
+        };
+
+        try
+        {
+            await _data.SaveLegalIssueDetailsAsync(
+                dto.WarningId,
+                categoriesToSave,
+                answerToSave,
+                auditNote);
+            return (true, null);
+        }
+        catch (Exception exception) when (exception is KeyNotFoundException or InvalidOperationException or ArgumentException)
+        {
+            return (false, exception.Message);
+        }
+    }
+
+    private static List<DateOnly> ParseAnsweredDates(string? answerJson)
+    {
+        if (string.IsNullOrWhiteSpace(answerJson))
+            return [];
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(answerJson);
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("dates", out var datesElement) ||
+                datesElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return [];
+
+            return datesElement.EnumerateArray()
+                .Select(item => DateOnly.TryParse(item.GetString(), out var date) ? date : (DateOnly?)null)
+                .Where(date => date.HasValue)
+                .Select(date => date!.Value)
+                .Distinct()
+                .OrderBy(date => date)
+                .ToList();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
     }
 
     public static string HtmlToPlainText(string? html)

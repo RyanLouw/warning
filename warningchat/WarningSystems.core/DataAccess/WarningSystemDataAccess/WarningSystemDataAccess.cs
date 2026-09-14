@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
 using WarningSystems.Core.DataAccess.GraphDataAccess;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
@@ -526,6 +525,54 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         }
 
         await _context.SaveChangesAsync();
+    }
+
+    public async Task SaveLegalIssueDetailsAsync(
+        long warningId,
+        IReadOnlyCollection<WarningCategory>? categories,
+        WarningAnswer? answer,
+        WarningNote auditNote)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+
+        var warning = await _context.Warnings
+            .SingleOrDefaultAsync(item => item.WarningId == warningId);
+
+        if (warning is null)
+            throw new KeyNotFoundException("The issue could not be found.");
+
+        if (categories is not null)
+        {
+            var existingCategories = await _context.WarningCategories
+                .Where(item => item.WarningId == warningId)
+                .ToListAsync();
+            _context.WarningCategories.RemoveRange(existingCategories);
+            await _context.WarningCategories.AddRangeAsync(categories);
+            warning.CategoryId = categories.First().CategoryId;
+        }
+
+        if (answer is not null)
+        {
+            var existingAnswer = await _context.WarningAnswers
+                .FirstOrDefaultAsync(item =>
+                    item.WarningId == warningId &&
+                    item.QuestionId == answer.QuestionId);
+
+            if (existingAnswer is null)
+            {
+                _context.WarningAnswers.Add(answer);
+            }
+            else
+            {
+                existingAnswer.AnswerText = answer.AnswerText;
+                existingAnswer.AnswerJson = answer.AnswerJson;
+            }
+        }
+
+        _context.WarningNotes.Add(auditNote);
+
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
     }
 
     public async Task<List<NoteTypeLookup>> GetActiveNoteTypesAsync()

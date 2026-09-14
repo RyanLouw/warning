@@ -1,5 +1,6 @@
 ﻿@using WarningSystems.Core.Services
 @using WarningSystems.Core.ViewModels
+@using System.Text.Json
 
 @model WarningSystems.Core.ViewModels.LegalWizardVm
 
@@ -23,6 +24,61 @@
 
         return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
     }
+    string FormatAnswer(LegalQuestionVm question)
+    {
+        if (!string.IsNullOrWhiteSpace(question.AnswerText))
+            return question.AnswerText.Trim();
+
+        if (string.IsNullOrWhiteSpace(question.AnswerJson))
+            return "—";
+
+        try
+        {
+            using var document = JsonDocument.Parse(question.AnswerJson);
+            var root = document.RootElement;
+
+            if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                    notApplicable.ValueKind == JsonValueKind.True)
+                    return "SOP Not Applicable";
+
+                if (root.TryGetProperty("sopDocumentName", out var documentName) &&
+                    documentName.ValueKind == JsonValueKind.String)
+                    return ValOrDash(documentName.GetString());
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var propertyName in new[] { "dates", "values", "selected" })
+                {
+                    if (root.TryGetProperty(propertyName, out var values) &&
+                        values.ValueKind == JsonValueKind.Array)
+                    {
+                        var displayValues = values.EnumerateArray()
+                            .Select(value => value.ToString())
+                            .Where(value => !string.IsNullOrWhiteSpace(value))
+                            .ToList();
+
+                        if (displayValues.Count > 0)
+                            return string.Join(", ", displayValues);
+                    }
+                }
+
+                if (root.TryGetProperty("text", out var textValue) &&
+                    textValue.ValueKind == JsonValueKind.String)
+                    return ValOrDash(textValue.GetString());
+            }
+
+            return root.ValueKind == JsonValueKind.String
+                ? ValOrDash(root.GetString())
+                : question.AnswerJson.Trim();
+        }
+        catch (JsonException)
+        {
+            return question.AnswerJson.Trim();
+        }
+    }
     var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
@@ -31,6 +87,31 @@
     var warningCategory = ValOrDash(Model.WarningSubtype);
     var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
     var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
+    var canEditIssueDetails = Model.Status is "New" or "In Progress" or "Pending";
+    var applicableDates = new List<string>();
+    var datesAnswer = Model.Questions?.FirstOrDefault(question => question.QuestionId == 1)?.AnswerJson;
+    if (!string.IsNullOrWhiteSpace(datesAnswer))
+    {
+        try
+        {
+            using var datesDocument = JsonDocument.Parse(datesAnswer);
+            if (datesDocument.RootElement.TryGetProperty("dates", out var datesElement) &&
+                datesElement.ValueKind == JsonValueKind.Array)
+            {
+                applicableDates = datesElement.EnumerateArray()
+                    .Select(item => item.GetString())
+                    .Where(date => !string.IsNullOrWhiteSpace(date))
+                    .Select(date => date!)
+                    .Distinct()
+                    .OrderBy(date => date)
+                    .ToList();
+            }
+        }
+        catch (JsonException)
+        {
+            // Older malformed answers remain visible in Questions & Answers.
+        }
+    }
 
     var issueCreatedOn = Model.CreatedOn == default
         ? "—"
@@ -81,6 +162,16 @@
                     onclick="toggleTeamLeadVisibility(this)">
                 @(Model.HideFromTeamLead ? "Show to Team Leads" : "Hide from Team Leads")
             </button>
+            @if (canEditIssueDetails)
+            {
+                <button type="button"
+                        class="ws-btn-primary-pill"
+                        data-bs-toggle="modal"
+                        data-bs-target="#editIssueDetailsModal">
+                    Update Categories / Dates
+                </button>
+            }
+
             @if (canRecordDecision)
             {
                 <button type="button"
@@ -246,6 +337,19 @@
 
                 <li class="nav-item" role="presentation">
                     <button class="nav-link"
+                            id="questions-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#questions"
+                            type="button"
+                            role="tab"
+                            aria-controls="questions"
+                            aria-selected="false">
+                        Questions &amp; Answers
+                    </button>
+                </li>
+
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link"
                             id="history-tab"
                             data-bs-toggle="tab"
                             data-bs-target="#history"
@@ -272,6 +376,57 @@
             </ul>
 
             <div class="tab-content">
+
+                <!-- QUESTIONS TAB -->
+                <div class="tab-pane fade" id="questions" role="tabpanel" aria-labelledby="questions-tab">
+                    <div class="panel-body">
+                        <h5 class="mb-2">Questions &amp; Answers</h5>
+                        <div class="text-muted mb-3">
+                            All questions answered when this issue was submitted.
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th style="width:40%;">Question</th>
+                                        <th>Answer</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        var answeredQuestions = (Model.Questions ?? new List<LegalQuestionVm>())
+                                            .Where(question =>
+                                                !string.IsNullOrWhiteSpace(question.AnswerText) ||
+                                                !string.IsNullOrWhiteSpace(question.AnswerJson))
+                                            .OrderBy(question => question.SortOrder)
+                                            .ThenBy(question => question.QuestionText)
+                                            .ToList();
+                                    }
+
+                                    @if (!answeredQuestions.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-center text-muted py-4">
+                                                No answered questions are available.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var question in answeredQuestions)
+                                        {
+                                            <tr>
+                                                <td class="fw-semibold">@question.QuestionText</td>
+                                                <td class="text-break" style="white-space:pre-wrap;">@FormatAnswer(question)</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- NOTES TAB -->
                 <div class="tab-pane fade show active"
@@ -593,6 +748,66 @@
     </div>
 </div>
 
+<!-- EDIT CATEGORIES / DATES MODAL -->
+<div class="modal fade" id="editIssueDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Categories or Dates</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Choose what you want to change. The old and new values, your identity, and the time of the change will be recorded in Interactions.</p>
+
+                <div class="d-flex gap-4 mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="legalUpdateType" id="updateCategoriesChoice" value="categories" checked onchange="toggleLegalUpdateFields()" />
+                        <label class="form-check-label fw-semibold" for="updateCategoriesChoice">Categories</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="legalUpdateType" id="updateDatesChoice" value="dates" onchange="toggleLegalUpdateFields()" />
+                        <label class="form-check-label fw-semibold" for="updateDatesChoice">Applicable dates</label>
+                    </div>
+                </div>
+
+                <div id="legalCategoriesFields">
+                    <label class="form-label fw-semibold">Categories</label>
+                    <div class="row g-2">
+                        @foreach (var category in Model.Categories)
+                        {
+                            <div class="col-12 col-md-6">
+                                <label class="border rounded p-2 d-flex gap-2 align-items-center h-100">
+                                    <input class="form-check-input mt-0 legal-category-checkbox" type="checkbox"
+                                           value="@category.CategoryId"
+                                           checked="@(Model.CategoryIds.Contains(category.CategoryId) ? "checked" : null)" />
+                                    <span>@category.Name</span>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                    <div class="form-text">At least one category must remain selected.</div>
+                </div>
+
+                <div id="legalDatesFields" class="d-none">
+                    <label for="legalDateInput" class="form-label fw-semibold">Applicable dates</label>
+                    <div class="input-group mb-3">
+                        <input type="date" class="form-control" id="legalDateInput" />
+                        <button type="button" class="btn btn-outline-secondary" onclick="addLegalDate()">Add date</button>
+                    </div>
+                    <div id="legalDatesList" class="d-flex flex-wrap gap-2"></div>
+                    <div class="form-text">Use Remove to delete an existing date. All dates may be removed.</div>
+                </div>
+
+                <div id="legalDetailsSaveMsg" class="mt-3" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="ws-btn-primary-pill" onclick="updateLegalIssueDetails(this)">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ADD NOTE MODAL -->
 <div class="modal fade" id="addNoteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -872,6 +1087,100 @@
 </div>
 
 <script>
+    const legalApplicableDates = @Html.Raw(JsonSerializer.Serialize(applicableDates));
+
+    function toggleLegalUpdateFields() {
+        const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
+        document.getElementById("legalCategoriesFields")?.classList.toggle("d-none", updateType !== "categories");
+        document.getElementById("legalDatesFields")?.classList.toggle("d-none", updateType !== "dates");
+        showLegalDetailsMessage("", false);
+    }
+
+    function renderLegalDates() {
+        const list = document.getElementById("legalDatesList");
+        if (!list) return;
+        list.replaceChildren();
+
+        legalApplicableDates.sort().forEach(date => {
+            const item = document.createElement("span");
+            item.className = "badge bg-light text-dark border d-inline-flex align-items-center gap-2 p-2";
+            const label = document.createElement("span");
+            label.textContent = date;
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "btn-close";
+            remove.setAttribute("aria-label", `Remove ${date}`);
+            remove.addEventListener("click", () => {
+                const index = legalApplicableDates.indexOf(date);
+                if (index >= 0) legalApplicableDates.splice(index, 1);
+                renderLegalDates();
+            });
+            item.append(label, remove);
+            list.appendChild(item);
+        });
+
+        if (legalApplicableDates.length === 0) {
+            const empty = document.createElement("span");
+            empty.className = "text-muted";
+            empty.textContent = "No applicable dates selected.";
+            list.appendChild(empty);
+        }
+    }
+
+    function addLegalDate() {
+        const input = document.getElementById("legalDateInput");
+        const date = input?.value || "";
+        if (!date || legalApplicableDates.includes(date)) return;
+        legalApplicableDates.push(date);
+        input.value = "";
+        renderLegalDates();
+    }
+
+    function showLegalDetailsMessage(message, isError) {
+        const element = document.getElementById("legalDetailsSaveMsg");
+        if (!element) return;
+        element.style.display = message ? "block" : "none";
+        element.className = isError ? "text-danger mt-3" : "text-success mt-3";
+        element.textContent = message;
+    }
+
+    async function updateLegalIssueDetails(button) {
+        const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
+        const categoryIds = Array.from(document.querySelectorAll(".legal-category-checkbox:checked"))
+            .map(input => Number.parseInt(input.value, 10));
+
+        if (updateType === "categories" && categoryIds.length === 0) {
+            showLegalDetailsMessage("Select at least one category.", true);
+            return;
+        }
+
+        button.disabled = true;
+        showLegalDetailsMessage("Saving...", false);
+        try {
+            const response = await fetch("@Url.Action("UpdateIssueDetails", "Legal")", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    warningId: @Model.WarningId,
+                    updateType,
+                    categoryIds,
+                    dates: legalApplicableDates
+                })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.success === false)
+                throw new Error(data.message || "The issue could not be updated.");
+
+            showLegalDetailsMessage("Changes saved and logged.", false);
+            setTimeout(() => location.reload(), 500);
+        } catch (error) {
+            showLegalDetailsMessage(error?.message || "The issue could not be updated.", true);
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    renderLegalDates();
     async function addEvidenceNote(btn) {
         debugger;
         const warningEl = document.getElementById("addNoteWarningId");
