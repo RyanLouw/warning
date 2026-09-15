@@ -1619,7 +1619,10 @@ public class TransgressionManager : ITransgressionManager
                     historyWarning.LastStatusChangedBy,
                 CategoryName =
                     historyWarning.Category?.Name
-                    ?? string.Empty
+                    ?? string.Empty,
+                IssueType =
+                    historyWarning.IssueType?.IssueTypeName
+                    ?? historyWarning.Type
             })
             .OrderByDescending(item => item.CreatedOn)
             .ToList();

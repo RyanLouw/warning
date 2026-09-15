@@ -1,5 +1,6 @@
 ﻿@using WarningSystems.Core.Services
 @using WarningSystems.Core.ViewModels
+@using System.Text.Json
 @model LegalWizardVm
 
 @{
@@ -24,6 +25,61 @@
         text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
 
         return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
+    }
+    string FormatAnswer(LegalQuestionVm question)
+    {
+        if (!string.IsNullOrWhiteSpace(question.AnswerText))
+            return question.AnswerText.Trim();
+
+        if (string.IsNullOrWhiteSpace(question.AnswerJson))
+            return "—";
+
+        try
+        {
+            using var document = JsonDocument.Parse(question.AnswerJson);
+            var root = document.RootElement;
+
+            if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                    notApplicable.ValueKind == JsonValueKind.True)
+                    return "SOP Not Applicable";
+
+                if (root.TryGetProperty("sopDocumentName", out var documentName) &&
+                    documentName.ValueKind == JsonValueKind.String)
+                    return ValOrDash(documentName.GetString());
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var propertyName in new[] { "dates", "values", "selected" })
+                {
+                    if (root.TryGetProperty(propertyName, out var values) &&
+                        values.ValueKind == JsonValueKind.Array)
+                    {
+                        var displayValues = values.EnumerateArray()
+                            .Select(value => value.ToString())
+                            .Where(value => !string.IsNullOrWhiteSpace(value))
+                            .ToList();
+
+                        if (displayValues.Count > 0)
+                            return string.Join(", ", displayValues);
+                    }
+                }
+
+                if (root.TryGetProperty("text", out var textValue) &&
+                    textValue.ValueKind == JsonValueKind.String)
+                    return ValOrDash(textValue.GetString());
+            }
+
+            return root.ValueKind == JsonValueKind.String
+                ? ValOrDash(root.GetString())
+                : question.AnswerJson.Trim();
+        }
+        catch (JsonException)
+        {
+            return question.AnswerJson.Trim();
+        }
     }
     var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
@@ -240,6 +296,19 @@
                 </li>
 
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link"
+                            id="questions-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#questions"
+                            type="button"
+                            role="tab"
+                            aria-controls="questions"
+                            aria-selected="false">
+                        Questions &amp; Answers
+                    </button>
+                </li>
+
+                <li class="nav-item" role="presentation">
                     <button class="nav-link active"
                             id="notes-tab"
                             data-bs-toggle="tab"
@@ -255,7 +324,56 @@
 
             <div class="tab-content">
 
-              
+                <!-- QUESTIONS TAB -->
+                <div class="tab-pane fade" id="questions" role="tabpanel" aria-labelledby="questions-tab">
+                    <div class="panel-body">
+                        <h5 class="mb-2">Questions &amp; Answers</h5>
+                        <div class="text-muted mb-3">
+                            All questions answered when this issue was submitted.
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th style="width:40%;">Question</th>
+                                        <th>Answer</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        var answeredQuestions = (Model.Questions ?? new List<LegalQuestionVm>())
+                                            .Where(question =>
+                                                !string.IsNullOrWhiteSpace(question.AnswerText) ||
+                                                !string.IsNullOrWhiteSpace(question.AnswerJson))
+                                            .OrderBy(question => question.SortOrder)
+                                            .ThenBy(question => question.QuestionText)
+                                            .ToList();
+                                    }
+
+                                    @if (!answeredQuestions.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-center text-muted py-4">
+                                                No answered questions are available.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var question in answeredQuestions)
+                                        {
+                                            <tr>
+                                                <td class="fw-semibold">@question.QuestionText</td>
+                                                <td class="text-break" style="white-space:pre-wrap;">@FormatAnswer(question)</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- DOCUMENTS TAB -->
                 <div class="tab-pane fade"
