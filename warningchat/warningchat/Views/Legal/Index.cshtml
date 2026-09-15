@@ -89,7 +89,9 @@
     var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
     var canEditIssueDetails = Model.Status is "New" or "In Progress" or "Pending";
     var applicableDates = new List<string>();
-    var datesAnswer = Model.Questions?.FirstOrDefault(question => question.QuestionId == 1)?.AnswerJson;
+    var transgressionDateQuestion = Model.Questions?
+        .FirstOrDefault(question => question.QuestionId == 1);
+    var datesAnswer = transgressionDateQuestion?.AnswerJson;
     if (!string.IsNullOrWhiteSpace(datesAnswer))
     {
         try
@@ -113,17 +115,9 @@
         }
     }
 
-    var issueCreatedOn = Model.CreatedOn == default
+    var transgressionDates = transgressionDateQuestion is null
         ? "—"
-        : Model.CreatedOn.ToString("yyyy/MM/dd HH:mm");
-
-    var issueSubmittedOn = Model.SubmittedOn.HasValue
-        ? Model.SubmittedOn.Value.ToString("yyyy/MM/dd HH:mm")
-        : "—";
-
-    var issueDueDate = Model.LegalExpiryDate.HasValue
-        ? Model.LegalExpiryDate.Value.ToString("yyyy/MM/dd")
-        : "—";
+        : FormatAnswer(transgressionDateQuestion);
 
     var descriptionQuestion = Model.Questions?
         .FirstOrDefault(q => q.QuestionId == 2);
@@ -255,18 +249,8 @@
                         <div class="ws-ov-card-head">2. Dates</div>
                         <div class="ws-ov-card-body">
                             <div class="ws-ov-row">
-                                <div class="ws-ov-label">Created:</div>
-                                <div class="ws-ov-value">@issueCreatedOn</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Submitted:</div>
-                                <div class="ws-ov-value">@issueSubmittedOn</div>
-                            </div>
-
-                            <div class="ws-ov-row">
-                                <div class="ws-ov-label">Due Date:</div>
-                                <div class="ws-ov-value">@issueDueDate</div>
+                                <div class="ws-ov-label">When it happened:</div>
+                                <div class="ws-ov-value text-break">@transgressionDates</div>
                             </div>
                         </div>
                     </div>
@@ -613,6 +597,7 @@
                                         <th>Status</th>
                                         <th>Last Changed By</th>
                                         <th>Issue Category</th>
+                                        <th>Issue Type</th>
                                         <th class="text-end">Issue</th>
                                     </tr>
                                 </thead>
@@ -621,7 +606,7 @@
                                     @if (Model.TransgretionHistory == null || !Model.TransgretionHistory.Any())
                                     {
                                         <tr>
-                                            <td colspan="5" class="text-center text-muted py-4">
+                                            <td colspan="6" class="text-center text-muted py-4">
                                                 No history data available.
                                             </td>
                                         </tr>
@@ -639,6 +624,7 @@
                                                                                                 : h.LastStatusChangedByDisplayName)
                                                 </td>
                                                 <td>@h.CategoryName</td>
+                                                <td>@h.IssueType</td>
                                                 <td class="text-end">
                                                     <a class="btn btn-outline-secondary btn-sm"
                                                        style="border-radius:999px;"
