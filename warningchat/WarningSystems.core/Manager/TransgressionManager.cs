@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
 using System.Net;
 using Microsoft.Identity.Web;
+using System.Net;
 using System.Text.RegularExpressions;
 using WarningSystems.core.Models.DTO;
 using WarningSystems.core.Services.Interface;
@@ -725,7 +726,7 @@ public class TransgressionManager : ITransgressionManager
 
     private static int GetStatusSortOrder(string status)
     {
-        string[] workflow = ["Draft", "New", "In Progress", "Pending", "Issued", "Validated", "Invalid"];
+        string[] workflow = ["Draft", "New", "In Progress",  "Request More Information","Added More Information","Pending", "Issued", "Validated", "Invalid"];
         var index = Array.FindIndex(workflow,
             value => value.Equals(status, StringComparison.OrdinalIgnoreCase));
         return index < 0 ? workflow.Length : index;
@@ -1745,8 +1746,8 @@ public class TransgressionManager : ITransgressionManager
             return (false, "The issue could not be found.");
 
         var status = warning.IssueStatus?.IssueStatusName ?? warning.Status;
-        if (status is not ("New" or "In Progress" or "Pending"))
-            return (false, "Categories and dates can only be changed while the issue is New, In Progress, or Pending.");
+        if (status is not ("New" or "In Progress" or "Pending" or "Added More Information"))
+            return (false, "Categories and dates can only be changed while Legal is reviewing the issue.");
 
         var updateType = dto.UpdateType?.Trim().ToLowerInvariant();
         var user = string.IsNullOrWhiteSpace(changedBy) ? "System" : changedBy.Trim();
@@ -2122,6 +2123,7 @@ public class TransgressionManager : ITransgressionManager
         if (noteTypeId == 4)
         {
             await SendMoreInformationRequiredEmailAsync(warningId, noteText, null);
+           
         }
 
         await _data.AddWarningNoteAsync(
@@ -2130,6 +2132,7 @@ public class TransgressionManager : ITransgressionManager
             noteTypeId,
             noteText,
             user);
+
     }
 
     public async Task<long?> SaveEvidenceAsync(
@@ -2146,6 +2149,8 @@ public class TransgressionManager : ITransgressionManager
         if (typeid == 4 && legal)
         {
             await SendMoreInformationRequiredEmailAsync(warningId, notes, null);
+        
+
         }
         else if (typeid == 4)
         {
@@ -2621,13 +2626,15 @@ public class TransgressionManager : ITransgressionManager
         }
     }
 
-    public async Task SendMoreInformationRequiredEmailAsync(
-        long warningId,
-        string noteText,
-        IFormFile? file = null)
+    public async Task SendMoreInformationRequiredEmailAsync(long warningId,string noteText, IFormFile? file = null)
     {
+
+
+        User? me = await _graphUserDataAccess.GetMeAsync();
+        await _data.SetWarningStatusAsync(warningId, IssueStatusGroup.RequestMoreInformation, me.Id.ToString());
         var stage = "Starting";
 
+       
         try
         {
             stage = "Validating input";
@@ -2825,6 +2832,9 @@ public class TransgressionManager : ITransgressionManager
         IReadOnlyCollection<IFormFile>? files = null)
     {
         var stage = "Starting";
+        User? me = await _graphUserDataAccess.GetMeAsync();
+        await _data.SetWarningStatusAsync(warningId, IssueStatusGroup.AddedMoreInformation, me.Id.ToString());
+        
 
         try
         {
@@ -3258,15 +3268,11 @@ public class TransgressionManager : ITransgressionManager
             };
         }
 
-        await _data.SaveTeamLeadEvidenceAsync(
-            model.WarningId,
-            evidenceToSave,
-            note);
+        await _data.SaveTeamLeadEvidenceAsync(model.WarningId,evidenceToSave,note);
 
-        await SendMoreInformationAddedEmailAsync(
-            model.WarningId,
-            noteText,
-            model.Files);
+        await SendMoreInformationAddedEmailAsync(model.WarningId,noteText,model.Files);
+
+      
     }
 
     public async Task NotifyLegalIssueCompletedAsync(long warningId)

@@ -18,3 +18,22 @@ WHEN NOT MATCHED THEN INSERT
     (IssueSubTypeId, IssueTypeId, IssueSubTypeName, IsActive)
     VALUES (source.IssueSubTypeId, source.IssueTypeId, source.IssueSubTypeName, source.IsActive);
 SET IDENTITY_INSERT ws.LookupIssueSubTypes OFF;
+
+
+
+ UPDATE [PitStop_Demo].[ws].[LookupIssueSubTypes]
+	SET IssueSubTypeName = 'Final Written Warning '
+	WHERE IssueSubTypeId = 4;
+
+	INSERT INTO [PitStop_Demo].[ws].[LookupIssueSubTypes]
+(
+    IssueTypeId,
+    IssueSubTypeName,
+    IsActive
+)
+VALUES
+(
+    2,
+    'Consolidated Final Written Warning',
+    1
+);

@@ -13,6 +13,6 @@ public class _0006_Notes : Migration
 
     public override void Up()
     {
-        Execute.EmbeddedScript("0006.sql");
+        Execute.Script(@"Migrations\Scripts\0006.sql");
     }
 }

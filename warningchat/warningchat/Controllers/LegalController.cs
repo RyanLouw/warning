@@ -7,10 +7,11 @@ using System.Diagnostics;
 using WarningSystems.core.Models.DTO;
 using WarningSystems.Core;
 using WarningSystems.Core.DataAccess.AzureFileStorage;
+using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
 using WarningSystems.Core.Manager;
+using WarningSystems.Core.Models.Enum;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Models.DTO;
-using WarningSystems.Core.Models.Enum;
 
 namespace WarningSystems.Controllers
 {
@@ -323,6 +324,7 @@ namespace WarningSystems.Controllers
 
             try
             {
+               
                 await _transgressionManager.SendMoreInformationRequiredEmailAsync(
                     request.WarningId,
                     request.Message.Trim(),

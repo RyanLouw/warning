@@ -33,30 +33,14 @@
         new { Key = "Draft",       Label = "Draft",       CssClass = "draft" },
         new { Key = "New",         Label = "New",         CssClass = "new" },
         new { Key = "In Progress", Label = "In Progress", CssClass = "in-progress" },
+        new { Key = "Request More Information", Label = "Request More Information", CssClass = "request-more-information" },
+        new { Key = "Added More Information", Label = "Added More Information", CssClass = "added-more-information" },
         new { Key = "Pending",     Label = "Pending",     CssClass = "pending" },
-        new { Key = "Completed",      Label = "Completed",      CssClass = "issued" },
+        new { Key = "Completed",   Label = "Completed",      CssClass = "issued" },
         new { Key = "Validated",   Label = "Validated",   CssClass = "validated" }
     };
 
-    // var taskListRows = Model.TaskList
-    //    .Where(row =>
-    //    {
-    //        var status = (row.Status ?? string.Empty).Trim();
 
-    //        return !(isUser && string.Equals(
-    //                   status,
-    //                   "Completed",
-    //                   StringComparison.OrdinalIgnoreCase)) &&
-    //               !((isUser || isLegal) && string.Equals(
-    //                   status,
-    //                   "Validated",
-    //                   StringComparison.OrdinalIgnoreCase));
-    //    })
-    //    .ToList();
-
-    // var roles = Model.CurrentUserRoles ?? Array.Empty<string>();
-// bool isUser = roles.Contains("User");
-// bool isLegal = roles.Contains("Legal");
 bool isAdmin = roles.Contains("Admin");
 bool isLegalOrAdmin = isLegal || isAdmin;
 
@@ -569,6 +553,14 @@ var taskListRows = Model.TaskList
 
                                                 <option value="in progress">
                                                     In Progress
+                                                </option>
+
+                                                <option value="request more information">
+                                                    Request More Information
+                                                </option>
+
+                                                <option value="added more information">
+                                                    Added More Information
                                                 </option>
 
                                                 <option value="completed">

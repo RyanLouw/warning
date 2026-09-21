@@ -75,5 +75,6 @@ public interface IWarningSystemDataAccess
         LookupIssueSubType? issueSubType, string user);
     Task CompleteDiscussionAsync(long warningId, int issueSubTypeId, string user);
     Task AdvanceWarningStatusAsync(long warningId, IssueStatusGroup requiredGroup, string user);
-    public Task SaveLegalIssueDetailsAsync(long warningId,IReadOnlyCollection<WarningCategory>? categories, WarningAnswer? answer,WarningNote auditNote);
+    Task SetWarningStatusAsync(long warningId, IssueStatusGroup statusGroup, string user);
+    Task SaveLegalIssueDetailsAsync(long warningId,IReadOnlyCollection<WarningCategory>? categories, WarningAnswer? answer,WarningNote auditNote);
 }

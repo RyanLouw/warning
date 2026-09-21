@@ -110,9 +110,13 @@ SET IDENTITY_INSERT ws.LookupIssueSubTypes OFF;
 IF COL_LENGTH('ws.Warning', 'IssueStatusId') IS NULL ALTER TABLE ws.Warning ADD IssueStatusId INT NULL;
 IF COL_LENGTH('ws.Warning', 'IssueTypeId') IS NULL ALTER TABLE ws.Warning ADD IssueTypeId INT NULL;
 IF COL_LENGTH('ws.Warning', 'IssueSubTypeId') IS NULL ALTER TABLE ws.Warning ADD IssueSubTypeId INT NULL;
+IF COL_LENGTH('ws.Warning', 'Type') IS NULL ALTER TABLE ws.Warning ADD [Type] VARCHAR(100) NULL;
+IF COL_LENGTH('ws.Warning', 'WarningSubtype') IS NULL ALTER TABLE ws.Warning ADD WarningSubtype VARCHAR(100) NULL;
+
 
 ALTER TABLE ws.Warning ALTER COLUMN Status VARCHAR(100) NOT NULL;
-ALTER TABLE ws.Warning ALTER COLUMN Type VARCHAR(100) NOT NULL;
+UPDATE ws.Warning SET [Type] = 'Issue' WHERE [Type] IS NULL;
+ALTER TABLE ws.Warning ALTER COLUMN [Type] VARCHAR(100) NOT NULL;
 ALTER TABLE ws.Warning ALTER COLUMN WarningSubtype VARCHAR(100) NULL;
 
 -- Completed was an accidental intermediate value; Issued is the configured workflow state.

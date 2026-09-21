@@ -88,11 +88,10 @@
     var displayedDecision = ValOrDash(Model.Type);
     var warningCategory = ValOrDash(Model.WarningSubtype);
     var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
-    var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
 
+    var canRecordDecision = Model.Status is "In Progress" or "Added More Information";
+    var canEditIssueDetails = Model.Status is "New" or "In Progress" or "Pending" or "Added More Information";
 
-
-    var canEditIssueDetails = Model.Status is "New" or "In Progress" or "Pending";
     var applicableDates = new List<string>();
     var transgressionDateQuestion = Model.Questions?
         .FirstOrDefault(question => question.QuestionId == 1);

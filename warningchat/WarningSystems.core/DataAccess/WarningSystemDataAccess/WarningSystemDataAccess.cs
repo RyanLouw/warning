@@ -654,6 +654,26 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         await _context.SaveChangesAsync();
     }
 
+    public async Task SetWarningStatusAsync(long warningId,IssueStatusGroup statusGroup, string user)
+    {
+      
+        var warning = await _context.Warnings
+            .FirstOrDefaultAsync(x => x.WarningId == warningId && !x.IsDeleted)
+            ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
+
+        var status = await _context.LookupIssueStatuses
+            .SingleOrDefaultAsync(x => x.IsActive && x.IssueStatusGroup == statusGroup)
+            ?? throw new InvalidOperationException(
+                $"The {statusGroup} issue status has not been configured.");
+
+        warning.IssueStatusId = status.IssueStatusId;
+        warning.Status = status.IssueStatusName;
+        warning.LastStatusChangedOn = NowSast;
+        warning.LastStatusChangedBy = string.IsNullOrWhiteSpace(user) ? "system" : user.Trim();
+
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<long?> SaveEvidenceAsync(long warningId, string? fileName, string? mediaType, long? fileSizeBytes, string user, string? notes, int? noteTypeId)
     {
         if (warningId is 0)

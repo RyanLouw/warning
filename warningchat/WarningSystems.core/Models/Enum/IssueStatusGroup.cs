@@ -7,5 +7,7 @@ public enum IssueStatusGroup : byte
     LegalDecision = 3,
     EmployeeAction = 4,
     LegalValidation = 5,
-    Closed = 6
+    Closed = 6,
+    RequestMoreInformation = 7,
+    AddedMoreInformation = 8
 }
