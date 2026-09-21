@@ -38,6 +38,46 @@
         new { Key = "Validated",   Label = "Validated",   CssClass = "validated" }
     };
 
+    // var taskListRows = Model.TaskList
+    //    .Where(row =>
+    //    {
+    //        var status = (row.Status ?? string.Empty).Trim();
+
+    //        return !(isUser && string.Equals(
+    //                   status,
+    //                   "Completed",
+    //                   StringComparison.OrdinalIgnoreCase)) &&
+    //               !((isUser || isLegal) && string.Equals(
+    //                   status,
+    //                   "Validated",
+    //                   StringComparison.OrdinalIgnoreCase));
+    //    })
+    //    .ToList();
+
+    // var roles = Model.CurrentUserRoles ?? Array.Empty<string>();
+// bool isUser = roles.Contains("User");
+// bool isLegal = roles.Contains("Legal");
+bool isAdmin = roles.Contains("Admin");
+bool isLegalOrAdmin = isLegal || isAdmin;
+
+var taskListRows = Model.TaskList
+    .Where(row =>
+    {
+        var status = (row.Status ?? string.Empty).Trim();
+
+        // Team Leaders: Draft/Pending
+        // Legal/Admin: New/In Progress/Completed
+        // Invalid/Validated: hidden
+        return (isUser &&
+                (string.Equals(status, "Draft", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase))) ||
+               (isLegalOrAdmin &&
+                (string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(status, "In Progress", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase)));
+    })
+    .ToList();
+
 }
 
 <div class="ws-page">
@@ -195,7 +235,7 @@
                                 </thead>
 
                                 <tbody>
-                                    @if (Model.TaskList == null || !Model.TaskList.Any())
+                                    @if (!taskListRows.Any())
                                     {
                                         <tr>
                                             <td colspan="6"
@@ -206,7 +246,7 @@
                                     }
                                     else
                                     {
-                                        @foreach (var row in Model.TaskList)
+                                        @foreach (var row in taskListRows)
                                         {
                                             var status = (row.Status ?? string.Empty).Trim();
                                             var statusKey = status.ToLowerInvariant();

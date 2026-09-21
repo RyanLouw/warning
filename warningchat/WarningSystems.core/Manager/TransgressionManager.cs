@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
 using System.Net;
+using Microsoft.Identity.Web;
 using System.Text.RegularExpressions;
 using WarningSystems.core.Models.DTO;
 using WarningSystems.core.Services.Interface;
@@ -1444,12 +1445,13 @@ public class TransgressionManager : ITransgressionManager
             return null;
         }
 
-        var warningCategories =
-            await _data.GetWarningCategoriesByWarningIdAsync(warningId);
+        var warningCategories = await _data.GetWarningCategoriesByWarningIdAsync(warningId);
+
         var categoryIds = warningCategories
             .Select(link => link.CategoryId)
             .Distinct()
             .ToList();
+
         var categoryNames = warningCategories
             .Select(link => link.Category?.Name)
             .Where(name => !string.IsNullOrWhiteSpace(name))
@@ -1487,9 +1489,14 @@ public class TransgressionManager : ITransgressionManager
         var questions = categoryQuestions
             .Where(categoryQuestion =>
                 categoryQuestion.Question is not null)
-            .Select(categoryQuestion =>
+            .GroupBy(categoryQuestion => categoryQuestion.QuestionId)
+            .Select(group =>
             {
-                var question = categoryQuestion.Question!;
+               var categoryQuestion = group
+                   .OrderBy(link => link.SortOrder)
+                   .ThenBy(link => link.CategoryId)
+                   .First();
+               var question = categoryQuestion.Question!;
 
                 answerLookup.TryGetValue(
                     question.QuestionId,
@@ -1500,8 +1507,8 @@ public class TransgressionManager : ITransgressionManager
                     QuestionId = question.QuestionId,
                     QuestionText = question.QuestionText,
                     ControlType = question.ControlType,
-                    IsRequired = categoryQuestion.IsRequired,
-                    SortOrder = categoryQuestion.SortOrder,
+                    IsRequired = group.Any(link => link.IsRequired),
+                    SortOrder = group.Min(link => link.SortOrder),
                     DefaultConfigJson = question.DefaultConfigJson,
                     CategoryConfigJson = categoryQuestion.ConfigJson,
                     AnswerText = HtmlToPlainText(answer?.AnswerText),
@@ -1511,12 +1518,9 @@ public class TransgressionManager : ITransgressionManager
             .OrderBy(question => question.SortOrder)
             .ThenBy(question => question.QuestionText)
             .ToList();
-
-        // Keep previously saved answers visible even when an administrator has
-        // since disabled the question or removed it from this category.
         var includedQuestionIds = questions
-            .Select(question => question.QuestionId)
-            .ToHashSet();
+                    .Select(question => question.QuestionId)
+                    .ToHashSet();
         var missingAnsweredQuestionIds = answerLookup.Keys
             .Where(questionId => !includedQuestionIds.Contains(questionId))
             .ToHashSet();
@@ -1548,6 +1552,8 @@ public class TransgressionManager : ITransgressionManager
                 .ThenBy(question => question.QuestionText)
                 .ToList();
         }
+
+
 
         var evidence = warning.Evidence
             .OrderByDescending(item => item.UploadedOn)
@@ -1599,19 +1605,17 @@ public class TransgressionManager : ITransgressionManager
             await _data.GetWarningsByEmployeeIdAsync(
                 warning.EmployeeId);
 
-        var history = warningHistory
+        List<LegalWarningHistoryVm>? history = warningHistory
             .Select(historyWarning => new LegalWarningHistoryVm
             {
                 WarningId = historyWarning.WarningId,
                 CreatedOn = historyWarning.CreatedOn,
                 Status = historyWarning.Status,
-                LastStatusChangedOn =
-                    historyWarning.LastStatusChangedOn,
-                LastStatusChangedBy =
-                    historyWarning.LastStatusChangedBy,
-                CategoryName =
-                    historyWarning.Category?.Name
-                    ?? string.Empty
+                LastStatusChangedOn =historyWarning.LastStatusChangedOn,
+                LastStatusChangedBy =historyWarning.LastStatusChangedBy,
+                CategoryName =historyWarning.Category?.Name?? string.Empty,
+                IssueType =historyWarning.IssueType?.IssueTypeName?? historyWarning.Type,
+                Subtype = historyWarning.WarningSubtype
             })
             .OrderByDescending(item => item.CreatedOn)
             .ToList();
@@ -1730,9 +1734,8 @@ public class TransgressionManager : ITransgressionManager
         };
     }
 
-    public async Task<(bool Success, string? Message)> UpdateLegalIssueDetailsAsync(
-        UpdateLegalIssueDetailsDto dto,
-        string changedBy)
+
+    public async Task<(bool Success, string? Message)> UpdateLegalIssueDetailsAsync(UpdateLegalIssueDetailsDto dto,string changedBy)
     {
         if (dto.WarningId <= 0)
             return (false, "Missing warning id.");
@@ -2248,7 +2251,7 @@ public class TransgressionManager : ITransgressionManager
 
         var email = new SendEmailRequest
         {
-            Subject = "Warning System | Issue Created",
+            Subject = $"Warning System | Issue #{warning.WarningId} Created",
             BodyHtml = bodyHtml,
             ToRecipients = _emailSettings.LegalRecipients,
         };
@@ -2488,6 +2491,13 @@ public class TransgressionManager : ITransgressionManager
             var safeEmployeeDisplayName = System.Net.WebUtility.HtmlEncode(employeeDisplayName);
             var safeCategory = System.Net.WebUtility.HtmlEncode(
                 warningInfo.Category.Name ?? warningInfo.CategoryId.ToString());
+
+            var safeType = System.Net.WebUtility.HtmlEncode(
+                string.IsNullOrWhiteSpace(warningInfo.Type) ? "—" : warningInfo.Type);
+            var safeSubtype = System.Net.WebUtility.HtmlEncode(
+                string.IsNullOrWhiteSpace(warningInfo.WarningSubtype)
+                    ? "—"
+                    : warningInfo.WarningSubtype);
             var safeWarningUrl = System.Net.WebUtility.HtmlEncode(warningUrl);
 
             var req = new SendEmailRequest
@@ -2523,6 +2533,25 @@ public class TransgressionManager : ITransgressionManager
                                         {safeCategory}
                                     </td>
                                 </tr>
+                                <tr>
+                                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
+                                        Type
+                                    </td>
+                                    <td style=""padding:8px; border:1px solid #ddd;"">
+                                        {safeType}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
+                                        Subtype
+                                    </td>
+                                    <td style=""padding:8px; border:1px solid #ddd;"">
+                                        {safeSubtype}
+                                    </td>
+                                </tr>
+
+
+
                                 <tr>
                                     <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
                                         Status
@@ -2777,6 +2806,10 @@ public class TransgressionManager : ITransgressionManager
             await _graphUserDataAccess.SendEmailAsync(req);
 
             stage = $"Email sent successfully. WarningId={warningId}, To={userEmail}";
+        }
+        catch (MicrosoftIdentityWebChallengeUserException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

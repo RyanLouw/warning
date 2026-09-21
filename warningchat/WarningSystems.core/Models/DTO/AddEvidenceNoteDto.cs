@@ -1,4 +1,6 @@
-﻿namespace WarningSystems.Models.DTO;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace WarningSystems.Models.DTO;
 
 public class AddEvidenceNoteDto
 {

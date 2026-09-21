@@ -276,6 +276,11 @@ body {
    MAIN PANEL
    =============================== */
 
+#legalDateInput::-webkit-datetime-edit-year-field {
+    color: #000 !important;
+    opacity: 1;
+}
+
 .main-panel {
     background: white;
     border-radius: 14px;
@@ -1391,9 +1396,11 @@ body {
     white-space: normal;
     word-break: break-word;
 }
-
+.empdash-table-warnings {
+    min-width: 1180px;
+}
 #employeeDashboardModal .modal-dialog {
-    max-width: 950px;
+    max-width: min(1400px, 96vw);
 }
 
 #employeeDashboardModal .modal-content {
@@ -1433,9 +1440,9 @@ body {
         grid-template-columns: 110px 1fr;
     }
 
-    #employeeDashboardModal .modal-dialog {
+/*    #employeeDashboardModal .modal-dialog {
         max-width: 92vw;
-    }
+    }*/
 }
 
 @media (max-width: 575.98px) {

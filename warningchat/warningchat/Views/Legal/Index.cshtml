@@ -1,12 +1,13 @@
 ﻿@using WarningSystems.Core.Services
 @using WarningSystems.Core.ViewModels
 @using System.Text.Json
-
 @model WarningSystems.Core.ViewModels.LegalWizardVm
 
 @{
     ViewData["Title"] = "Legal";
-
+    var isReadOnly = Model.IssueStatusGroup is
+        WarningSystems.Core.Models.Enum.IssueStatusGroup.LegalValidation or
+        WarningSystems.Core.Models.Enum.IssueStatusGroup.Closed;
     string ValOrDash(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
@@ -79,6 +80,7 @@
             return question.AnswerJson.Trim();
         }
     }
+
     var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
@@ -87,45 +89,42 @@
     var warningCategory = ValOrDash(Model.WarningSubtype);
     var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
     var canRecordDecision = string.Equals(Model.Status, "In Progress", StringComparison.OrdinalIgnoreCase);
+
+
+
     var canEditIssueDetails = Model.Status is "New" or "In Progress" or "Pending";
     var applicableDates = new List<string>();
-    var datesAnswer = Model.Questions?.FirstOrDefault(question => question.QuestionId == 1)?.AnswerJson;
+    var transgressionDateQuestion = Model.Questions?
+        .FirstOrDefault(question => question.QuestionId == 1);
+    var datesAnswer = transgressionDateQuestion?.AnswerJson;
     if (!string.IsNullOrWhiteSpace(datesAnswer))
     {
-        try
-        {
-            using var datesDocument = JsonDocument.Parse(datesAnswer);
-            if (datesDocument.RootElement.TryGetProperty("dates", out var datesElement) &&
-                datesElement.ValueKind == JsonValueKind.Array)
-            {
-                applicableDates = datesElement.EnumerateArray()
-                    .Select(item => item.GetString())
-                    .Where(date => !string.IsNullOrWhiteSpace(date))
-                    .Select(date => date!)
-                    .Distinct()
-                    .OrderBy(date => date)
-                    .ToList();
-            }
-        }
-        catch (JsonException)
-        {
-            // Older malformed answers remain visible in Questions & Answers.
-        }
-    }
 
-    var issueCreatedOn = Model.CreatedOn == default
+        using var datesDocument = JsonDocument.Parse(datesAnswer);
+        if (datesDocument.RootElement.TryGetProperty("dates", out var datesElement) &&
+            datesElement.ValueKind == JsonValueKind.Array)
+        {
+            applicableDates = datesElement.EnumerateArray()
+                .Select(item => item.GetString())
+                .Where(date => !string.IsNullOrWhiteSpace(date))
+                .Select(date => date!)
+                .Distinct()
+                .OrderBy(date => date)
+                .ToList();
+        }
+
+    }     
+    var transgressionDates = transgressionDateQuestion is null
         ? "—"
-        : Model.CreatedOn.ToString("yyyy/MM/dd HH:mm");
+        : FormatAnswer(transgressionDateQuestion);
 
-    var issueSubmittedOn = Model.SubmittedOn.HasValue
-        ? Model.SubmittedOn.Value.ToString("yyyy/MM/dd HH:mm")
-        : "—";
+    var createdOn = Model.CreatedOn.ToString("yyyy/MM/dd");
+    var deu = Model.LegalExpiryDate?.ToString("yyyy/MM/dd") ?? "—";
 
-    var issueDueDate = Model.LegalExpiryDate.HasValue
-        ? Model.LegalExpiryDate.Value.ToString("yyyy/MM/dd")
-        : "—";
 
     var descriptionQuestion = Model.Questions?
+
+
         .FirstOrDefault(q => q.QuestionId == 2);
 
     var issueDescriptionRaw = !string.IsNullOrWhiteSpace(descriptionQuestion?.AnswerText)
@@ -153,55 +152,64 @@
 
 
         <div class="page-actions d-flex gap-2">
-
-            <button type="button"
-                    id="btnTeamLeadVisibility"
-                    class="btn @(Model.HideFromTeamLead ? "ws-sensitive-hidden" : "btn-outline-warning")"
-                    style="border-radius:999px;"
-                    data-hidden="@(Model.HideFromTeamLead ? "true" : "false")"
-                    onclick="toggleTeamLeadVisibility(this)">
-                @(Model.HideFromTeamLead ? "Show to Team Leads" : "Hide from Team Leads")
-            </button>
-            @if (canEditIssueDetails)
+            @if (!isReadOnly)
             {
-                <button type="button"
-                        class="ws-btn-primary-pill"
-                        data-bs-toggle="modal"
-                        data-bs-target="#editIssueDetailsModal">
-                    Update Categories / Dates
-                </button>
-            }
 
-            @if (canRecordDecision)
-            {
                 <button type="button"
-                        class="ws-btn-primary-pill"
-                        data-bs-toggle="modal"
-                        data-bs-target="#completeModal">
-                    Record Decision
-                </button>
-            }
-
-            @if (canValidate)
-            {
-                <button type="button"
-                        class="btn btn-success"
+                        id="btnTeamLeadVisibility"
+                        class="btn @(Model.HideFromTeamLead ? "ws-sensitive-hidden" : "btn-outline-warning")"
                         style="border-radius:999px;"
-                        id="btnValidateIssue"
-                        onclick="validateIssue(this)">
-                    Validate
+                        data-hidden="@(Model.HideFromTeamLead ? "true" : "false")"
+                        onclick="toggleTeamLeadVisibility(this)">
+                    @(Model.HideFromTeamLead ? "Show to Team Leads" : "Hide from Team Leads")
                 </button>
-            }
+               <button type="button"
+                    class="ws-btn-primary-pill"
+                    data-bs-toggle="modal"
+                    data-bs-target="#requestTeamLeadInfoModal">
+                    Ask Team Lead for More Info
+               </button>
+
+
+                @if (canRecordDecision)
+                {
+                    <button type="button"
+                            class="ws-btn-primary-pill"
+                            data-bs-toggle="modal"
+                            data-bs-target="#completeModal">
+                        Record Decision
+                    </button>
+                }
+                @if (canEditIssueDetails)
+                {
+                    <button type="button"
+                            class="ws-btn-primary-pill"
+                            data-bs-toggle="modal"
+                            data-bs-target="#editIssueDetailsModal">
+                        Update Categories / Dates
+                    </button>
+                }
+
+                @if (canValidate)
+                {
+                    <button type="button"
+                            class="btn btn-success"
+                            style="border-radius:999px;"
+                            id="btnValidateIssue"
+                            onclick="validateIssue(this)">
+                        Validate
+                    </button>
+                }
        
 
-            <button type="button"
-                    class="ws-btn-primary-pill"
-                    style="border-radius:999px;"
-                    data-bs-toggle="modal"
-                    data-bs-target="#dueDateModal">
-                Change Due Date
-            </button>
-
+                <button type="button"
+                        class="ws-btn-primary-pill"
+                        style="border-radius:999px;"
+                        data-bs-toggle="modal"
+                        data-bs-target="#dueDateModal">
+                    Change Due Date
+                </button>
+            }
         </div>
         <div class="mb-4">
             <h5 class="mb-2">Issue Recap</h5>
@@ -226,7 +234,7 @@
 
                             <div class="ws-ov-row">
                                 <div class="ws-ov-label">Category:</div>
-                                <div class="ws-ov-value text-truncate" title="@issueCategory">
+                                <div class="ws-ov-value text-wrap" style="overflow-wrap: anywhere;">
                                     @issueCategory
                                 </div>
                             </div>
@@ -255,18 +263,16 @@
                         <div class="ws-ov-card-head">2. Dates</div>
                         <div class="ws-ov-card-body">
                             <div class="ws-ov-row">
-                                <div class="ws-ov-label">Created:</div>
-                                <div class="ws-ov-value">@issueCreatedOn</div>
+                                <div class="ws-ov-label">Date of Offense:</div>
+                                <div class="ws-ov-value text-break">@transgressionDates</div>
                             </div>
-
                             <div class="ws-ov-row">
-                                <div class="ws-ov-label">Submitted:</div>
-                                <div class="ws-ov-value">@issueSubmittedOn</div>
+                                <div class="ws-ov-label">Date Submitted:</div>
+                                <div class="ws-ov-value text-break">@createdOn</div>
                             </div>
-
                             <div class="ws-ov-row">
                                 <div class="ws-ov-label">Due Date:</div>
-                                <div class="ws-ov-value">@issueDueDate</div>
+                                <div class="ws-ov-value text-break">@deu</div>
                             </div>
                         </div>
                     </div>
@@ -347,7 +353,6 @@
                         Questions &amp; Answers
                     </button>
                 </li>
-
                 <li class="nav-item" role="presentation">
                     <button class="nav-link"
                             id="history-tab"
@@ -376,7 +381,6 @@
             </ul>
 
             <div class="tab-content">
-
                 <!-- QUESTIONS TAB -->
                 <div class="tab-pane fade" id="questions" role="tabpanel" aria-labelledby="questions-tab">
                     <div class="panel-body">
@@ -427,7 +431,6 @@
                         </div>
                     </div>
                 </div>
-
                 <!-- NOTES TAB -->
                 <div class="tab-pane fade show active"
                      id="notes"
@@ -450,7 +453,7 @@
                                     style="border-radius:999px;"
                                     data-bs-toggle="modal"
                                     data-bs-target="#uploadDocsModal">
-                                Add Evidence
+                                Add Interaction
                             </button>
                         </div>
 
@@ -613,6 +616,8 @@
                                         <th>Status</th>
                                         <th>Last Changed By</th>
                                         <th>Issue Category</th>
+                                        <th>Issue Type</th>
+                                        <th>Subtype</th>
                                         <th class="text-end">Issue</th>
                                     </tr>
                                 </thead>
@@ -621,7 +626,7 @@
                                     @if (Model.TransgretionHistory == null || !Model.TransgretionHistory.Any())
                                     {
                                         <tr>
-                                            <td colspan="5" class="text-center text-muted py-4">
+                                            <td colspan="7" class="text-center text-muted py-4">
                                                 No history data available.
                                             </td>
                                         </tr>
@@ -639,6 +644,8 @@
                                                                                                 : h.LastStatusChangedByDisplayName)
                                                 </td>
                                                 <td>@h.CategoryName</td>
+                                                <td>@h.IssueType</td>
+                                                <td>@h.Subtype</td>
                                                 <td class="text-end">
                                                     <a class="btn btn-outline-secondary btn-sm"
                                                        style="border-radius:999px;"
@@ -748,6 +755,7 @@
     </div>
 </div>
 
+
 <!-- EDIT CATEGORIES / DATES MODAL -->
 <div class="modal fade" id="editIssueDetailsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -794,7 +802,7 @@
                         <input type="date" class="form-control" id="legalDateInput" />
                         <button type="button" class="btn btn-outline-secondary" onclick="addLegalDate()">Add date</button>
                     </div>
-                    <div id="legalDatesList" class="d-flex flex-wrap gap-2"></div>
+                    <div id="legalDatesList" class="d-flex flex-wrap gap-2" style="color: #000;">></div>
                     <div class="form-text">Use Remove to delete an existing date. All dates may be removed.</div>
                 </div>
 
@@ -898,7 +906,9 @@
         <div class="modal-content">
 
             <div class="modal-header">
-                <h5 class="modal-title">Upload Documents</h5>
+                <h5 class="modal-title">
+                    Add Interaction
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
@@ -912,7 +922,7 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Notes (optional)</label>
+                    <label class="form-label">Notes</label>
                     <textarea class="form-control"
                               id="uploadNotes"
                               rows="3"
@@ -975,6 +985,7 @@
                                    id="issueType-@legalDecision.IssueTypeId"
                                    value="@legalDecision.IssueTypeId"
                                    data-subtype-mode="@((int)legalDecision.SubTypeSelectionMode)"
+                                   data-show-subtypes="@(legalDecision.IssueTypeName != "Discussion" ? "true" : "false")"
                                    checked="@(index == 0)">
                             <label class="form-check-label" for="issueType-@legalDecision.IssueTypeId">
                                 @legalDecision.IssueTypeName
@@ -1028,6 +1039,50 @@
                 </button>
             </div>
 
+        </div>
+    </div>
+</div>
+
+<!-- REQUEST MORE INFORMATION MODAL -->
+<div class="modal fade" id="requestTeamLeadInfoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ask Team Lead for More Information</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <input type="hidden" id="requestInfoWarningId" value="@Model.WarningId" />
+
+                <div class="mb-3">
+                    <label class="form-label" for="requestInfoMessage">Message</label>
+                    <textarea class="form-control"
+                              id="requestInfoMessage"
+                              rows="4"
+                              maxlength="1000"
+                              placeholder="Tell the team lead what additional information is needed..."
+                              required></textarea>
+                    <div class="form-text">This message will be included in the email to the team lead.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="requestInfoFile">Supporting document (optional)</label>
+                    <input class="form-control" type="file" id="requestInfoFile" />
+                </div>
+
+                <div id="requestInfoError" class="alert alert-danger d-none mb-0" role="alert"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button"
+                        class="ws-btn-primary-pill"
+                        id="btnRequestTeamLeadInfo"
+                        onclick="requestTeamLeadInformation(this)">
+                    Send Request
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -1087,100 +1142,162 @@
 </div>
 
 <script>
-    const legalApplicableDates = @Html.Raw(JsonSerializer.Serialize(applicableDates));
 
-    function toggleLegalUpdateFields() {
-        const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
-        document.getElementById("legalCategoriesFields")?.classList.toggle("d-none", updateType !== "categories");
-        document.getElementById("legalDatesFields")?.classList.toggle("d-none", updateType !== "dates");
-        showLegalDetailsMessage("", false);
-    }
+  const legalApplicableDates = @Html.Raw(JsonSerializer.Serialize(applicableDates));
 
-    function renderLegalDates() {
-        const list = document.getElementById("legalDatesList");
-        if (!list) return;
-        list.replaceChildren();
-
-        legalApplicableDates.sort().forEach(date => {
-            const item = document.createElement("span");
-            item.className = "badge bg-light text-dark border d-inline-flex align-items-center gap-2 p-2";
-            const label = document.createElement("span");
-            label.textContent = date;
-            const remove = document.createElement("button");
-            remove.type = "button";
-            remove.className = "btn-close";
-            remove.setAttribute("aria-label", `Remove ${date}`);
-            remove.addEventListener("click", () => {
-                const index = legalApplicableDates.indexOf(date);
-                if (index >= 0) legalApplicableDates.splice(index, 1);
-                renderLegalDates();
-            });
-            item.append(label, remove);
-            list.appendChild(item);
-        });
-
-        if (legalApplicableDates.length === 0) {
-            const empty = document.createElement("span");
-            empty.className = "text-muted";
-            empty.textContent = "No applicable dates selected.";
-            list.appendChild(empty);
+        function toggleLegalUpdateFields() {
+            const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
+            document.getElementById("legalCategoriesFields")?.classList.toggle("d-none", updateType !== "categories");
+            document.getElementById("legalDatesFields")?.classList.toggle("d-none", updateType !== "dates");
+            showLegalDetailsMessage("", false);
         }
-    }
 
-    function addLegalDate() {
-        const input = document.getElementById("legalDateInput");
-        const date = input?.value || "";
-        if (!date || legalApplicableDates.includes(date)) return;
-        legalApplicableDates.push(date);
-        input.value = "";
-        renderLegalDates();
-    }
 
-    function showLegalDetailsMessage(message, isError) {
-        const element = document.getElementById("legalDetailsSaveMsg");
-        if (!element) return;
-        element.style.display = message ? "block" : "none";
-        element.className = isError ? "text-danger mt-3" : "text-success mt-3";
-        element.textContent = message;
-    }
 
-    async function updateLegalIssueDetails(button) {
-        const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
-        const categoryIds = Array.from(document.querySelectorAll(".legal-category-checkbox:checked"))
-            .map(input => Number.parseInt(input.value, 10));
+        async function requestTeamLeadInformation(btn) {
+        const warningId = parseInt(document.getElementById("requestInfoWarningId")?.value || "0", 10);
+        const messageEl = document.getElementById("requestInfoMessage");
+        const fileEl = document.getElementById("requestInfoFile");
+        const errorEl = document.getElementById("requestInfoError");
+        const message = (messageEl?.value || "").trim();
 
-        if (updateType === "categories" && categoryIds.length === 0) {
-            showLegalDetailsMessage("Select at least one category.", true);
+        errorEl?.classList.add("d-none");
+
+        if (!warningId || !message) {
+            if (errorEl) {
+                errorEl.textContent = "Please add a message for the team lead.";
+                errorEl.classList.remove("d-none");
+            }
+            messageEl?.focus();
             return;
         }
 
-        button.disabled = true;
-        showLegalDetailsMessage("Saving...", false);
-        try {
-            const response = await fetch("@Url.Action("UpdateIssueDetails", "Legal")", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    warningId: @Model.WarningId,
-                    updateType,
-                    categoryIds,
-                    dates: legalApplicableDates
-                })
-            });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || data.success === false)
-                throw new Error(data.message || "The issue could not be updated.");
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Sending...";
 
-            showLegalDetailsMessage("Changes saved and logged.", false);
-            setTimeout(() => location.reload(), 500);
+        try {
+            const formData = new FormData();
+            formData.append("WarningId", warningId.toString());
+            formData.append("Message", message);
+
+            if (fileEl?.files?.length) {
+                formData.append("File", fileEl.files[0], fileEl.files[0].name);
+            }
+
+            const response = await fetch("@Url.Action("RequestTeamLeadInformation", "Legal")", {
+                method: "POST",
+                body: formData
+            });
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(result.message || "The request could not be sent.");
+            }
+
+            const modalElement = document.getElementById("requestTeamLeadInfoModal");
+            bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+            messageEl.value = "";
+            fileEl.value = "";
+            alert(result.message || "The request was sent to the team lead.");
         } catch (error) {
-            showLegalDetailsMessage(error?.message || "The issue could not be updated.", true);
+            if (errorEl) {
+                errorEl.textContent = error?.message || "The request could not be sent.";
+                errorEl.classList.remove("d-none");
+            }
         } finally {
-            button.disabled = false;
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
     }
 
-    renderLegalDates();
+        function renderLegalDates() {
+            const list = document.getElementById("legalDatesList");
+            if (!list) return;
+            list.replaceChildren();
+
+            legalApplicableDates.sort().forEach(date => {
+                const item = document.createElement("span");
+               item.className = "badge text-bg-light border d-inline-flex align-items-center gap-2 p-2";
+               item.style.color = "#000";
+                const label = document.createElement("span");
+                label.textContent = date;
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "btn-close";
+                remove.setAttribute("aria-label", `Remove ${date}`);
+                remove.addEventListener("click", () => {
+                    const index = legalApplicableDates.indexOf(date);
+                    if (index >= 0) legalApplicableDates.splice(index, 1);
+                    renderLegalDates();
+                });
+                item.append(label, remove);
+                list.appendChild(item);
+            });
+
+            if (legalApplicableDates.length === 0) {
+                const empty = document.createElement("span");
+                empty.className = "text-muted";
+                empty.textContent = "No applicable dates selected.";
+                list.appendChild(empty);
+            }
+        }
+
+        function addLegalDate() {
+            const input = document.getElementById("legalDateInput");
+            const date = input?.value || "";
+            if (!date || legalApplicableDates.includes(date)) return;
+            legalApplicableDates.push(date);
+            input.value = "";
+            renderLegalDates();
+        }
+
+        function showLegalDetailsMessage(message, isError) {
+            const element = document.getElementById("legalDetailsSaveMsg");
+            if (!element) return;
+            element.style.display = message ? "block" : "none";
+            element.className = isError ? "text-danger mt-3" : "text-success mt-3";
+            element.textContent = message;
+        }
+
+        async function updateLegalIssueDetails(button) {
+            const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
+            const categoryIds = Array.from(document.querySelectorAll(".legal-category-checkbox:checked"))
+                .map(input => Number.parseInt(input.value, 10));
+
+            if (updateType === "categories" && categoryIds.length === 0) {
+                showLegalDetailsMessage("Select at least one category.", true);
+                return;
+            }
+
+            button.disabled = true;
+            showLegalDetailsMessage("Saving...", false);
+            try {
+                const response = await fetch("@Url.Action("UpdateIssueDetails", "Legal")", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        warningId: @Model.WarningId,
+                        updateType,
+                        categoryIds,
+                        dates: legalApplicableDates
+                    })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false)
+                    throw new Error(data.message || "The issue could not be updated.");
+
+                showLegalDetailsMessage("Changes saved and logged.", false);
+                setTimeout(() => location.reload(), 500);
+            } catch (error) {
+                showLegalDetailsMessage(error?.message || "The issue could not be updated.", true);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        renderLegalDates();
+
     async function addEvidenceNote(btn) {
         debugger;
         const warningEl = document.getElementById("addNoteWarningId");
@@ -1262,11 +1379,6 @@
 
         if (!warningId) {
             alert("Missing WarningId.");
-            return;
-        }
-
-        if (!filesInput || !filesInput.files || filesInput.files.length === 0) {
-            alert("Please select at least one file.");
             return;
         }
 
@@ -1480,6 +1592,7 @@
 
         const issueTypeId = issueTypeInput.value;
         const subtypeMode = parseInt(issueTypeInput.dataset.subtypeMode || "0", 10);
+        const showSubtypes = issueTypeInput.dataset.showSubtypes === "true";
         let hasSubtypes = false;
 
         Array.from(select.options).forEach((option, index) => {
@@ -1492,8 +1605,8 @@
         });
 
         select.value = "";
-        select.required = subtypeMode === 2;
-        group.classList.toggle("d-none", subtypeMode === 0 || !hasSubtypes);
+        select.required = showSubtypes && subtypeMode === 2;
+        group.classList.toggle("d-none", !showSubtypes || subtypeMode === 0 || !hasSubtypes);
     }
 
     const issueTypeInputs = document.querySelectorAll('input[name="completeIssueType"][type="radio"]');

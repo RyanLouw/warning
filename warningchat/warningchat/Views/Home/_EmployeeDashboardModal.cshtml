@@ -196,13 +196,14 @@
                         <th>Due</th>
                         <th>Last Actioned</th>
                         <th>Description</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (!issues.Any())
                     {
                         <tr>
-                            <td colspan="9" class="text-center text-muted">No issues found.</td>
+                            <td colspan="10" class="text-center text-muted">No issues found.</td>
                         </tr>
                     }
                     else
@@ -229,6 +230,15 @@
                                             @Html.Raw(warning.DescriptionSummary)
                                         </div>
                                     }
+                                </td>
+                                <td>
+                                    <a class="btn btn-sm btn-outline-primary text-nowrap"
+                                       asp-controller="Home"
+                                       asp-action="Redirect"
+                                       asp-route-warningId="@warning.WarningId"
+                                       asp-route-status="@warning.Status">
+                                        Open Issue
+                                    </a>
                                 </td>
                             </tr>
                         }

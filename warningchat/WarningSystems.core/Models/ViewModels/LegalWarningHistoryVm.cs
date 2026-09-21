@@ -9,4 +9,6 @@ public class LegalWarningHistoryVm
     public string? LastStatusChangedBy { get; set; }
     public string? LastStatusChangedByDisplayName { get; set; }
     public string CategoryName { get; set; } = "";
+    public string IssueType { get; set; } = "";
+    public string Subtype { get; set; } = "";
 }

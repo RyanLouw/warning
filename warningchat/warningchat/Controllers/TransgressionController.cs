@@ -277,21 +277,11 @@ namespace WarningSystems.Controllers
             var vm = await _transgression.GetWarningLegalAsync(id);
             return View(vm);
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         [Authorize(Roles = "User")]
         public async Task<IActionResult> AddTeamLeadEvidence(AddTeamLeadEvidenceVm model)
         {
-            var hasFiles = model.Files != null && model.Files.Any(x => x.Length > 0);
-            var hasNote = !string.IsNullOrWhiteSpace(model.NoteText);
-
-            if (!hasFiles && !hasNote)
-            {
-                TempData["Error"] = "Please add at least one document or note.";
-                return RedirectToAction(nameof(TeamLeadWarning), new { id = model.WarningId });
-            }
-
             await _transgression.AddTeamLeadEvidenceAsync(model);
 
             TempData["Success"] = "Additional information was saved successfully.";

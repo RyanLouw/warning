@@ -17,6 +17,7 @@ namespace WarningSystems.Controllers
     [Authorize]
     public class LegalController : Controller
     {
+        private const long MaximumEmailAttachmentBytes = 3 * 1024 * 1024;
         private readonly ILogger<LegalController> _logger;
         private readonly ITransgressionManager _transgressionManager;
         private readonly IAzureFileStorageDataAccess _fileStorageService;
@@ -102,6 +103,26 @@ namespace WarningSystems.Controllers
             return Ok(new { success = true });
         }
 
+
+
+
+        [Authorize(Roles = "Legal")]
+        [HttpPost]
+        public async Task<IActionResult> UpdateIssueDetails([FromBody] UpdateLegalIssueDetailsDto dto)
+        {
+            if (dto is null || !ModelState.IsValid)
+                return BadRequest(new { success = false, message = "Invalid update request." });
+
+            var changedBy = User.Identity?.Name;
+            if (string.IsNullOrWhiteSpace(changedBy))
+                return Unauthorized(new { success = false, message = "Unable to determine the logged-in user." });
+
+            var result = await _transgressionManager.UpdateLegalIssueDetailsAsync(dto, changedBy);
+            if (!result.Success)
+                return BadRequest(new { success = false, message = result.Message });
+
+            return Ok(new { success = true });
+        }
         [Authorize(Roles = "Legal")]
         [HttpPost]
         public async Task<IActionResult> AddEvidenceNote([FromBody] AddEvidenceNoteDto dto)
@@ -235,25 +256,6 @@ namespace WarningSystems.Controllers
             return Ok(new { success = true });
         }
 
-        [Authorize(Roles = "Legal")]
-        [HttpPost]
-        public async Task<IActionResult> UpdateIssueDetails(
-            [FromBody] UpdateLegalIssueDetailsDto dto)
-        {
-            if (dto is null || !ModelState.IsValid)
-                return BadRequest(new { success = false, message = "Invalid update request." });
-
-            var changedBy = User.Identity?.Name;
-            if (string.IsNullOrWhiteSpace(changedBy))
-                return Unauthorized(new { success = false, message = "Unable to determine the logged-in user." });
-
-            var result = await _transgressionManager.UpdateLegalIssueDetailsAsync(dto, changedBy);
-            if (!result.Success)
-                return BadRequest(new { success = false, message = result.Message });
-
-            return Ok(new { success = true });
-        }
-
 
 
 
@@ -274,7 +276,7 @@ namespace WarningSystems.Controllers
                 User.Identity?.Name ?? "Unknown";
 
             var result =
-                await _transgressionManager.SetHideFromTeamLeadAsync(dto.WarningId,dto.HideFromTeamLead,changedBy );
+                await _transgressionManager.SetHideFromTeamLeadAsync(dto.WarningId, dto.HideFromTeamLead, changedBy);
 
             if (!result.HasValue)
             {
@@ -293,6 +295,56 @@ namespace WarningSystems.Controllers
                     ? "The issue is now hidden from Team Leads."
                     : "The issue is now visible to Team Leads."
             });
+        }
+
+        [Authorize(Roles = "Legal")]
+        [AuthorizeForScopes(Scopes = new[] { "User.Read.All", "Mail.Send" })]
+        [HttpPost]
+        public async Task<IActionResult> RequestTeamLeadInformation(
+           [FromForm] RequestTeamLeadInformationVm request)
+        {
+            if (request.WarningId <= 0)
+                return BadRequest(new { success = false, message = "A valid warning id is required." });
+
+            if (string.IsNullOrWhiteSpace(request.Message))
+                return BadRequest(new { success = false, message = "Please add a message for the team lead." });
+
+            if (request.Message.Trim().Length > 1000)
+                return BadRequest(new { success = false, message = "The message cannot be longer than 1,000 characters." });
+
+            if (request.File is { Length: > MaximumEmailAttachmentBytes })
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "The supporting document must be 3 MB or smaller so it can be attached to the email."
+                });
+            }
+
+            try
+            {
+                await _transgressionManager.SendMoreInformationRequiredEmailAsync(
+                    request.WarningId,
+                    request.Message.Trim(),
+                    request.File);
+
+                return Ok(new { success = true, message = "The request was sent to the team lead." });
+            }
+            catch (MicrosoftIdentityWebChallengeUserException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to request more information from the team lead for warning {WarningId}.",
+                    request.WarningId);
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    success = false,
+                    message = "The email could not be sent. Please try again or contact support if the problem continues."
+                });
+            }
         }
 
 

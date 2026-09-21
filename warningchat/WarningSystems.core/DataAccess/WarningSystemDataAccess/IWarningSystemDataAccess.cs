@@ -51,10 +51,6 @@ public interface IWarningSystemDataAccess
 
     public Task UpsertWarningAnswerAsync(long warningId, int questionId, string? answerText, string? answerJson);
 
-    public Task SaveLegalIssueDetailsAsync(long warningId,
-        IReadOnlyCollection<WarningCategory>? categories, WarningAnswer? answer,
-        WarningNote auditNote);
-
     public Task<List<NoteTypeLookup>> GetActiveNoteTypesAsync();
 
     public Task UpdateWarningDueDateAsync(long warningId, DateOnly? dueDate, string user);
@@ -79,4 +75,5 @@ public interface IWarningSystemDataAccess
         LookupIssueSubType? issueSubType, string user);
     Task CompleteDiscussionAsync(long warningId, int issueSubTypeId, string user);
     Task AdvanceWarningStatusAsync(long warningId, IssueStatusGroup requiredGroup, string user);
+    public Task SaveLegalIssueDetailsAsync(long warningId,IReadOnlyCollection<WarningCategory>? categories, WarningAnswer? answer,WarningNote auditNote);
 }
