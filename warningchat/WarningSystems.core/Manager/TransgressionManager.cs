@@ -2185,16 +2185,17 @@ public class TransgressionManager : ITransgressionManager
         await _data.UpdateWarningDueDateAsync(warningId, duedate, user);
     }
 
-    public async Task ApplyLegalDecisionAsync(
-        long warningId,
-        int issueTypeId,
-        int? issueSubTypeId)
+    public async Task ApplyLegalDecisionAsync(long warningId,int issueTypeId, int? issueSubTypeId)
     {
         var warning = await _data.GetWarningByIdAsync(warningId)
             ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
 
-        if (warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.LegalDecision)
-            throw new InvalidOperationException("Legal can only record a decision while an issue is In Progress.");
+        if (warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.LegalDecision &&
+            warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.AddedMoreInformation)
+        {
+            throw new InvalidOperationException(
+                "Legal can only record a decision when the issue is ready for a legal decision or more information has been added.");
+        }
 
         var issueType = (await _data.GetActiveIssueTypesAsync())
             .SingleOrDefault(type => type.IssueTypeId == issueTypeId)

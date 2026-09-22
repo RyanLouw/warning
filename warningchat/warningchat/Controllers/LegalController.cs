@@ -86,7 +86,7 @@ namespace WarningSystems.Controllers
         public async Task<IActionResult> SaveEvidenceAttachment(SaveAttachmentsDto dto)
         {
             if (dto.WarningId is 0) return BadRequest();
-
+            var savedFile = false;
             foreach (var file in dto.Files)
             {
                 if (file is null || file.Length is 0)
@@ -98,7 +98,24 @@ namespace WarningSystems.Controllers
                 var type = "LegalEvidence";
 
                 var fileName = await _fileStorageService.UploadWarningFileAsync(dto.WarningId, type, file);
-                await _transgressionManager.SaveEvidenceAsync(dto.WarningId, fileName, Mediatype, file.Length, dto.Notes, 3, true);
+                var notes = savedFile ? null : dto.Notes;
+                await _transgressionManager.SaveEvidenceAsync(dto.WarningId, fileName, Mediatype, file.Length, notes, 3, true);
+                savedFile = true;
+            }
+
+            if (!savedFile)
+            {
+                if (string.IsNullOrWhiteSpace(dto.Notes))
+                    return BadRequest(new { success = false, message = "Add a file, a note, or both." });
+
+                await _transgressionManager.SaveEvidenceAsync(
+                    dto.WarningId,
+                    null,
+                    null,
+                    null,
+                    dto.Notes,
+                    3,
+                    true);
             }
 
             return Ok(new { success = true });

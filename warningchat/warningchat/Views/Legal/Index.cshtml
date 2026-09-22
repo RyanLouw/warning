@@ -1,6 +1,7 @@
 ﻿@using WarningSystems.Core.Services
 @using WarningSystems.Core.ViewModels
 @using System.Text.Json
+@using System.Text.RegularExpressions
 @model WarningSystems.Core.ViewModels.LegalWizardVm
 
 @{
@@ -26,60 +27,77 @@
         return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
     }
     string FormatAnswer(LegalQuestionVm question)
+{
+    string FormatDisplayValue(string? value)
     {
-        if (!string.IsNullOrWhiteSpace(question.AnswerText))
-            return question.AnswerText.Trim();
-
-        if (string.IsNullOrWhiteSpace(question.AnswerJson))
+        if (string.IsNullOrWhiteSpace(value))
             return "—";
 
-        try
-        {
-            using var document = JsonDocument.Parse(question.AnswerJson);
-            var root = document.RootElement;
-
-            if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
-            {
-                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
-                    notApplicable.ValueKind == JsonValueKind.True)
-                    return "SOP Not Applicable";
-
-                if (root.TryGetProperty("sopDocumentName", out var documentName) &&
-                    documentName.ValueKind == JsonValueKind.String)
-                    return ValOrDash(documentName.GetString());
-            }
-
-            if (root.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var propertyName in new[] { "dates", "values", "selected" })
-                {
-                    if (root.TryGetProperty(propertyName, out var values) &&
-                        values.ValueKind == JsonValueKind.Array)
-                    {
-                        var displayValues = values.EnumerateArray()
-                            .Select(value => value.ToString())
-                            .Where(value => !string.IsNullOrWhiteSpace(value))
-                            .ToList();
-
-                        if (displayValues.Count > 0)
-                            return string.Join(", ", displayValues);
-                    }
-                }
-
-                if (root.TryGetProperty("text", out var textValue) &&
-                    textValue.ValueKind == JsonValueKind.String)
-                    return ValOrDash(textValue.GetString());
-            }
-
-            return root.ValueKind == JsonValueKind.String
-                ? ValOrDash(root.GetString())
-                : question.AnswerJson.Trim();
-        }
-        catch (JsonException)
-        {
-            return question.AnswerJson.Trim();
-        }
+        return Regex.Replace(
+            value.Trim(),
+            @"\b(\d{4})-(\d{2})-(\d{2})\b",
+            "$1/$2/$3");
     }
+
+    if (!string.IsNullOrWhiteSpace(question.AnswerText))
+        return FormatDisplayValue(question.AnswerText);
+
+    if (string.IsNullOrWhiteSpace(question.AnswerJson))
+        return "—";
+
+    try
+    {
+        using var document = JsonDocument.Parse(question.AnswerJson);
+        var root = document.RootElement;
+
+        if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+        {
+            if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                notApplicable.ValueKind == JsonValueKind.True)
+            {
+                return "SOP Not Applicable";
+            }
+
+            if (root.TryGetProperty("sopDocumentName", out var documentName) &&
+                documentName.ValueKind == JsonValueKind.String)
+            {
+                return FormatDisplayValue(documentName.GetString());
+            }
+        }
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var propertyName in new[] { "dates", "values", "selected" })
+            {
+                if (root.TryGetProperty(propertyName, out var values) &&
+                    values.ValueKind == JsonValueKind.Array)
+                {
+                    var displayValues = values.EnumerateArray()
+                        .Select(value => FormatDisplayValue(value.ToString()))
+                        .Where(value => value != "—")
+                        .ToList();
+
+                    if (displayValues.Count > 0)
+                        return string.Join(", ", displayValues);
+                }
+            }
+
+            if (root.TryGetProperty("text", out var textValue) &&
+                textValue.ValueKind == JsonValueKind.String)
+            {
+                return FormatDisplayValue(textValue.GetString());
+            }
+        }
+
+        return root.ValueKind == JsonValueKind.String
+            ? FormatDisplayValue(root.GetString())
+            : FormatDisplayValue(question.AnswerJson);
+    }
+    catch (JsonException)
+    {
+        return FormatDisplayValue(question.AnswerJson);
+    }
+}
 
     var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
@@ -112,13 +130,22 @@
                 .ToList();
         }
 
-    }     
+    }  
+    
+         string FormatOffenseDates(string dates)
+            {
+                if (string.IsNullOrWhiteSpace(dates) || dates == "—")
+                    return "—";
+
+                return dates.Replace("-", "/");
+            }
     var transgressionDates = transgressionDateQuestion is null
         ? "—"
-        : FormatAnswer(transgressionDateQuestion);
+       : FormatOffenseDates(FormatAnswer(transgressionDateQuestion));
 
+   
     var createdOn = Model.CreatedOn.ToString("yyyy/MM/dd");
-    var deu = Model.LegalExpiryDate?.ToString("yyyy/MM/dd") ?? "—";
+    var deu = Model.LegalExpiryDate?.ToString("yyyy/MMdd") ?? "—";
 
 
     var descriptionQuestion = Model.Questions?
@@ -451,7 +478,7 @@
                                     class="ws-btn-primary-pill"
                                     style="border-radius:999px;"
                                     data-bs-toggle="modal"
-                                    data-bs-target="#uploadDocsModal">
+                                    data-bs-target="#addNoteModal">
                                 Add Interaction
                             </button>
                         </div>
@@ -815,66 +842,34 @@
     </div>
 </div>
 
-<!-- ADD NOTE MODAL -->
+<!-- ADD INTERACTION MODAL -->
 <div class="modal fade" id="addNoteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
 
             <div class="modal-header">
-                <h5 class="modal-title">Add New Note</h5>
+                  <h5 class="modal-title">Add Interaction</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
             <div class="modal-body">
 
-                <input type="hidden" id="addNoteWarningId" value="@Model.WarningId" />
+                <input type="hidden" id="addInteractionWarningId" value="@Model.WarningId" />
 
                 <div class="mb-3">
-                    <label class="form-label">Note Type</label>
-
-                    <select class="form-select" id="addNoteTypeId">
-                        <option value="">Select Interactions type</option>
-
-                        @foreach (var type in Model.NoteTypes)
-                        {
-                            <option value="@type.NoteTypeId">@type.Name</option>
-                        }
-                    </select>
-
-                    <div class="form-text text-muted">
-                        Choose what type of Interactions this is.
-                    </div>
+                    <label class="form-label">Files <span class="text-muted fw-normal">(optional)</span></label>
+                    <input class="form-control" type="file" id="addInteractionFiles" multiple />
+                    <div class="form-text text-muted">Select one or more files, or leave this empty to add only a note.</div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Link to Document</label>
-
-                    <select class="form-select" id="addNoteEvidenceId">
-                        <option value="">General Interactions - not linked to a document</option>
-
-                        @foreach (var e in (Model.Evidence ?? new List<LegalEvidenceVm>())
-                                                .Where(x => !string.IsNullOrWhiteSpace(x.FileName))
-                                                .OrderByDescending(x => x.UploadedOn))
-                        {
-                            <option value="@e.EvidenceId">
-                                @FileNameHelper.GetDisplayFileName(e.FileName)
-                            </option>
-                        }
-                    </select>
-
-                    <div class="form-text text-muted">
-                        Leave this as general Interactions if the Interactions is not about a specific document.
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Note</label>
+                    <label class="form-label">Note <span class="text-muted fw-normal">(optional)</span></label>
                     <textarea class="form-control"
-                              id="addNoteText"
+                              id="addInteractionNote"
                               rows="4"
-                              placeholder="Type your Interactions..."></textarea>
+                              placeholder="Type your interaction note..."></textarea>
                     <div class="form-text text-muted">
-                        This will be appended and saved as a new Interactions.
+                        Add a file, a note, or both.
                     </div>
                 </div>
 
@@ -889,9 +884,9 @@
 
                 <button type="button"
                         class="btn btn-primary"
-                        id="btnAddNote"
-                        onclick="addEvidenceNote(this)">
-                    Add Interactions
+                        id="btnAddInteraction"
+                        onclick="addInteraction(this)">
+                    Save Interaction
                 </button>
             </div>
 
@@ -943,7 +938,7 @@
                         class="btn btn-primary"
                         id="btnUploadDocs"
                         onclick="uploadDocuments(this)">
-                    Upload
+                    Add Interaction
                 </button>
             </div>
 
@@ -1297,76 +1292,69 @@
 
         renderLegalDates();
 
-    async function addEvidenceNote(btn) {
-        debugger;
-        const warningEl = document.getElementById("addNoteWarningId");
-        const typeEl = document.getElementById("addNoteTypeId");
-        const evidenceEl = document.getElementById("addNoteEvidenceId");
-        const textEl = document.getElementById("addNoteText");
+    async function addInteraction(btn) {
+        const warningEl = document.getElementById("addInteractionWarningId");
+        const filesEl = document.getElementById("addInteractionFiles");
+        const noteEl = document.getElementById("addInteractionNote");
 
-        if (!warningEl || !typeEl || !evidenceEl || !textEl) {
-            console.warn("Missing modal elements:", { warningEl, typeEl, evidenceEl, textEl });
+        if (!warningEl || !filesEl || !noteEl) {
+            console.warn("Missing modal elements:", { warningEl, filesEl, noteEl });
             alert("Modal inputs not found. Check element IDs.");
             return;
         }
 
         const warningId = parseInt(warningEl.value || "0", 10);
-        const noteTypeId = parseInt(typeEl.value || "0", 10);
-
-        const evidenceValue = (evidenceEl.value || "").trim();
-        const evidenceId = evidenceValue ? parseInt(evidenceValue, 10) : null;
-
-        const noteText = (textEl.value || "").trim();
+        const note = (noteEl.value || "").trim();
 
         if (!warningId) {
-            alert("Missing WarningId.");
+            alert("Invalid warning.");
             return;
         }
 
-        if (!noteTypeId) {
-            alert("Please select a note type.");
-            return;
-        }
-
-        if (!noteText) {
-            alert("Please type a note.");
+        if (filesEl.files.length === 0 && !note) {
+            alert("Add a file, a note, or both.");
             return;
         }
 
         btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "Saving...";
 
         try {
-            const res = await fetch("/Legal/AddEvidenceNote", {
+            const formData = new FormData();
+
+
+            formData.append("WarningId", warningId.toString());
+            formData.append("Notes", note);
+
+            for (const file of filesEl.files) {
+                formData.append("Files", file, file.name);
+            }
+
+            const res = await fetch("/Legal/SaveEvidenceAttachment", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    warningId: warningId,
-                    evidenceId: evidenceId,
-                    noteTypeId: noteTypeId,
-                    noteText: noteText
-                })
+                body: formData
             });
 
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(txt || `HTTP ${res.status}`);
+            const result = await res.json();
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || `HTTP ${res.status}`);
             }
 
             const modalEl = document.getElementById("addNoteModal");
-            let modal = bootstrap.Modal.getInstance(modalEl);
-            if (!modal) modal = new bootstrap.Modal(modalEl);
-            modal.hide();
+            bootstrap.Modal.getInstance(modalEl)?.hide();
 
-            typeEl.value = "";
-            evidenceEl.value = "";
-            textEl.value = "";
+            filesEl.value = "";
+            noteEl.value = "";
 
             location.reload();
-
         } catch (err) {
-            alert("Failed to add note: " + (err?.message || err));
+            console.error("Failed to add interaction:", err);
+            alert("Failed to add interaction: " + (err?.message || err));
         } finally {
             btn.disabled = false;
+            btn.innerHTML = originalText;
         }
     }
 

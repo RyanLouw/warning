@@ -28,61 +28,73 @@
 
         return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
     }
-    string FormatAnswer(LegalQuestionVm question)
+
+
+string FormatAnswer(LegalQuestionVm question)
+{
+    if (!string.IsNullOrWhiteSpace(question.AnswerText))
+        return question.AnswerText.Trim();
+
+    if (string.IsNullOrWhiteSpace(question.AnswerJson))
+        return "—";
+
+    try
     {
-        if (!string.IsNullOrWhiteSpace(question.AnswerText))
-            return question.AnswerText.Trim();
+        using var document = JsonDocument.Parse(question.AnswerJson);
+        var root = document.RootElement;
 
-        if (string.IsNullOrWhiteSpace(question.AnswerJson))
-            return "—";
-
-        try
+        if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
         {
-            using var document = JsonDocument.Parse(question.AnswerJson);
-            var root = document.RootElement;
-
-            if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+            if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                notApplicable.ValueKind == JsonValueKind.True)
             {
-                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
-                    notApplicable.ValueKind == JsonValueKind.True)
-                    return "SOP Not Applicable";
-
-                if (root.TryGetProperty("sopDocumentName", out var documentName) &&
-                    documentName.ValueKind == JsonValueKind.String)
-                    return ValOrDash(documentName.GetString());
+                return "SOP Not Applicable";
             }
 
-            if (root.ValueKind == JsonValueKind.Object)
+            if (root.TryGetProperty("sopDocumentName", out var documentName) &&
+                documentName.ValueKind == JsonValueKind.String)
             {
-                foreach (var propertyName in new[] { "dates", "values", "selected" })
+                return ValOrDash(documentName.GetString());
+            }
+        }
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var propertyName in new[] { "dates", "values", "selected" })
+            {
+                if (root.TryGetProperty(propertyName, out var values) &&
+                    values.ValueKind == JsonValueKind.Array)
                 {
-                    if (root.TryGetProperty(propertyName, out var values) &&
-                        values.ValueKind == JsonValueKind.Array)
-                    {
-                        var displayValues = values.EnumerateArray()
-                            .Select(value => value.ToString())
-                            .Where(value => !string.IsNullOrWhiteSpace(value))
-                            .ToList();
+                    var displayValues = values.EnumerateArray()
+                        .Select(value => value.ToString())
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .Select(value =>
+                            propertyName == "dates"
+                                ? value.Replace("-", "/")
+                                : value)
+                        .ToList();
 
-                        if (displayValues.Count > 0)
-                            return string.Join(", ", displayValues);
-                    }
+                    if (displayValues.Count > 0)
+                        return string.Join(", ", displayValues);
                 }
-
-                if (root.TryGetProperty("text", out var textValue) &&
-                    textValue.ValueKind == JsonValueKind.String)
-                    return ValOrDash(textValue.GetString());
             }
 
-            return root.ValueKind == JsonValueKind.String
-                ? ValOrDash(root.GetString())
-                : question.AnswerJson.Trim();
+            if (root.TryGetProperty("text", out var textValue) &&
+                textValue.ValueKind == JsonValueKind.String)
+            {
+                return ValOrDash(textValue.GetString());
+            }
         }
-        catch (JsonException)
-        {
-            return question.AnswerJson.Trim();
-        }
+
+        return root.ValueKind == JsonValueKind.String
+            ? ValOrDash(root.GetString())
+            : question.AnswerJson.Trim();
     }
+    catch (JsonException)
+    {
+        return question.AnswerJson.Trim();
+    }
+}
     var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
@@ -92,14 +104,14 @@
 
     var issueCreatedOn = Model.CreatedOn == default
         ? "—"
-        : Model.CreatedOn.ToString("yyyy/MM/dd HH:mm");
+        : Model.CreatedOn.ToString("yyyy-MM-dd HH:mm");
 
     var issueSubmittedOn = Model.SubmittedOn.HasValue
-        ? Model.SubmittedOn.Value.ToString("yyyy/MM/dd HH:mm")
+        ? Model.SubmittedOn.Value.ToString("yyyy-MM-dd HH:mm")
         : "—";
 
     var issueDueDate = Model.LegalExpiryDate.HasValue
-        ? Model.LegalExpiryDate.Value.ToString("yyyy/MM/dd")
+        ? Model.LegalExpiryDate.Value.ToString("yyyy-MM-dd")
         : "—";
 
     var descriptionQuestion = Model.Questions?
@@ -122,6 +134,25 @@
         .Where(e => e.Notes != null && e.Notes.Any())
         .SelectMany(e => e.Notes)
         .Count();
+
+var transgressionDateQuestion = Model.Questions?
+    .FirstOrDefault(q => q.QuestionId == 1);
+
+string FormatOffenseDates(string dates)
+{
+    if (string.IsNullOrWhiteSpace(dates) || dates == "—")
+        return "—";
+
+    return dates.Replace("-", "/");
+}
+
+var transgressionDates = transgressionDateQuestion is null
+    ? "—"
+    : FormatOffenseDates(FormatAnswer(transgressionDateQuestion));
+   
+    var createdOn = Model.CreatedOn.ToString("yyyy/MM/dd");
+    var deu = Model.LegalExpiryDate?.ToString("yyyy/MMdd") ?? "—";
+
 }
 
 <div class="ws-page">
@@ -208,23 +239,22 @@
                     </div>
                 </div>
 
+
                 <div class="col-12 col-md-6 col-xl-3">
                     <div class="ws-ov-card ws-ov-dates h-100">
                         <div class="ws-ov-card-head">2. Dates</div>
                         <div class="ws-ov-card-body">
                             <div class="ws-ov-row">
-                                <div class="ws-ov-label">Created:</div>
-                                <div class="ws-ov-value">@issueCreatedOn</div>
+                                <div class="ws-ov-label">Date of Offense:</div>
+                                <div class="ws-ov-value text-break">@transgressionDates</div>
                             </div>
-
                             <div class="ws-ov-row">
-                                <div class="ws-ov-label">Submitted:</div>
-                                <div class="ws-ov-value">@issueSubmittedOn</div>
+                                <div class="ws-ov-label">Date Submitted:</div>
+                                <div class="ws-ov-value text-break">@createdOn</div>
                             </div>
-
                             <div class="ws-ov-row">
                                 <div class="ws-ov-label">Due Date:</div>
-                                <div class="ws-ov-value">@issueDueDate</div>
+                                <div class="ws-ov-value text-break">@deu</div>
                             </div>
                         </div>
                     </div>
