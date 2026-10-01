@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
 using WarningSystems.core.Models.DTO;
-using WarningSystems.Core.Models.Enum;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Models.DTO;
 using WarningSystems.Models.Validation;
@@ -9,8 +8,6 @@ namespace WarningSystems.Core.Manager;
 
 public interface ITransgressionManager
 {
-    public Task<WarningRedirectTarget> RedirectPicker(string status);
-
     public Task<TaskListVM> BuildTaskListAsync();
 
     public Task<EmployeeDashboardVm> GetEmployeeDashboardAsync(string employeeId);

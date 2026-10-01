@@ -48,9 +48,34 @@ namespace WarningSystems.Controllers
                 : BadRequest(new { success = false, message = result.Message });
         }
 
-        public async Task<IActionResult> Redirect(int warningId, string status)
+        // Authorization runs before the action. An unauthenticated recipient is
+        // challenged by Microsoft Identity, which sends them to sign in and
+        // returns them to this original email URL after authentication.
+        [Authorize]
+        [HttpGet]
+        public IActionResult Redirect(int warningId, string? status)
         {
-            var target = await _transgression.RedirectPicker(status);
+            if (warningId <= 0)
+            {
+                _logger.LogWarning(
+                    "Email redirect was requested without a valid warning id. WarningId={WarningId}",
+                    warningId);
+
+                return RedirectToAction("Index", "Home");
+            }
+
+            // Do not query Microsoft Graph while following an email link. The
+            // authenticated principal already contains the roles used by the
+            // authorization attributes, and relying on Graph here made this
+            // simple redirect fail whenever Graph was temporarily unavailable.
+            var isDraft = string.Equals(status?.Trim(), "draft", StringComparison.OrdinalIgnoreCase);
+            var target = User.IsInRole("Legal") && !isDraft
+                ? WarningRedirectTarget.LegalIndex
+                : User.IsInRole("User")
+                    ? isDraft
+                        ? WarningRedirectTarget.TransgressionIndex
+                        : WarningRedirectTarget.TransgressionTeamLeadWarning
+                    : WarningRedirectTarget.HomeIndex;
 
             return target switch
             {
