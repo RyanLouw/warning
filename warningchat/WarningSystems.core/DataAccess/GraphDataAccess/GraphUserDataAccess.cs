@@ -76,7 +76,8 @@ public class GraphUserDataAccess : IGraphUserDataAccess
 
     public async Task<List<User>> GetUsersBelowMyLevelAsync()
     {
-        var me = await GetMeAsync();
+       var me = await GetMeAsync();
+       // var me = await GetUserAsync("42730445-5c09-456a-be93-a0a3f22e7974");
         if (string.IsNullOrWhiteSpace(me?.Id))
             return [];
 
@@ -89,7 +90,22 @@ public class GraphUserDataAccess : IGraphUserDataAccess
         var manager = await GetManagerAsync(me.Id);
         if (!string.IsNullOrWhiteSpace(manager?.Id))
         {
-            var sameLevelUsers = await GetDirectReportsUsersAsync(manager.Id);
+            var allsameLevelUsers = await GetDirectReportsUsersAsync(manager.Id);
+            var myDepartment = me.Department?.Trim();
+            var myJobTitle = me.JobTitle?.Trim();
+
+            var sameLevelUsers = allsameLevelUsers
+                .Where(user =>
+                    string.Equals(
+                        user.Department?.Trim(),
+                        myDepartment,
+                        StringComparison.OrdinalIgnoreCase)
+                    &&
+                    string.Equals(
+                        user.JobTitle?.Trim(),
+                        myJobTitle,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             foreach (var sameLevelUser in sameLevelUsers)
             {
@@ -109,10 +125,15 @@ public class GraphUserDataAccess : IGraphUserDataAccess
 
         users.Remove(me.Id);
 
-        return users.Values
-            .OrderBy(user => user.DisplayName)
-            .ThenBy(user => user.UserPrincipalName)
-            .ToList();
+
+        var usersunderme = users.Values
+          //.Where(user => user.AccountEnabled == true)
+          .OrderBy(user => user.DisplayName)
+          .ThenBy(user => user.UserPrincipalName)
+          .ToList();
+
+
+        return usersunderme;
     }
 
     public async Task<User?> GetManagerAsync(string userId)

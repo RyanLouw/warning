@@ -1,6 +1,7 @@
-﻿@using WarningSystems.Core.Services
+﻿@using System.Text.Json
+@using System.Text.RegularExpressions
+@using WarningSystems.Core.Services
 @using WarningSystems.Core.ViewModels
-@using System.Text.Json
 @model LegalWizardVm
 
 @{
@@ -30,71 +31,78 @@
     }
 
 
-string FormatAnswer(LegalQuestionVm question)
-{
-    if (!string.IsNullOrWhiteSpace(question.AnswerText))
-        return question.AnswerText.Trim();
-
-    if (string.IsNullOrWhiteSpace(question.AnswerJson))
-        return "—";
-
-    try
+    string FormatAnswer(LegalQuestionVm question)
     {
-        using var document = JsonDocument.Parse(question.AnswerJson);
-        var root = document.RootElement;
-
-        if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+        string FormatDisplayValue(string? value)
         {
-            if (root.TryGetProperty("notApplicable", out var notApplicable) &&
-                notApplicable.ValueKind == JsonValueKind.True)
-            {
-                return "SOP Not Applicable";
-            }
+            if (string.IsNullOrWhiteSpace(value))
+                return "—";
 
-            if (root.TryGetProperty("sopDocumentName", out var documentName) &&
-                documentName.ValueKind == JsonValueKind.String)
-            {
-                return ValOrDash(documentName.GetString());
-            }
+            return Regex.Replace(
+                value.Trim(),
+                @"\b(\d{4})-(\d{2})-(\d{2})\b",
+                "$1/$2/$3");
         }
 
-        if (root.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var propertyName in new[] { "dates", "values", "selected" })
-            {
-                if (root.TryGetProperty(propertyName, out var values) &&
-                    values.ValueKind == JsonValueKind.Array)
-                {
-                    var displayValues = values.EnumerateArray()
-                        .Select(value => value.ToString())
-                        .Where(value => !string.IsNullOrWhiteSpace(value))
-                        .Select(value =>
-                            propertyName == "dates"
-                                ? value.Replace("-", "/")
-                                : value)
-                        .ToList();
+        if (!string.IsNullOrWhiteSpace(question.AnswerText))
+            return FormatDisplayValue(question.AnswerText);
 
-                    if (displayValues.Count > 0)
-                        return string.Join(", ", displayValues);
+        if (string.IsNullOrWhiteSpace(question.AnswerJson))
+            return "—";
+
+        try
+        {
+            using var document = JsonDocument.Parse(question.AnswerJson);
+            var root = document.RootElement;
+
+            if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                    notApplicable.ValueKind == JsonValueKind.True)
+                {
+                    return "SOP Not Applicable";
+                }
+
+                if (root.TryGetProperty("sopDocumentName", out var documentName) &&
+                    documentName.ValueKind == JsonValueKind.String)
+                {
+                    return FormatDisplayValue(documentName.GetString());
                 }
             }
 
-            if (root.TryGetProperty("text", out var textValue) &&
-                textValue.ValueKind == JsonValueKind.String)
+            if (root.ValueKind == JsonValueKind.Object)
             {
-                return ValOrDash(textValue.GetString());
-            }
-        }
+                foreach (var propertyName in new[] { "dates", "values", "selected" })
+                {
+                    if (root.TryGetProperty(propertyName, out var values) &&
+                        values.ValueKind == JsonValueKind.Array)
+                    {
+                        var displayValues = values.EnumerateArray()
+                            .Select(value => FormatDisplayValue(value.ToString()))
+                            .Where(value => value != "—")
+                            .ToList();
 
-        return root.ValueKind == JsonValueKind.String
-            ? ValOrDash(root.GetString())
-            : question.AnswerJson.Trim();
+                        if (displayValues.Count > 0)
+                            return string.Join(", ", displayValues);
+                    }
+                }
+
+                if (root.TryGetProperty("text", out var textValue) &&
+                    textValue.ValueKind == JsonValueKind.String)
+                {
+                    return FormatDisplayValue(textValue.GetString());
+                }
+            }
+
+            return root.ValueKind == JsonValueKind.String
+                ? FormatDisplayValue(root.GetString())
+                : FormatDisplayValue(question.AnswerJson);
+        }
+        catch (JsonException)
+        {
+            return FormatDisplayValue(question.AnswerJson);
+        }
     }
-    catch (JsonException)
-    {
-        return question.AnswerJson.Trim();
-    }
-}
     var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
     var issueCategory = ValOrDash(Model.CategoryName);
@@ -148,10 +156,10 @@ string FormatOffenseDates(string dates)
 
 var transgressionDates = transgressionDateQuestion is null
     ? "—"
-    : FormatOffenseDates(FormatAnswer(transgressionDateQuestion));
+    : FormatAnswer(transgressionDateQuestion);
    
     var createdOn = Model.CreatedOn.ToString("yyyy/MM/dd");
-    var deu = Model.LegalExpiryDate?.ToString("yyyy/MMdd") ?? "—";
+    var deu = Model.LegalExpiryDate?.ToString("yyyy/MM/dd") ?? "—";
 
 }
 
@@ -514,7 +522,7 @@ var transgressionDates = transgressionDateQuestion is null
                             {
                                 allInteractions.AddRange(Model.Notes.Select(n => new
                                 {
-                                    NoteText = n.NoteText,
+                                    NoteText = FormatOffenseDates(n.NoteText),
                                     CreatedOnUtc = n.CreatedOnUtc,
                                     CreatedBy = string.IsNullOrWhiteSpace(n.CreatedByDisplayName)
                                 ? n.CreatedBy
@@ -535,7 +543,7 @@ var transgressionDates = transgressionDateQuestion is null
                                 {
                                     allInteractions.Add(new
                                     {
-                                        NoteText = note.NoteText,
+                                        NoteText = FormatOffenseDates(note.NoteText),
                                         CreatedOnUtc = note.CreatedOnUtc,
                                         CreatedBy = string.IsNullOrWhiteSpace(note.CreatedByDisplayName)
                                     ? note.CreatedBy

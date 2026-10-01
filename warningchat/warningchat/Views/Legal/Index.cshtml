@@ -6,9 +6,8 @@
 
 @{
     ViewData["Title"] = "Legal";
-    var isReadOnly = Model.IssueStatusGroup is
-        WarningSystems.Core.Models.Enum.IssueStatusGroup.LegalValidation or
-        WarningSystems.Core.Models.Enum.IssueStatusGroup.Closed;
+    var isReadOnly = Model.Status.Trim() is "Validated";
+
     string ValOrDash(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
@@ -27,77 +26,77 @@
         return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
     }
     string FormatAnswer(LegalQuestionVm question)
-{
-    string FormatDisplayValue(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
-            return "—";
-
-        return Regex.Replace(
-            value.Trim(),
-            @"\b(\d{4})-(\d{2})-(\d{2})\b",
-            "$1/$2/$3");
-    }
-
-    if (!string.IsNullOrWhiteSpace(question.AnswerText))
-        return FormatDisplayValue(question.AnswerText);
-
-    if (string.IsNullOrWhiteSpace(question.AnswerJson))
-        return "—";
-
-    try
-    {
-        using var document = JsonDocument.Parse(question.AnswerJson);
-        var root = document.RootElement;
-
-        if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+        string FormatDisplayValue(string? value)
         {
-            if (root.TryGetProperty("notApplicable", out var notApplicable) &&
-                notApplicable.ValueKind == JsonValueKind.True)
-            {
-                return "SOP Not Applicable";
-            }
+            if (string.IsNullOrWhiteSpace(value))
+                return "—";
 
-            if (root.TryGetProperty("sopDocumentName", out var documentName) &&
-                documentName.ValueKind == JsonValueKind.String)
-            {
-                return FormatDisplayValue(documentName.GetString());
-            }
+            return Regex.Replace(
+                value.Trim(),
+                @"\b(\d{4})-(\d{2})-(\d{2})\b",
+                "$1/$2/$3");
         }
 
-        if (root.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var propertyName in new[] { "dates", "values", "selected" })
-            {
-                if (root.TryGetProperty(propertyName, out var values) &&
-                    values.ValueKind == JsonValueKind.Array)
-                {
-                    var displayValues = values.EnumerateArray()
-                        .Select(value => FormatDisplayValue(value.ToString()))
-                        .Where(value => value != "—")
-                        .ToList();
+        if (!string.IsNullOrWhiteSpace(question.AnswerText))
+            return FormatDisplayValue(question.AnswerText);
 
-                    if (displayValues.Count > 0)
-                        return string.Join(", ", displayValues);
+        if (string.IsNullOrWhiteSpace(question.AnswerJson))
+            return "—";
+
+        try
+        {
+            using var document = JsonDocument.Parse(question.AnswerJson);
+            var root = document.RootElement;
+
+            if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                    notApplicable.ValueKind == JsonValueKind.True)
+                {
+                    return "SOP Not Applicable";
+                }
+
+                if (root.TryGetProperty("sopDocumentName", out var documentName) &&
+                    documentName.ValueKind == JsonValueKind.String)
+                {
+                    return FormatDisplayValue(documentName.GetString());
                 }
             }
 
-            if (root.TryGetProperty("text", out var textValue) &&
-                textValue.ValueKind == JsonValueKind.String)
+            if (root.ValueKind == JsonValueKind.Object)
             {
-                return FormatDisplayValue(textValue.GetString());
-            }
-        }
+                foreach (var propertyName in new[] { "dates", "values", "selected" })
+                {
+                    if (root.TryGetProperty(propertyName, out var values) &&
+                        values.ValueKind == JsonValueKind.Array)
+                    {
+                        var displayValues = values.EnumerateArray()
+                            .Select(value => FormatDisplayValue(value.ToString()))
+                            .Where(value => value != "—")
+                            .ToList();
 
-        return root.ValueKind == JsonValueKind.String
-            ? FormatDisplayValue(root.GetString())
-            : FormatDisplayValue(question.AnswerJson);
+                        if (displayValues.Count > 0)
+                            return string.Join(", ", displayValues);
+                    }
+                }
+
+                if (root.TryGetProperty("text", out var textValue) &&
+                    textValue.ValueKind == JsonValueKind.String)
+                {
+                    return FormatDisplayValue(textValue.GetString());
+                }
+            }
+
+            return root.ValueKind == JsonValueKind.String
+                ? FormatDisplayValue(root.GetString())
+                : FormatDisplayValue(question.AnswerJson);
+        }
+        catch (JsonException)
+        {
+            return FormatDisplayValue(question.AnswerJson);
+        }
     }
-    catch (JsonException)
-    {
-        return FormatDisplayValue(question.AnswerJson);
-    }
-}
 
     var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
     var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
@@ -105,10 +104,11 @@
     var issueStatus = ValOrDash(Model.Status);
     var displayedDecision = ValOrDash(Model.Type);
     var warningCategory = ValOrDash(Model.WarningSubtype);
-    var canValidate = string.Equals(Model.Status, "Completed", StringComparison.OrdinalIgnoreCase);
 
-    var canRecordDecision = Model.Status is "In Progress" or "Added More Information";
-    var canEditIssueDetails = Model.Status is "New" or "In Progress" or "Pending" or "Added More Information";
+    var canValidate = Model.Status is "Completed";
+
+    var canRecordDecision = Model.Status.Trim() is not "Completed" or "Validated";
+    var canEditIssueDetails = Model.Status.Trim() is not "Completed" or "Validated";
 
     var applicableDates = new List<string>();
     var transgressionDateQuestion = Model.Questions?
@@ -141,11 +141,11 @@
             }
     var transgressionDates = transgressionDateQuestion is null
         ? "—"
-       : FormatOffenseDates(FormatAnswer(transgressionDateQuestion));
+       : FormatAnswer(transgressionDateQuestion);
 
    
     var createdOn = Model.CreatedOn.ToString("yyyy/MM/dd");
-    var deu = Model.LegalExpiryDate?.ToString("yyyy/MMdd") ?? "—";
+    var deu = Model.LegalExpiryDate?.ToString("yyyy/MM/dd") ?? "—";
 
 
     var descriptionQuestion = Model.Questions?
@@ -178,6 +178,8 @@
 
 
         <div class="page-actions d-flex gap-2">
+         
+            
             @if (!isReadOnly)
             {
 
@@ -334,10 +336,6 @@
                                 <div class="ws-ov-value">@generalNotesCount</div>
                             </div>
 
-                            @* <div class="ws-ov-row">
-                                <div class="ws-ov-label">Document:</div>
-                                <div class="ws-ov-value">@documentNotesCount</div>
-                            </div> *@
 
                             <div class="ws-ov-row">
                                 <div class="ws-ov-label">Created By:</div>
@@ -490,7 +488,7 @@
                             {
                                 allInteractions.AddRange(Model.Notes.Select(n => new
                                 {
-                                    NoteText = n.NoteText,
+                                    NoteText = FormatOffenseDates(n.NoteText),
                                     CreatedOnUtc = n.CreatedOnUtc,
                                     CreatedBy = string.IsNullOrWhiteSpace(n.CreatedByDisplayName)
                                 ? n.CreatedBy
@@ -511,7 +509,7 @@
                                 {
                                     allInteractions.Add(new
                                     {
-                                        NoteText = note.NoteText,
+                                        NoteText = FormatOffenseDates(note.NoteText),
                                         CreatedOnUtc = note.CreatedOnUtc,
                                         CreatedBy = string.IsNullOrWhiteSpace(note.CreatedByDisplayName)
                                     ? note.CreatedBy
@@ -1215,7 +1213,7 @@
                item.className = "badge text-bg-light border d-inline-flex align-items-center gap-2 p-2";
                item.style.color = "#000";
                 const label = document.createElement("span");
-                label.textContent = date;
+                label.textContent = formatLegalDate(date);
                 const remove = document.createElement("button");
                 remove.type = "button";
                 remove.className = "btn-close";
@@ -1237,11 +1235,17 @@
             }
         }
 
+        function formatLegalDate(date) {
+            return date.replaceAll("-", "/");
+        }
+
         function addLegalDate() {
             const input = document.getElementById("legalDateInput");
             const date = input?.value || "";
+
             if (!date || legalApplicableDates.includes(date)) return;
-            legalApplicableDates.push(date);
+
+            legalApplicableDates.push(date); 
             input.value = "";
             renderLegalDates();
         }

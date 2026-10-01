@@ -58,6 +58,7 @@ public interface ITransgressionManager
     public Task SendEmailToTeamLeadAsync(CompleteTransgressionDto dto);
 
     public Task SendMoreInformationRequiredEmailAsync(long warningId, string noteText, IFormFile? file = null);
+    public Task RequestTeamLeadInformationAsync(long warningId, string noteText, IFormFile? file = null);
 
     public Task SendMoreInformationAddedEmailAsync(long warningId, string? noteText, IReadOnlyCollection<IFormFile>? files = null);
 

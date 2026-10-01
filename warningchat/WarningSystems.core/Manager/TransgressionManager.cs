@@ -149,10 +149,7 @@ public class TransgressionManager : ITransgressionManager
 
         ApplyStatusAndDueCounts(vm, rows);
 
-        vm.EmployeeRows = await BuildEmployeeRowsAsync(
-            rows,
-            underMe,
-            me?.DisplayName ?? "Me");
+        vm.EmployeeRows = await BuildEmployeeRowsAsync(rows,underMe,me?.DisplayName ?? "Me");
 
         var employeeLookup = vm.EmployeeRows
             .Where(employee =>
@@ -708,34 +705,10 @@ public class TransgressionManager : ITransgressionManager
         }
     }
 
-    private static string GetWarningSubStatus(string? type, string? warningSubtype)
-    {
-        var cleanType = type?.Trim() ?? string.Empty;
-        var cleanSubtype = warningSubtype?.Trim() ?? string.Empty;
 
-        if (cleanType.Equals("Warning", StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(cleanSubtype))
-        {
-            return $"Warning - {cleanSubtype}";
-        }
 
-        return cleanType.Equals("Issue", StringComparison.OrdinalIgnoreCase)
-            ? string.Empty
-            : cleanType;
-    }
 
-    private static int GetStatusSortOrder(string status)
-    {
-        string[] workflow = ["Draft", "New", "In Progress",  "Request More Information","Added More Information","Pending", "Issued", "Validated", "Invalid"];
-        var index = Array.FindIndex(workflow,
-            value => value.Equals(status, StringComparison.OrdinalIgnoreCase));
-        return index < 0 ? workflow.Length : index;
-    }
-
-    private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(
-     List<TransgretionsVM> rows,
-     List<User> underme,
-     string managerName)
+    private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(List<TransgretionsVM> rows, List<User> underme,string managerName)
     {
         var warningsByEmployee = rows
             .Where(r => !string.IsNullOrWhiteSpace(r.EmployeeId))
@@ -2627,9 +2600,22 @@ public class TransgressionManager : ITransgressionManager
         }
     }
 
+
+    public async Task RequestTeamLeadInformationAsync(long warningId,string noteText,IFormFile? file = null)
+    {
+      
+
+        var user = _currentUser?.ObjectId ?? "system";
+        await _data.AddWarningNoteAsync(
+            warningId,
+            null,
+            4,
+            noteText,
+            user);
+    }
     public async Task SendMoreInformationRequiredEmailAsync(long warningId,string noteText, IFormFile? file = null)
     {
-
+        await RequestTeamLeadInformationAsync(warningId, noteText, file);
 
         User? me = await _graphUserDataAccess.GetMeAsync();
         await _data.SetWarningStatusAsync(warningId, IssueStatusGroup.RequestMoreInformation, me.Id.ToString());

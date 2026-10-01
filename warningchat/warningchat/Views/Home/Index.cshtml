@@ -51,13 +51,15 @@ var taskListRows = Model.TaskList
 
 
         var isMoreInformationStatus =
-            string.Equals(status, "Request More Information", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(status, "Added More Information", StringComparison.OrdinalIgnoreCase);
+                string.Equals(status, "More Information Requested", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(status, "More Information Added", StringComparison.OrdinalIgnoreCase);
 
 
         return (isUser &&
                 (string.Equals(status, "Draft", StringComparison.OrdinalIgnoreCase) ||
                   string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) ||
+
                  isMoreInformationStatus)) ||
                (isLegalOrAdmin &&
                 (string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) ||
@@ -290,7 +292,7 @@ var taskListRows = Model.TaskList
                                                 data-status="@status">
 
                                                 <td>
-                                                    @(canClick ? "🔓" : "🔒")
+                                                    @(canClick ? "" : "")
                                                     @status
                                                 </td>
 
@@ -564,6 +566,29 @@ var taskListRows = Model.TaskList
                                                 <option value="draft">
                                                     Draft
                                                 </option>
+
+                                                <option value="new">
+                                                    New
+                                                </option>
+                                                <option value="In Progress">
+                                                    In Progress
+                                                </option>
+                                                <option value="Pending">
+                                                    Pending
+                                                </option>
+                                                <option value="Completed">
+                                                    Completed
+                                                </option>
+                                                <option value="Validated">
+                                                    Validated
+                                                </option>
+                                                <option value="Invalid">
+                                                    Invalid
+                                                </option>
+                                                <option value="More Information Added">
+                                                    More Information Added
+                                                </option>
+
 
                                                 <option value="added more information">
                                                     Added More Information
