@@ -1,0 +1,44 @@
+@model WarningSystems.Core.ViewModels.LegalOverviewVm
+
+<div class="panel-body">
+    <h5 class="mb-2">Legal Overview</h5>
+    <p class="text-muted mb-3">
+        Issues created in the last 30 days (@Model.From.ToString("yyyy/MM/dd") to @Model.To.ToString("yyyy/MM/dd")),
+        excluding Draft, Invalid and Validated.
+    </p>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle" id="legalOverviewTable">
+            <thead>
+                <tr>
+                    <th scope="col">Issue</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Employee Name</th>
+                    <th scope="col">Created By</th>
+                    <th scope="col">Created Date</th>
+                    <th scope="col">Due Date</th>
+                    <th scope="col">Last Actioned Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Issues.Count == 0)
+                {
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">No issues found for the last 30 days.</td>
+                    </tr>
+                }
+                @foreach (var row in Model.Issues)
+                {
+                    <tr>
+                        <td><a asp-controller="Legal" asp-action="Index" asp-route-id="@row.WarningId">#@row.WarningId</a></td>
+                        <td>@row.Status</td>
+                        <td>@row.EmployeeDisplayName</td>
+                        <td>@row.CreatedByDisplayName</td>
+                        <td>@row.CreatedOn.ToString("yyyy/MM/dd")</td>
+                        <td>@(row.LegalExpiryDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                        <td>@(row.LastStatusChangedOn?.ToString("yyyy/MM/dd") ?? "-")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
