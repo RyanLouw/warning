@@ -37,41 +37,16 @@
         return document.getElementById('attachmentName');
     }
 
-    function getExistingAttachmentCount() {
-        return document.querySelectorAll(".ws-attach-item").length;
-    }
-
-    function getSelectedFileCount() {
-        const input = getInput();
-        return input && input.files ? input.files.length : 0;
-    }
-
-    function hasAnyAttachment() {
-        return getExistingAttachmentCount() > 0 || getSelectedFileCount() > 0;
-    }
+    let isSaving = false;
 
     function updateContinueButtonState() {
         const btnContinue = getContinueButton();
         if (!btnContinue) return;
 
-        const canContinue = hasAnyAttachment();
-
-        btnContinue.disabled = !canContinue;
-        btnContinue.setAttribute("aria-disabled", String(!canContinue));
-
-        if (!canContinue) {
-            btnContinue.classList.add("disabled");
-            btnContinue.title = "Please upload at least one attachment before continuing.";
-        } else {
-            btnContinue.classList.remove("disabled");
-            btnContinue.title = "";
-        }
-
-        console.log("Attachment button state:", {
-            existing: getExistingAttachmentCount(),
-            selected: getSelectedFileCount(),
-            canContinue
-        });
+        btnContinue.disabled = isSaving;
+        btnContinue.setAttribute("aria-disabled", String(isSaving));
+        btnContinue.classList.toggle("disabled", isSaving);
+        btnContinue.title = "";
     }
 
     document.addEventListener("change", function (e) {
@@ -126,14 +101,6 @@
 
         updateContinueButtonState();
 
-        const btnContinue = getContinueButton();
-
-        if (btnContinue && files.length > 0) {
-            btnContinue.disabled = false;
-            btnContinue.setAttribute("aria-disabled", "false");
-            btnContinue.classList.remove("disabled");
-            btnContinue.title = "";
-        }
     });
 
     document.addEventListener("click", async function (e) {
@@ -279,19 +246,13 @@
         e.preventDefault();
         e.stopPropagation();
 
-        if (!hasAnyAttachment()) {
-            alert(
-                "Please upload at least one attachment before continuing."
-            );
-
-            updateContinueButtonState();
-            return;
-        }
+        if (isSaving) return;
 
         const originalButtonText =
             btnContinue.textContent;
 
         try {
+            isSaving = true;
             btnContinue.disabled = true;
             btnContinue.setAttribute(
                 "aria-disabled",
@@ -303,6 +264,7 @@
             const result = await uploadAttachments();
 
             if (!result.success) {
+                alert(result.message || "The attachments could not be saved.");
                 return;
             }
 
@@ -326,15 +288,9 @@
                 "The attachments could not be saved."
             );
 
-            btnContinue.disabled = false;
-            btnContinue.setAttribute(
-                "aria-disabled",
-                "false"
-            );
-
-            btnContinue.textContent =
-                originalButtonText;
-
+        } finally {
+            isSaving = false;
+            btnContinue.textContent = originalButtonText;
             updateContinueButtonState();
         }
     });
@@ -344,12 +300,6 @@
         if (!form) return;
 
         e.preventDefault();
-
-        if (!hasAnyAttachment()) {
-            alert("Please upload at least one attachment before continuing.");
-            updateContinueButtonState();
-            return;
-        }
 
         const result = await uploadAttachments();
         if (!result.success) return;
