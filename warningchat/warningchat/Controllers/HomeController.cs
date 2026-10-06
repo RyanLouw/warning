@@ -48,9 +48,26 @@ namespace WarningSystems.Controllers
                 : BadRequest(new { success = false, message = result.Message });
         }
 
-        public async Task<IActionResult> Redirect(int warningId, string status)
+        [Authorize]
+        [HttpGet]
+        public IActionResult Redirect(int warningId, string? status)
         {
-            var target = await _transgression.RedirectPicker(status);
+            if (warningId <= 0)
+            {
+                _logger.LogWarning(
+                    "Email redirect was requested without a valid warning id. WarningId={WarningId}",
+                    warningId);
+
+                return RedirectToAction("Index", "Home");
+            }
+            var isDraft = string.Equals(status?.Trim(), "draft", StringComparison.OrdinalIgnoreCase);
+            var target = User.IsInRole("Legal") && !isDraft
+                ? WarningRedirectTarget.LegalIndex
+                : User.IsInRole("User")
+                    ? isDraft
+                        ? WarningRedirectTarget.TransgressionIndex
+                        : WarningRedirectTarget.TransgressionTeamLeadWarning
+                    : WarningRedirectTarget.HomeIndex;
 
             return target switch
             {

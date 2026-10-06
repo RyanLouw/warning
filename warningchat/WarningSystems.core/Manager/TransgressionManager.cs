@@ -58,29 +58,29 @@ public class TransgressionManager : ITransgressionManager
         _emailTemplateRenderer = emailTemplateRenderer;
     }
     private static DateTime NowSast => DateTime.UtcNow.AddHours(2);
-    public async Task<WarningRedirectTarget> RedirectPicker(string status)
-    {
-        var roles = await _roles.GetCurrentUserRolesAsync();
+    //public async Task<WarningRedirectTarget> RedirectPicker(string status)
+    //{
+    //    var roles = await _roles.GetCurrentUserRolesAsync();
 
-        status = (status ?? "").Trim().ToLowerInvariant();
+    //    status = (status ?? "").Trim().ToLowerInvariant();
 
-        bool isUser = roles.Contains("User");
-        bool isLegal = roles.Contains("Legal");
+    //    bool isUser = roles.Contains("User");
+    //    bool isLegal = roles.Contains("Legal");
 
-        bool isDraft = status == "draft";
-        if (isUser && isDraft)
-            return WarningRedirectTarget.TransgressionIndex;
+    //    bool isDraft = status == "draft";
+    //    if (isUser && isDraft)
+    //        return WarningRedirectTarget.TransgressionIndex;
 
-        // Legal must be able to reopen every submitted issue, including a
-        // Completed issue that is waiting for final validation.
-        if (isLegal && !isDraft)
-            return WarningRedirectTarget.LegalIndex;
+    //    // Legal must be able to reopen every submitted issue, including a
+    //    // Completed issue that is waiting for final validation.
+    //    if (isLegal && !isDraft)
+    //        return WarningRedirectTarget.LegalIndex;
 
-        if (isUser && !isDraft)
-            return WarningRedirectTarget.TransgressionTeamLeadWarning;
+    //    if (isUser && !isDraft)
+    //        return WarningRedirectTarget.TransgressionTeamLeadWarning;
 
-        return WarningRedirectTarget.HomeIndex;
-    }
+    //    return WarningRedirectTarget.HomeIndex;
+    //}
 
     public async Task<TaskListVM> BuildTaskListAsync()
     {

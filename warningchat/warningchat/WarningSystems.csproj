@@ -32,8 +32,4 @@
 		<ProjectReference Include="..\WarningSystems.Core\WarningSystems.Core.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<Folder Include="Logs\" />
-	</ItemGroup>
-
 </Project>
