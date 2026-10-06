@@ -133,7 +133,7 @@ public class GraphUserDataAccess : IGraphUserDataAccess
           .ToList();
 
 
-        return usersunderme;
+       return usersunderme;
     }
 
     public async Task<User?> GetManagerAsync(string userId)

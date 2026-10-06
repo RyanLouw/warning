@@ -48,9 +48,6 @@ namespace WarningSystems.Controllers
                 : BadRequest(new { success = false, message = result.Message });
         }
 
-        // Authorization runs before the action. An unauthenticated recipient is
-        // challenged by Microsoft Identity, which sends them to sign in and
-        // returns them to this original email URL after authentication.
         [Authorize]
         [HttpGet]
         public IActionResult Redirect(int warningId, string? status)
@@ -63,11 +60,6 @@ namespace WarningSystems.Controllers
 
                 return RedirectToAction("Index", "Home");
             }
-
-            // Do not query Microsoft Graph while following an email link. The
-            // authenticated principal already contains the roles used by the
-            // authorization attributes, and relying on Graph here made this
-            // simple redirect fail whenever Graph was temporarily unavailable.
             var isDraft = string.Equals(status?.Trim(), "draft", StringComparison.OrdinalIgnoreCase);
             var target = User.IsInRole("Legal") && !isDraft
                 ? WarningRedirectTarget.LegalIndex
