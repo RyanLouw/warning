@@ -184,6 +184,16 @@ var taskListRows = Model.TaskList
                     </button>
                 </li>
 
+                @if (isLegal && Model.LegalOverview != null)
+                {
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="legal-overview-tab" data-bs-toggle="tab" data-bs-target="#legal-overview"
+                                type="button" role="tab" aria-controls="legal-overview" aria-selected="false">
+                            Legal Overview (@Model.LegalOverview.Issues.Count)
+                        </button>
+                    </li>
+                }
+
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="employee-tab" data-bs-toggle="tab" data-bs-target="#employee"
                             type="button" role="tab" aria-controls="employee" aria-selected="false">
@@ -201,6 +211,13 @@ var taskListRows = Model.TaskList
 
 
             <div class="tab-content">
+
+                @if (isLegal && Model.LegalOverview != null)
+                {
+                    <div class="tab-pane fade" id="legal-overview" role="tabpanel" aria-labelledby="legal-overview-tab">
+                        <partial name="_LegalOverview" model="Model.LegalOverview" />
+                    </div>
+                }
 
                 <!-- TASK LIST  -->
                 <div class="tab-pane fade show active" id="tasklist" role="tabpanel" aria-labelledby="tasklist-tab">
