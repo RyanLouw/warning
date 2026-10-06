@@ -8,6 +8,8 @@ public class TaskListVM
 
     public List<TransgretionsVM> ReportRows { get; set; } = [];
 
+    public LegalOverviewVm? LegalOverview { get; set; }
+
     public List<User> UnderME { get; set; } = [];
     public List<EmployeeRowVm> EmployeeRows { get; set; } = [];
 

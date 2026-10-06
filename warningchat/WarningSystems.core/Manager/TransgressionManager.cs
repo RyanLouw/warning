@@ -123,7 +123,16 @@ public class TransgressionManager : ITransgressionManager
 
         var rows = FilterRowsForUser(context);
 
-        await PopulateDisplayNamesAsync(rows);
+        LegalOverviewVm? legalOverview = null;
+        if (roleFlags.IsLegal)
+        {
+            legalOverview = LegalOverviewVm.Create(allRows, NowSast);
+        }
+
+        await PopulateDisplayNamesAsync(rows
+            .Concat(legalOverview?.Issues ?? [])
+            .Distinct()
+            .ToList());
 
         var reportRows = MapWarningRows(reportWarningEntities);
 
@@ -144,6 +153,7 @@ public class TransgressionManager : ITransgressionManager
             CurrentUserRoles = roles,
             CurrentUserId = me?.Id ?? string.Empty,
             ReportRows = reportRows,
+            LegalOverview = legalOverview,
             DiscussionSubTypes = discussionSubTypes
         };
 
