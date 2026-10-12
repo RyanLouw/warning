@@ -98,8 +98,8 @@
 
                 showSaveMessage("Dates saved successfully ✅", false);
 
-                if (typeof window.warningWizard?.reloadAtStep === "function") {
-                    window.warningWizard.reloadAtStep(3);
+                if (typeof window.warningWizard?.goToStep === "function") {
+                    window.warningWizard.goToStep(3);
                 } else {
                     sessionStorage.setItem("warningWizardActiveStep", "3");
                     window.location.reload();

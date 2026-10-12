@@ -125,8 +125,8 @@
             const data = await postJson(saveUrl, dto);
 
             if (data?.success) {
-                if (typeof window.warningWizard?.reloadAtStep === "function") {
-                    window.warningWizard.reloadAtStep(5);
+                if (typeof window.warningWizard?.goToStep === "function") {
+                    window.warningWizard.goToStep(5);
                 } else {
                     sessionStorage.setItem("warningWizardActiveStep", "5");
                     window.location.reload();
