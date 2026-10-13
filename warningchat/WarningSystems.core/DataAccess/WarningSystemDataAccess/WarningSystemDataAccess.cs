@@ -59,8 +59,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
             .ToListAsync();
     }
 
-    public async Task<List<Warning>>
-        GetAllWarningsForReportingAsync()
+    public async Task<List<Warning>>GetAllWarningsForReportingAsync()
     {
         return await _context.Warnings
             .AsNoTracking()
@@ -91,6 +90,14 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
     }
 
     public async Task<List<TransgressionCategory>> GetAllCategoriesAsync()
+    {
+        return await _context.TransgressionCategories
+            .AsNoTracking()
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
+    public async Task<List<TransgressionCategory>> GetAllCategoriesAndEnActiveAsync()
     {
         return await _context.TransgressionCategories
             .AsNoTracking()

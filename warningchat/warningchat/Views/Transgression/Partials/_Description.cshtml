@@ -1327,11 +1327,9 @@
 
                 console.log("Warning answers saved successfully.");
 
-                if (typeof window.warningWizard?.reloadAtStep === "function") {
-                    window.warningWizard.reloadAtStep(4);
+                if (typeof window.warningWizard?.goToStep === "function") {
+                    window.warningWizard.goToStep(4);
                 } else {
-                    // Support clients that still have an older stepper.js in
-                    // cache: persist the next step and reload directly.
                     sessionStorage.setItem("warningWizardActiveStep", "4");
                     window.location.reload();
                 }

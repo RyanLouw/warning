@@ -165,10 +165,7 @@ public class GraphUserDataAccess : IGraphUserDataAccess
         }
     }
 
-    private async Task AddReportsRecursiveAsync(
-        string managerId,
-        Dictionary<string, User> users,
-        HashSet<string> visitedManagers)
+    private async Task AddReportsRecursiveAsync( string managerId, Dictionary<string, User> users,HashSet<string> visitedManagers)
     {
         if (!visitedManagers.Add(managerId))
             return;

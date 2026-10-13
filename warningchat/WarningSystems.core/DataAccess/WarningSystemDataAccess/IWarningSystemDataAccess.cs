@@ -77,4 +77,5 @@ public interface IWarningSystemDataAccess
     Task AdvanceWarningStatusAsync(long warningId, IssueStatusGroup requiredGroup, string user);
     Task SetWarningStatusAsync(long warningId, IssueStatusGroup statusGroup, string user);
     Task SaveLegalIssueDetailsAsync(long warningId,IReadOnlyCollection<WarningCategory>? categories, WarningAnswer? answer,WarningNote auditNote);
+    Task<List<TransgressionCategory>> GetAllCategoriesAndEnActiveAsync();
 }

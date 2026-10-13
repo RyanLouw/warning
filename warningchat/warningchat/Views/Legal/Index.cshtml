@@ -107,7 +107,8 @@
 
     var canValidate = Model.Status is "Completed";
 
-    var canRecordDecision = Model.Status.Trim() is not "Completed" or "Validated";
+    var canRecordDecision = Model.Status.Trim() is not "Completed" or "Validated" or "Pending";
+
     var canEditIssueDetails = Model.Status.Trim() is not "Completed" or "Validated";
 
     var applicableDates = new List<string>();

@@ -123,7 +123,16 @@ public class TransgressionManager : ITransgressionManager
 
         var rows = FilterRowsForUser(context);
 
-        await PopulateDisplayNamesAsync(rows);
+        LegalOverviewVm? legalOverview = null;
+        if (roleFlags.IsLegal)
+        {
+            legalOverview = LegalOverviewVm.Create(allRows, NowSast);
+        }
+
+        await PopulateDisplayNamesAsync(rows
+            .Concat(legalOverview?.Issues ?? [])
+            .Distinct()
+            .ToList());
 
         var reportRows = MapWarningRows(reportWarningEntities);
 
@@ -144,6 +153,7 @@ public class TransgressionManager : ITransgressionManager
             CurrentUserRoles = roles,
             CurrentUserId = me?.Id ?? string.Empty,
             ReportRows = reportRows,
+            LegalOverview = legalOverview,
             DiscussionSubTypes = discussionSubTypes
         };
 
@@ -768,7 +778,7 @@ public class TransgressionManager : ITransgressionManager
 
     public async Task<AdminVM> BuildAdminView()
     {
-        var categoryEntities = await _data.GetAllCategoriesAsync();
+        var categoryEntities = await _data.GetAllCategoriesAndEnActiveAsync();
         var questionEntities = await _data.GetAllQuestionsAsync();
 
         var userNameCache = new Dictionary<string, string>(
@@ -812,10 +822,7 @@ public class TransgressionManager : ITransgressionManager
 
             if (!string.IsNullOrWhiteSpace(question.UpdatedBy))
             {
-                updatedByDisplayName =
-                    await ResolveUserDisplayNameAsync(
-                        question.UpdatedBy,
-                        userNameCache);
+                updatedByDisplayName = await ResolveUserDisplayNameAsync(question.UpdatedBy,userNameCache);
             }
 
             questions.Add(new QuestionVM(
@@ -2199,6 +2206,28 @@ public class TransgressionManager : ITransgressionManager
             warningId, IssueStatusGroup.LegalValidation, _currentUser.ObjectId);
     }
 
+
+    private async Task<string> GetEmailCategoryNamesAsync(Warning warning)
+    {
+        var categories =
+            await _data.GetWarningCategoriesByWarningIdAsync(warning.WarningId);
+
+        var names = categories
+            .Select(link => link.Category?.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (names.Count > 0)
+            return string.Join(", ", names);
+
+        return !string.IsNullOrWhiteSpace(warning.Category?.Name)
+            ? warning.Category.Name.Trim()
+            : warning.CategoryId.ToString();
+    }
+
     public async Task SendEmailToLegalAsync(long warningId, DateOnly? duedate, string? status)
     {
         var warning = await _data.GetWarningByIdAsync(warningId)
@@ -2221,7 +2250,7 @@ public class TransgressionManager : ITransgressionManager
                 ["SubmittedByDisplayName"] = string.IsNullOrWhiteSpace(submittedByDisplayName)
                     ? warning.CreatedBy
                     : submittedByDisplayName,
-                ["Category"] = warning.Category?.Name ?? warning.CategoryId.ToString(),
+                ["Category"] = await GetEmailCategoryNamesAsync(warning),
                 ["Status"] = string.IsNullOrWhiteSpace(status) ? warning.Status : status.Trim(),
                 ["WarningId"] = warning.WarningId.ToString(),
                 ["DueDate"] = duedate.HasValue ? duedate.Value.ToString("dd/MM/yyyy") : "—",
@@ -2691,7 +2720,7 @@ public class TransgressionManager : ITransgressionManager
             var safeUsername = System.Net.WebUtility.HtmlEncode(username);
             var safeEmployeeDisplayName = System.Net.WebUtility.HtmlEncode(employeeDisplayName);
             var safeCategory = System.Net.WebUtility.HtmlEncode(
-                warningInfo.Category?.Name ?? warningInfo.CategoryId.ToString());
+                await GetEmailCategoryNamesAsync(warningInfo));
             var safeStatus = System.Net.WebUtility.HtmlEncode(warningInfo.Status ?? "");
 
             var req = new SendEmailRequest
@@ -3089,9 +3118,7 @@ public class TransgressionManager : ITransgressionManager
             stage =
                 $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={warningId}";
 
-            var employeeDisplayName =
-                await GetDisplayNameFromUserIdAsync(
-                    warningInfo.EmployeeId);
+            var employeeDisplayName = await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
 
             if (string.IsNullOrWhiteSpace(employeeDisplayName))
             {
@@ -3123,9 +3150,7 @@ public class TransgressionManager : ITransgressionManager
                 $"{_applicationOptions.BaseUrl.TrimEnd('/')}" +
                 $"/Legal/Index/{warningInfo.WarningId}";
 
-            var categoryName =
-                warningInfo.Category?.Name
-                ?? warningInfo.CategoryId.ToString();
+            var categoryName = await GetEmailCategoryNamesAsync(warningInfo);
 
             stage =
                 $"Rendering email template. WarningId={warningId}";
