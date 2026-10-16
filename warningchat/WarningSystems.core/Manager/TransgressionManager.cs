@@ -2046,8 +2046,8 @@ public class TransgressionManager : ITransgressionManager
 
         if (dto.IssueSubTypeId <= 0)
             return SaveIssueStepResult.Fail("Please select a discussion subtype.");
-        if (dto.Dates.Count == 0)
-            return SaveIssueStepResult.Fail("Please select at least one date.");
+        if (dto.Dates is null || dto.Dates.Count != 1)
+            return SaveIssueStepResult.Fail("Please select exactly one discussion date.");
         if (dto.Dates.Any(date => date > DateOnly.FromDateTime(NowSast)))
             return SaveIssueStepResult.Fail("Discussion dates cannot be in the future.");
         if (string.IsNullOrWhiteSpace(dto.Description))
