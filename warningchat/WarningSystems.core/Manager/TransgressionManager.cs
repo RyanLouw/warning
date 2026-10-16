@@ -312,6 +312,18 @@ public class TransgressionManager : ITransgressionManager
         var warningNotes =
             await _data.GetWarningNotesByWarningIdsAsync(warningIds);
 
+        var discussionDatesLookup = answers
+            .Where(answer => answer.QuestionId == 1)
+            .GroupBy(answer => answer.WarningId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(answer => answer.CreatedOn)
+                    .ThenByDescending(answer => answer.AnswerId)
+                    .Select(answer => DiscussionDateFormatter.Format(answer.AnswerText, answer.AnswerJson))
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                    ?? string.Empty);
+
         var descriptionLookup = answers
             .Where(a =>
                 a.QuestionId == 2 &&
@@ -421,6 +433,9 @@ public class TransgressionManager : ITransgressionManager
                         ?? string.Empty,
 
                     CreatedOn = warning.CreatedOn,
+
+                    DiscussionDatesDisplay = discussionDatesLookup.GetValueOrDefault(
+                        warning.WarningId, string.Empty),
 
                     DueDate = warning.LegalExpiryDate.HasValue
                         ? warning.LegalExpiryDate.Value

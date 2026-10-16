@@ -8,6 +8,7 @@ public class EmployeeWarningCardVm
     public string IssueTypeName { get; set; } = "";
     public string IssueSubTypeName { get; set; } = "";
     public bool IsAbsenceDiscussion { get; set; }
+    public string DiscussionDatesDisplay { get; set; } = "";
     public string CreatedByDisplayName { get; set; } = "";
     public DateTime CreatedOn { get; set; }
     public DateTime? DueDate { get; set; }

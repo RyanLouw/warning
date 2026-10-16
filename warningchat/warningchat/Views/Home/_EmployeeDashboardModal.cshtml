@@ -249,6 +249,43 @@
     </section>
 
     <section class="empdash-section">
+        <div class="empdash-section-head">Discussions</div>
+        <div class="table-responsive">
+            <table class="table empdash-table empdash-table-discussions">
+                <thead>
+                    <tr>
+                        <th scope="col">Status</th>
+                        <th scope="col">Discussion Subtype</th>
+                        <th scope="col">Date of Discussion</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Created By</th>
+                        <th scope="col">Created Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!absenceDiscussions.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No discussions found.</td>
+                        </tr>
+                    }
+                    @foreach (var discussion in absenceDiscussions)
+                    {
+                        <tr>
+                            <td>Validated</td>
+                            <td>@ValText(discussion.IssueSubTypeName)</td>
+                            <td>@ValText(discussion.DiscussionDatesDisplay)</td>
+                            <td class="empdash-desc-cell">@ValText(discussion.DescriptionSummary)</td>
+                            <td>@ValText(discussion.CreatedByDisplayName)</td>
+                            <td>@discussion.CreatedOn.ToString("yyyy/MM/dd")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="empdash-section">
         <div class="empdash-section-head">Notes</div>
         <div class="table-responsive">
             <table class="table empdash-table empdash-table-notes">
