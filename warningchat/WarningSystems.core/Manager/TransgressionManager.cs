@@ -58,29 +58,6 @@ public class TransgressionManager : ITransgressionManager
         _emailTemplateRenderer = emailTemplateRenderer;
     }
     private static DateTime NowSast => DateTime.UtcNow.AddHours(2);
-    //public async Task<WarningRedirectTarget> RedirectPicker(string status)
-    //{
-    //    var roles = await _roles.GetCurrentUserRolesAsync();
-
-    //    status = (status ?? "").Trim().ToLowerInvariant();
-
-    //    bool isUser = roles.Contains("User");
-    //    bool isLegal = roles.Contains("Legal");
-
-    //    bool isDraft = status == "draft";
-    //    if (isUser && isDraft)
-    //        return WarningRedirectTarget.TransgressionIndex;
-
-    //    // Legal must be able to reopen every submitted issue, including a
-    //    // Completed issue that is waiting for final validation.
-    //    if (isLegal && !isDraft)
-    //        return WarningRedirectTarget.LegalIndex;
-
-    //    if (isUser && !isDraft)
-    //        return WarningRedirectTarget.TransgressionTeamLeadWarning;
-
-    //    return WarningRedirectTarget.HomeIndex;
-    //}
 
     public async Task<TaskListVM> BuildTaskListAsync()
     {
@@ -299,18 +276,29 @@ public class TransgressionManager : ITransgressionManager
             };
         }
 
-        var warnings =
-            await _data.GetWarningsByEmployeeIdAsync(employeeId);
+        var warnings = await _data.GetWarningsByEmployeeIdAsync(employeeId);
 
         var warningIds = warnings
             .Select(w => w.WarningId)
             .ToList();
 
-        var answers =
-            await _data.GetWarningAnswersByWarningIdsAsync(warningIds);
 
-        var warningNotes =
-            await _data.GetWarningNotesByWarningIdsAsync(warningIds);
+
+        var answers =await _data.GetWarningAnswersByWarningIdsAsync(warningIds);
+
+        var warningNotes =await _data.GetWarningNotesByWarningIdsAsync(warningIds);
+
+        var discussionDatesLookup = answers
+            .Where(answer => answer.QuestionId == 1)
+            .GroupBy(answer => answer.WarningId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(answer => answer.CreatedOn)
+                    .ThenByDescending(answer => answer.AnswerId)
+                    .Select(answer => DiscussionDateFormatter.Format(answer.AnswerText, answer.AnswerJson))
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+            ?? string.Empty);
 
         var descriptionLookup = answers
             .Where(a =>
@@ -335,6 +323,7 @@ public class TransgressionManager : ITransgressionManager
             {
                 WarningId = note.WarningId,
                 CreatedOn = note.CreatedOn,
+              
                 CreatedBy = note.CreatedBy ?? string.Empty,
                 NoteType = note.EvidenceId.HasValue
                     ? "Evidence Note"
@@ -421,6 +410,9 @@ public class TransgressionManager : ITransgressionManager
                         ?? string.Empty,
 
                     CreatedOn = warning.CreatedOn,
+                    DiscussionDatesDisplay = discussionDatesLookup
+                    .GetValueOrDefault(warning.WarningId, string.Empty)
+                    .Replace("-", "/"),
 
                     DueDate = warning.LegalExpiryDate.HasValue
                         ? warning.LegalExpiryDate.Value
@@ -2046,8 +2038,8 @@ public class TransgressionManager : ITransgressionManager
 
         if (dto.IssueSubTypeId <= 0)
             return SaveIssueStepResult.Fail("Please select a discussion subtype.");
-        if (dto.Dates.Count == 0)
-            return SaveIssueStepResult.Fail("Please select at least one date.");
+        if (dto.Dates is null || dto.Dates.Count != 1)
+            return SaveIssueStepResult.Fail("Please select exactly one discussion date.");
         if (dto.Dates.Any(date => date > DateOnly.FromDateTime(NowSast)))
             return SaveIssueStepResult.Fail("Discussion dates cannot be in the future.");
         if (string.IsNullOrWhiteSpace(dto.Description))

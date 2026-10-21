@@ -1,4 +1,4 @@
-﻿@using WarningSystems.Core.ViewModels
+﻿﻿@using WarningSystems.Core.ViewModels
 @model WarningSystems.Core.ViewModels.TaskListVM
 
 
@@ -41,42 +41,42 @@
     };
 
 
-bool isAdmin = roles.Contains("Admin");
-bool isLegalOrAdmin = isLegal || isAdmin;
+    bool isAdmin = roles.Contains("Admin");
+    bool isLegalOrAdmin = isLegal || isAdmin;
 
-var taskListRows = Model.TaskList
-    .Where(row =>
-    {
-        var status = (row.Status ?? string.Empty).Trim();
-
-
-        var isMoreInformationStatus =
-                string.Equals(status, "More Information Requested", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(status, "More Information Added", StringComparison.OrdinalIgnoreCase);
+    var taskListRows = Model.TaskList
+        .Where(row =>
+        {
+            var status = (row.Status ?? string.Empty).Trim();
 
 
-        return (isUser &&
-                (string.Equals(status, "Draft", StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) ||
+            var isMoreInformationStatus =
+                    string.Equals(status, "More Information Requested", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(status, "More Information Added", StringComparison.OrdinalIgnoreCase);
 
-                 isMoreInformationStatus)) ||
-               (isLegalOrAdmin &&
-                (string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(status, "In Progress", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase) ||
-                 isMoreInformationStatus));
-    }).OrderBy(row =>
-    {
-        var status = (row.Status ?? string.Empty).Trim();
 
-        return string.Equals(status, "Request More Information", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(status, "Added More Information", StringComparison.OrdinalIgnoreCase)
-            ? 1
-            : 0;
-    })
-    .ThenByDescending(row => row.CreatedOn)
-    .ToList();
+            return (isUser &&
+                    (string.Equals(status, "Draft", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) ||
+
+                     isMoreInformationStatus)) ||
+                   (isLegalOrAdmin &&
+                    (string.Equals(status, "New", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(status, "In Progress", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(status, "Completed", StringComparison.OrdinalIgnoreCase) ||
+                     isMoreInformationStatus));
+        }).OrderBy(row =>
+        {
+            var status = (row.Status ?? string.Empty).Trim();
+
+            return string.Equals(status, "Request More Information", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(status, "Added More Information", StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0;
+        })
+        .ThenByDescending(row => row.CreatedOn)
+        .ToList();
 
 }
 
@@ -152,11 +152,9 @@ var taskListRows = Model.TaskList
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="absenceDates" class="form-label">Date(s)</label>
-                                <input id="absenceDates" class="form-control" type="date" multiple required />
-                                <div class="form-text">The date defaults to today. Add additional dates one at a time.</div>
-                                <button type="button" id="addAbsenceDate" class="btn btn-sm btn-outline-secondary mt-2">Add date</button>
-                                <div id="selectedAbsenceDates" class="d-flex flex-wrap gap-2 mt-2"></div>
+                                <label for="absenceDates" class="form-label">Date of Discussion</label>
+                                <input id="absenceDates" class="form-control" type="date" required />
+                                <div class="form-text">Select a discussion date. This field is required.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="absenceDescription" class="form-label">Description</label>
@@ -293,7 +291,7 @@ var taskListRows = Model.TaskList
 
                                             if (canClick)
                                             {
-                                                rowUrl = Url.Action("Redirect","Home",
+                                                rowUrl = Url.Action("Redirect", "Home",
                                                 new
                                                 {
                                                     warningId = row.WarningId,
@@ -1209,9 +1207,9 @@ var taskListRows = Model.TaskList
         } catch (error) {
             console.error(error);
             modalBody.innerHTML = `
-                    <div class="alert alert-danger">
-                        Could not load employee dashboard.
-                    </div>`;
+                        <div class="alert alert-danger">
+                            Could not load employee dashboard.
+                        </div>`;
         }
     });
 
@@ -1299,49 +1297,25 @@ var taskListRows = Model.TaskList
     (function initialiseAbsenceDiscussion() {
         const form = document.getElementById("absenceDiscussionForm");
         const dateInput = document.getElementById("absenceDates");
-        const dateList = document.getElementById("selectedAbsenceDates");
         const message = document.getElementById("absenceDiscussionMessage");
         const modalElement = document.getElementById("absenceDiscussionModal");
-        const dates = new Set();
 
         function today() {
             const now = new Date();
             return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
         }
 
-        function renderDates() {
-            dateList.innerHTML = "";
-            [...dates].sort().forEach(date => {
-                const badge = document.createElement("button");
-                badge.type = "button";
-                badge.className = "btn btn-sm btn-outline-secondary";
-                badge.textContent = `${date} ×`;
-                badge.setAttribute("aria-label", `Remove ${date}`);
-                badge.addEventListener("click", () => { dates.delete(date); renderDates(); });
-                dateList.appendChild(badge);
-            });
-        }
-
         document.getElementById("btnAbsenceDiscussion").addEventListener("click", function () {
             form.reset();
-            dates.clear();
-            dateInput.value = today();
+            dateInput.value = "";
             dateInput.max = today();
-            dates.add(dateInput.value);
-            renderDates();
             message.classList.add("d-none");
             bootstrap.Modal.getOrCreateInstance(modalElement).show();
         });
 
-        document.getElementById("addAbsenceDate").addEventListener("click", function () {
-            if (dateInput.value) dates.add(dateInput.value);
-            renderDates();
-        });
-
         form.addEventListener("submit", async function (event) {
             event.preventDefault();
-            if (dateInput.value) dates.add(dateInput.value);
-            if (!form.reportValidity() || dates.size === 0) return;
+            if (!form.reportValidity() || !dateInput.value) return;
 
             const saveButton = document.getElementById("saveAbsenceDiscussion");
             saveButton.disabled = true;
@@ -1356,7 +1330,7 @@ var taskListRows = Model.TaskList
                 body: JSON.stringify({
                     employeeId: document.getElementById("absenceEmployeeId").value,
                     issueSubTypeId: Number(document.getElementById("absenceSubType").value),
-                    dates: [...dates],
+                    dates: [dateInput.value],
                     description: document.getElementById("absenceDescription").value
                 })
             });
@@ -1708,12 +1682,12 @@ var taskListRows = Model.TaskList
 
         if (departments.size === 0) {
             tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="10"
-                            class="text-center text-muted py-3">
-                            No department data found.
-                        </td>
-                    </tr>`;
+                        <tr>
+                            <td colspan="10"
+                                class="text-center text-muted py-3">
+                                No department data found.
+                            </td>
+                        </tr>`;
 
             return;
         }
@@ -1727,13 +1701,13 @@ var taskListRows = Model.TaskList
                     document.createElement("tr");
 
                 row.innerHTML = `
-                        <td>${escapeReportHtml(summary.name)}</td>
-                        <td>${summary.total}</td>
-                        <td>${summary.draft}</td>
-                        <td>${summary.inProgress}</td>
-                        <td>${summary.completed}</td>
-                        <td>${summary.warning}</td>
-                    `;
+                            <td>${escapeReportHtml(summary.name)}</td>
+                            <td>${summary.total}</td>
+                            <td>${summary.draft}</td>
+                            <td>${summary.inProgress}</td>
+                            <td>${summary.completed}</td>
+                            <td>${summary.warning}</td>
+                        `;
 
           
                 tableBody.appendChild(row);

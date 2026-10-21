@@ -7,21 +7,22 @@ public class LegalOverviewVm
     public List<TransgretionsVM> Issues { get; init; } = [];
 
     public static LegalOverviewVm Create(
-        IEnumerable<TransgretionsVM> rows,
-        DateTime now)
+    IEnumerable<TransgretionsVM> rows,
+    DateTime now)
     {
-        var from = now.AddDays(-30);
+        var issues = rows
+            .Where(row => IsIncludedStatus(row.Status))
+            .OrderByDescending(row => row.CreatedOn)
+            .ThenByDescending(row => row.WarningId)
+            .ToList();
 
         return new LegalOverviewVm
         {
-            From = from,
+            From = issues.Count > 0
+                ? issues.Min(row => row.CreatedOn)
+                : now,
             To = now,
-            Issues = rows
-                .Where(row => row.CreatedOn >= from && row.CreatedOn <= now)
-                .Where(row => IsIncludedStatus(row.Status))
-                .OrderByDescending(row => row.CreatedOn)
-                .ThenByDescending(row => row.WarningId)
-                .ToList()
+            Issues = issues
         };
     }
 
