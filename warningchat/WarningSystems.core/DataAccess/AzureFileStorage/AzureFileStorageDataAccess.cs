@@ -56,9 +56,25 @@ public class AzureFileStorageDataAccess : IAzureFileStorageDataAccess
         var fileClient = filesDir.GetFileClient(fileName);
 
         using var stream = file.OpenReadStream();
-        await fileClient.CreateAsync(stream.Length);
-        await fileClient.UploadRangeAsync(new HttpRange(0, stream.Length), stream);
-
+        try
+        {
+            await fileClient.CreateAsync(stream.Length);
+            await fileClient.UploadRangeAsync(new HttpRange(0, stream.Length), stream);
+        }
+        catch (Exception failure)
+        {
+            try
+            {
+                await fileClient.DeleteIfExistsAsync();
+            }
+            catch (Exception cleanupFailure)
+            {
+                throw new AggregateException(
+                    $"File upload and cleanup failed. WarningId={warningId}, FileName={fileName}",
+                    failure, cleanupFailure);
+            }
+            throw;
+        }
         return fileName;
     }
 

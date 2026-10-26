@@ -1,0 +1,133 @@
+﻿@using WarningSystems.Core.ViewModels
+@using Microsoft.Graph.Models
+@model WarningWizardVm
+
+<form id="frmTransgression"
+      method="post"
+      asp-action="CreateTransgression"
+      asp-controller="Transgression"
+      class="ws-step-page">
+
+    @Html.AntiForgeryToken()
+
+    <div class="ws-step-header">
+        <div>
+            <h3 class="ws-step-title">Issue</h3>
+            <p class="ws-step-subtext mb-0">
+                Select the category and employee for this Issue.
+            </p>
+        </div>
+
+        <button type="submit" class="btn ws-btn-primary-pill">
+            @(Model.WarningId.HasValue
+                        ? "Save & Continue"
+                        : "Create Issue as Draft")
+        </button>
+    </div>
+
+    <input asp-for="WarningId" type="hidden" />
+
+    <div class="ws-field">
+        <label asp-for="EmployeeId"
+               class="form-label ws-q-label">
+            Employee
+        </label>
+
+        <select asp-for="EmployeeId"
+                class="form-select ws-input"
+                required>
+            <option value="">-- Select employee --</option>
+
+            @foreach (var u in Model.UnderMe ?? new List<User>())
+            {
+                var id = (u.Id ?? string.Empty).Trim();
+                var name = (u.DisplayName
+                ?? u.UserPrincipalName
+                ?? id).Trim();
+
+                if (!string.IsNullOrWhiteSpace(id))
+                {
+                    <option value="@id">@name</option>
+                }
+            }
+        </select>
+
+        <span asp-validation-for="EmployeeId"
+              class="text-danger"></span>
+
+        <div class="ws-small-help mt-1">
+            Only employees under you are shown.
+        </div>
+    </div>
+
+    <div class="ws-category-section">
+
+        <div class="ws-category-section-header">
+            <div>
+                <h5 class="ws-category-heading">Categories</h5>
+
+                <div class="ws-help mb-0">
+                    Select one or more categories applicable to the request.
+                </div>
+            </div>
+        </div>
+
+        <div class="ws-category-toolbar">
+            <div class="ws-category-search-wrap">
+                <input type="search"
+                       id="categorySearch"
+                       class="form-control ws-category-search"
+                       placeholder="Search categories..."
+                       autocomplete="off" />
+            </div>
+
+            <button type="button"
+                    class="btn ws-btn-primary-pill"
+                    id="btnSearchCategories">
+                Search
+            </button>
+
+            <button type="button"
+                    class="btn btn-light ws-clear-category-search"
+                    id="clearCategorySearch">
+                Clear
+            </button>
+        </div>
+
+        <div class="ws-category-grid" id="categoryGrid">
+            @foreach (var c in Model.Categories ?? [])
+            {
+                var isChecked =
+                Model.CategoryIds?.Contains(c.CategoryId) == true;
+
+                var categoryName = c.Name ?? string.Empty;
+
+                <label class="ws-category-card"
+                       data-category-name="@categoryName.ToLowerInvariant()">
+
+                    <input type="checkbox"
+                           name="CategoryIds"
+                           value="@c.CategoryId"
+                           @(isChecked ? "checked" : null) />
+
+                    <span class="ws-category-card-body">
+                        <span class="ws-category-text">
+                            <span class="ws-category-title">
+                                @categoryName
+                            </span>
+                        </span>
+
+                        <span class="ws-category-checkmark">
+                            ✓
+                        </span>
+                    </span>
+                </label>
+            }
+        </div>
+
+        <div class="ws-category-empty d-none"
+             id="categoryEmptyState">
+            No categories match your search.
+        </div>
+    </div>
+</form>

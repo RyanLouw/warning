@@ -1,0 +1,1709 @@
+﻿@using WarningSystems.Core.Services
+@using WarningSystems.Core.ViewModels
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@model WarningSystems.Core.ViewModels.LegalWizardVm
+
+@{
+    ViewData["Title"] = "Legal";
+    var isReadOnly = Model.Status.Trim() is "Validated";
+
+    string ValOrDash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
+    }
+    string StripHtml(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "—";
+
+        var text = System.Text.RegularExpressions.Regex.Replace(value, "<.*?>", " ");
+
+        text = System.Net.WebUtility.HtmlDecode(text);
+
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+
+        return string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
+    }
+    string FormatAnswer(LegalQuestionVm question)
+    {
+        string FormatDisplayValue(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "—";
+
+            return Regex.Replace(
+                value.Trim(),
+                @"\b(\d{4})-(\d{2})-(\d{2})\b",
+                "$1/$2/$3");
+        }
+
+        if (!string.IsNullOrWhiteSpace(question.AnswerText))
+            return FormatDisplayValue(question.AnswerText);
+
+        if (string.IsNullOrWhiteSpace(question.AnswerJson))
+            return "—";
+
+        try
+        {
+            using var document = JsonDocument.Parse(question.AnswerJson);
+            var root = document.RootElement;
+
+            if (question.QuestionId == 3 && root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("notApplicable", out var notApplicable) &&
+                    notApplicable.ValueKind == JsonValueKind.True)
+                {
+                    return "SOP Not Applicable";
+                }
+
+                if (root.TryGetProperty("sopDocumentName", out var documentName) &&
+                    documentName.ValueKind == JsonValueKind.String)
+                {
+                    return FormatDisplayValue(documentName.GetString());
+                }
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var propertyName in new[] { "dates", "values", "selected" })
+                {
+                    if (root.TryGetProperty(propertyName, out var values) &&
+                        values.ValueKind == JsonValueKind.Array)
+                    {
+                        var displayValues = values.EnumerateArray()
+                            .Select(value => FormatDisplayValue(value.ToString()))
+                            .Where(value => value != "—")
+                            .ToList();
+
+                        if (displayValues.Count > 0)
+                            return string.Join(", ", displayValues);
+                    }
+                }
+
+                if (root.TryGetProperty("text", out var textValue) &&
+                    textValue.ValueKind == JsonValueKind.String)
+                {
+                    return FormatDisplayValue(textValue.GetString());
+                }
+            }
+
+            return root.ValueKind == JsonValueKind.String
+                ? FormatDisplayValue(root.GetString())
+                : FormatDisplayValue(question.AnswerJson);
+        }
+        catch (JsonException)
+        {
+            return FormatDisplayValue(question.AnswerJson);
+        }
+    }
+
+    var issueEmployee = ValOrDash(Model.EmployeeIdDesplayName);
+    var issueCreatedBy = ValOrDash(Model.CreatedByDesplayName);
+    var issueCategory = ValOrDash(Model.CategoryName);
+    var issueStatus = ValOrDash(Model.Status);
+    var displayedDecision = ValOrDash(Model.Type);
+    var warningCategory = ValOrDash(Model.WarningSubtype);
+
+    var canValidate = Model.Status is "Completed";
+
+    var canRecordDecision = Model.Status.Trim() is not "Completed" or "Validated" or "Pending";
+
+    var canEditIssueDetails = Model.Status.Trim() is not "Completed" or "Validated";
+
+    var applicableDates = new List<string>();
+    var transgressionDateQuestion = Model.Questions?
+        .FirstOrDefault(question => question.QuestionId == 1);
+    var datesAnswer = transgressionDateQuestion?.AnswerJson;
+    try
+    {
+        using var datesDocument = JsonDocument.Parse(datesAnswer);
+        if (datesDocument.RootElement.TryGetProperty("dates", out var datesElement) &&
+            datesElement.ValueKind == JsonValueKind.Array)
+        {
+            applicableDates = datesElement.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString())
+                .Where(date => !string.IsNullOrWhiteSpace(date))
+                .Select(date => date!)
+                .Distinct()
+                .OrderBy(date => date)
+                .ToList();
+        }
+    }
+    catch (JsonException)
+    {
+        // Preserve page rendering when a legacy answer contains malformed JSON.
+    }
+    
+         string FormatOffenseDates(string dates)
+            {
+                if (string.IsNullOrWhiteSpace(dates) || dates == "—")
+                    return "—";
+
+                return dates.Replace("-", "/");
+            }
+    var transgressionDates = transgressionDateQuestion is null
+        ? "—"
+       : FormatAnswer(transgressionDateQuestion);
+
+   
+    var createdOn = Model.CreatedOn.ToString("yyyy/MM/dd");
+    var deu = Model.LegalExpiryDate?.ToString("yyyy/MM/dd") ?? "—";
+
+
+    var descriptionQuestion = Model.Questions?
+
+
+        .FirstOrDefault(q => q.QuestionId == 2);
+
+    var issueDescriptionRaw = !string.IsNullOrWhiteSpace(descriptionQuestion?.AnswerText)
+        ? descriptionQuestion.AnswerText
+        : !string.IsNullOrWhiteSpace(descriptionQuestion?.AnswerJson)
+            ? descriptionQuestion.AnswerJson
+            : "—";
+
+    var issueDescription = StripHtml(issueDescriptionRaw);
+
+    var docsCount = Model.Evidence?
+        .Count(x => !string.IsNullOrWhiteSpace(x.FileName)) ?? 0;
+
+    var generalNotesCount = Model.Notes?.Count ?? 0;
+
+    var documentNotesCount = (Model.Evidence ?? new List<LegalEvidenceVm>())
+        .Where(e => e.Notes != null && e.Notes.Any())
+        .SelectMany(e => e.Notes)
+        .Count();
+}
+
+<div class="ws-page">
+    <div class="ws-page-inner">
+
+
+
+        <div class="page-actions d-flex gap-2">
+         
+            
+            @if (!isReadOnly)
+            {
+
+                <button type="button"
+                        id="btnTeamLeadVisibility"
+                        class="btn @(Model.HideFromTeamLead ? "ws-sensitive-hidden" : "btn-outline-warning")"
+                        style="border-radius:999px;"
+                        data-hidden="@(Model.HideFromTeamLead ? "true" : "false")"
+                        onclick="toggleTeamLeadVisibility(this)">
+                    @(Model.HideFromTeamLead ? "Show to Team Leads" : "Hide from Team Leads")
+                </button>
+               <button type="button"
+                    class="ws-btn-primary-pill"
+                    data-bs-toggle="modal"
+                    data-bs-target="#requestTeamLeadInfoModal">
+                    Ask Team Lead for More Info
+               </button>
+
+
+                @if (canRecordDecision)
+                {
+                    <button type="button"
+                            class="ws-btn-primary-pill"
+                            data-bs-toggle="modal"
+                            data-bs-target="#completeModal">
+                        Record Decision
+                    </button>
+                }
+                @if (canEditIssueDetails)
+                {
+                    <button type="button"
+                            class="ws-btn-primary-pill"
+                            data-bs-toggle="modal"
+                            data-bs-target="#editIssueDetailsModal">
+                        Update Categories / Dates
+                    </button>
+                }
+
+                @if (canValidate)
+                {
+                    <button type="button"
+                            class="btn btn-success"
+                            style="border-radius:999px;"
+                            id="btnValidateIssue"
+                            onclick="validateIssue(this)">
+                        Validate
+                    </button>
+                }
+       
+
+                <button type="button"
+                        class="ws-btn-primary-pill"
+                        style="border-radius:999px;"
+                        data-bs-toggle="modal"
+                        data-bs-target="#dueDateModal">
+                    Change Due Date
+                </button>
+            }
+        </div>
+        <div class="mb-4">
+            <h5 class="mb-2">Issue Recap</h5>
+
+            <div class="row g-3">
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-trans h-100">
+                        <div class="ws-ov-card-head">1. Issue</div>
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Warning ID:</div>
+                                <div class="ws-ov-value">#@Model.WarningId</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Employee:</div>
+                                <div class="ws-ov-value text-truncate" title="@issueEmployee">
+                                    @issueEmployee
+                                </div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Category:</div>
+                                <div class="ws-ov-value text-wrap" style="overflow-wrap: anywhere;">
+                                    @issueCategory
+                                </div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Status:</div>
+                                <div class="ws-ov-value">@issueStatus</div>
+                            </div>
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Type:</div>
+                                <div class="ws-ov-value">@displayedDecision</div>
+                            </div>
+                            @if (string.Equals(Model.Type, "Warning", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="ws-ov-row">
+                                    <div class="ws-ov-label">Warning category:</div>
+                                    <div class="ws-ov-value">@warningCategory</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-dates h-100">
+                        <div class="ws-ov-card-head">2. Dates</div>
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Date of Offense:</div>
+                                <div class="ws-ov-value text-break">@transgressionDates</div>
+                            </div>
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Date Submitted:</div>
+                                <div class="ws-ov-value text-break">@createdOn</div>
+                            </div>
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Due Date:</div>
+                                <div class="ws-ov-value text-break">@deu</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-desc h-100">
+                        <div class="ws-ov-card-head">3. Description</div>
+
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Description:</div>
+
+                                <div class="ws-ov-value description-text">
+                                    @issueDescription
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6 col-xl-3">
+                    <div class="ws-ov-card ws-ov-att h-100">
+                        <div class="ws-ov-card-head">4. Evidence / Interactions</div>
+                        <div class="ws-ov-card-body">
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Documents:</div>
+                                <div class="ws-ov-value">@docsCount</div>
+                            </div>
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">General:</div>
+                                <div class="ws-ov-value">@generalNotesCount</div>
+                            </div>
+
+
+                            <div class="ws-ov-row">
+                                <div class="ws-ov-label">Created By:</div>
+                                <div class="ws-ov-value text-truncate" title="@issueCreatedBy">
+                                    @issueCreatedBy
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <div class="main-panel">
+
+            <ul class="nav nav-tabs hw-tabs" id="legalTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active"
+                            id="notes-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#notes"
+                            type="button"
+                            role="tab"
+                            aria-controls="notes"
+                            aria-selected="true">
+                        Interactions
+                    </button>
+                </li>
+
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link"
+                            id="questions-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#questions"
+                            type="button"
+                            role="tab"
+                            aria-controls="questions"
+                            aria-selected="false">
+                        Questions &amp; Answers
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link"
+                            id="history-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#history"
+                            type="button"
+                            role="tab"
+                            aria-controls="history"
+                            aria-selected="false">
+                        Issue History
+                    </button>
+                </li>
+
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link"
+                            id="docs-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#docs"
+                            type="button"
+                            role="tab"
+                            aria-controls="docs"
+                            aria-selected="false">
+                        Documents
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- QUESTIONS TAB -->
+                <div class="tab-pane fade" id="questions" role="tabpanel" aria-labelledby="questions-tab">
+                    <div class="panel-body">
+                        <h5 class="mb-2">Questions &amp; Answers</h5>
+                        <div class="text-muted mb-3">
+                            All questions answered when this issue was submitted.
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th style="width:40%;">Question</th>
+                                        <th>Answer</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        var answeredQuestions = (Model.Questions ?? new List<LegalQuestionVm>())
+                                            .Where(question =>
+                                                !string.IsNullOrWhiteSpace(question.AnswerText) ||
+                                                !string.IsNullOrWhiteSpace(question.AnswerJson))
+                                            .OrderBy(question => question.SortOrder)
+                                            .ThenBy(question => question.QuestionText)
+                                            .ToList();
+                                    }
+
+                                    @if (!answeredQuestions.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="2" class="text-center text-muted py-4">
+                                                No answered questions are available.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var question in answeredQuestions)
+                                        {
+                                            <tr>
+                                                <td class="fw-semibold">@question.QuestionText</td>
+                                                <td class="text-break" style="white-space:pre-wrap;">@FormatAnswer(question)</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- NOTES TAB -->
+                <div class="tab-pane fade show active"
+                     id="notes"
+                     role="tabpanel"
+                     aria-labelledby="notes-tab"
+                     tabindex="0">
+
+                    <div class="panel-body">
+
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">Interactions</h5>
+                                <div class="text-muted">
+                                    General interactions and interactions linked to uploaded evidence.
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    class="ws-btn-primary-pill"
+                                    style="border-radius:999px;"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#addNoteModal">
+                                Add Interaction
+                            </button>
+                        </div>
+
+                        @{
+                            var allInteractions = new List<dynamic>();
+
+                            if (Model.Notes != null && Model.Notes.Any())
+                            {
+                                allInteractions.AddRange(Model.Notes.Select(n => new
+                                {
+                                    NoteText = FormatOffenseDates(n.NoteText),
+                                    CreatedOnUtc = n.CreatedOnUtc,
+                                    CreatedBy = string.IsNullOrWhiteSpace(n.CreatedByDisplayName)
+                                ? n.CreatedBy
+                                : n.CreatedByDisplayName,
+                                    DocumentName = "",
+                                    DocumentType = "",
+                                    DocumentSize = ""
+                                }));
+                            }
+
+                            var evidenceWithNotes = (Model.Evidence ?? new List<LegalEvidenceVm>())
+                            .Where(e => e.Notes != null && e.Notes.Any())
+                            .ToList();
+
+                            foreach (var evidence in evidenceWithNotes)
+                            {
+                                foreach (var note in evidence.Notes)
+                                {
+                                    allInteractions.Add(new
+                                    {
+                                        NoteText = FormatOffenseDates(note.NoteText),
+                                        CreatedOnUtc = note.CreatedOnUtc,
+                                        CreatedBy = string.IsNullOrWhiteSpace(note.CreatedByDisplayName)
+                                    ? note.CreatedBy
+                                    : note.CreatedByDisplayName,
+                                        DocumentName = FileNameHelper.GetDisplayFileName(evidence.FileName),
+                                        DocumentType = evidence.FileType ?? "",
+                                        DocumentSize = $"{evidence.FileSizeBytes:N0} bytes"
+                                    });
+                                }
+                            }
+
+                            var orderedInteractions = allInteractions
+                            .OrderByDescending(x => x.CreatedOnUtc)
+                            .ToList();
+                        }
+
+                        <div>
+                            <h5 class="mb-2">All Interactions</h5>
+
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle" id="interactionsTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:45%;">Interaction</th>
+                                            <th style="width:18%;">Added On</th>
+                                            <th style="width:18%;">Added By</th>
+                                            <th style="width:19%;">Document</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        @if (!orderedInteractions.Any())
+                                        {
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted py-4">
+                                                    No interactions yet.
+                                                </td>
+                                            </tr>
+                                        }
+                                        else
+                                        {
+                                            foreach (var interaction in orderedInteractions)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        @interaction.NoteText
+                                                    </td>
+
+                                                    <td>
+                                                        @interaction.CreatedOnUtc.ToString("yyyy/MM/dd HH:mm")
+                                                    </td>
+
+                                                    <td>
+                                                        @interaction.CreatedBy
+                                                    </td>
+
+                                                    <td>
+                                                        @if (string.IsNullOrWhiteSpace(interaction.DocumentName))
+                                                        {
+                                                            <span class="text-muted">General</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="fw-semibold">
+                                                                @interaction.DocumentName
+                                                            </div>
+
+                                                            <div class="text-muted small">
+                                                                @interaction.DocumentType • @interaction.DocumentSize
+                                                            </div>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="table-footer mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div class="text-muted small" id="interactionsPageInfo"></div>
+
+                                <div class="pager-buttons btn-group" role="group" aria-label="Interactions pagination">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            id="interactionsPrevBtn">
+                                        Previous
+                                    </button>
+
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-sm"
+                                            id="interactionsNextBtn">
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+
+
+                        </div>
+
+                    </div>
+                </div>
+
+
+
+
+
+
+
+
+
+
+
+
+                <!-- HISTORY TAB -->
+                <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
+                    <div class="panel-body">
+                        <h5 class="mb-2">Issue History</h5>
+                        <div class="text-muted mb-3">
+                            All warnings for this employee, most recent first.
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Created On</th>
+                                        <th>Status</th>
+                                        <th>Last Changed By</th>
+                                        <th>Issue Category</th>
+                                        <th>Issue Type</th>
+                                        <th>Subtype</th>
+                                        <th class="text-end">Issue</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @if (Model.TransgretionHistory == null || !Model.TransgretionHistory.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                No history data available.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var h in Model.TransgretionHistory)
+                                        {
+                                            <tr>
+                                                <td>@h.CreatedOn.ToString("yyyy/MM/dd")</td>
+                                                <td>@h.Status</td>
+                                                <td>
+                                                    @(string.IsNullOrWhiteSpace(h.LastStatusChangedByDisplayName)
+                                                                                                ? "-"
+                                                                                                : h.LastStatusChangedByDisplayName)
+                                                </td>
+                                                <td>@h.CategoryName</td>
+                                                <td>@h.IssueType</td>
+                                                <td>@h.Subtype</td>
+                                                <td class="text-end">
+                                                    <a class="btn btn-outline-secondary btn-sm"
+                                                       style="border-radius:999px;"
+                                                       href="@Url.Action("Index", "Legal", new { id = h.WarningId })">
+                                                        View
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- DOCUMENTS TAB -->
+                <div class="tab-pane fade" id="docs" role="tabpanel" aria-labelledby="docs-tab">
+                    <div class="panel-body">
+
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">Documents</h5>
+                                <div class="text-muted">
+                                    Showing uploaded evidence documents.
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    class="ws-btn-primary-pill"
+                                    style="border-radius:999px;"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#uploadDocsModal">
+                                Upload Document
+                            </button>
+                        </div>
+
+                        @{
+                            var docs = (Model.Evidence ?? new List<LegalEvidenceVm>())
+                            .Where(x => !string.IsNullOrWhiteSpace(x.FileName))
+                            .GroupBy(x => x.FileName)
+                            .Select(g => g.OrderByDescending(x => x.UploadedOn).First())
+                            .OrderByDescending(x => x.UploadedOn)
+                            .ToList();
+                        }
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Type</th>
+                                        <th>Size</th>
+                                        <th>Uploaded By</th>
+                                        <th>Uploaded On</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @if (!docs.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-4">
+                                                No documents found.
+                                            </td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        foreach (var d in docs)
+                                        {
+                                            <tr>
+                                                <td class="fw-semibold">
+                                                    @FileNameHelper.GetDisplayFileName(d.FileName)
+                                                </td>
+                                                <td>@d.FileType</td>
+                                                <td>@d.FileSizeBytes.ToString("N0")</td>
+                                                <td>
+                                                    @(string.IsNullOrWhiteSpace(d.UploadedByDisplayName)
+                                                                                                ? d.UploadedBy
+                                                                                                : d.UploadedByDisplayName)
+                                                </td>
+                                                <td>@d.UploadedOn.ToString("yyyy/MM/dd HH:mm")</td>
+                                                <td class="text-end">
+                                                    <a class="btn btn-outline-secondary"
+                                                       style="border-radius:999px;"
+                                                       download
+                                                       href="@Url.Action("Download", "Legal", new { warningId = Model.WarningId, fileName = d.FileName })">
+                                                        Download
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+<!-- EDIT CATEGORIES / DATES MODAL -->
+<div class="modal fade" id="editIssueDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Categories or Dates</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Choose what you want to change. The old and new values, your identity, and the time of the change will be recorded in Interactions.</p>
+
+                <div class="d-flex gap-4 mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="legalUpdateType" id="updateCategoriesChoice" value="categories" checked onchange="toggleLegalUpdateFields()" />
+                        <label class="form-check-label fw-semibold" for="updateCategoriesChoice">Categories</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="legalUpdateType" id="updateDatesChoice" value="dates" onchange="toggleLegalUpdateFields()" />
+                        <label class="form-check-label fw-semibold" for="updateDatesChoice">Applicable dates</label>
+                    </div>
+                </div>
+
+                <div id="legalCategoriesFields">
+                    <label class="form-label fw-semibold">Categories</label>
+                    <div class="row g-2">
+                        @foreach (var category in Model.Categories)
+                        {
+                            <div class="col-12 col-md-6">
+                                <label class="border rounded p-2 d-flex gap-2 align-items-center h-100">
+                                    <input class="form-check-input mt-0 legal-category-checkbox" type="checkbox"
+                                           value="@category.CategoryId"
+                                           checked="@(Model.CategoryIds.Contains(category.CategoryId) ? "checked" : null)" />
+                                    <span>@category.Name</span>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                    <div class="form-text">At least one category must remain selected.</div>
+                </div>
+
+                <div id="legalDatesFields" class="d-none">
+                    <label for="legalDateInput" class="form-label fw-semibold">Applicable dates</label>
+                    <div class="input-group mb-3">
+                        <input type="date" class="form-control" id="legalDateInput" />
+                        <button type="button" class="btn btn-outline-secondary" onclick="addLegalDate()">Add date</button>
+                    </div>
+                    <div id="legalDatesList" class="d-flex flex-wrap gap-2" style="color: #000;"></div>
+                    <div class="form-text">Use Remove to delete an existing date. All dates may be removed.</div>
+                </div>
+
+                <div id="legalDetailsSaveMsg" class="mt-3" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="ws-btn-primary-pill" onclick="updateLegalIssueDetails(this)">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ADD INTERACTION MODAL -->
+<div class="modal fade" id="addNoteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                  <h5 class="modal-title">Add Interaction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+
+                <input type="hidden" id="addInteractionWarningId" value="@Model.WarningId" />
+
+                <div class="mb-3">
+                    <label class="form-label">Files <span class="text-muted fw-normal">(optional)</span></label>
+                    <input class="form-control" type="file" id="addInteractionFiles" multiple />
+                    <div class="form-text text-muted">Select one or more files, or leave this empty to add only a note.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Note <span class="text-muted fw-normal">(optional)</span></label>
+                    <textarea class="form-control"
+                              id="addInteractionNote"
+                              rows="4"
+                              placeholder="Type your interaction note..."></textarea>
+                    <div class="form-text text-muted">
+                        Add a file, a note, or both.
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="btn btn-primary"
+                        id="btnAddInteraction"
+                        onclick="addInteraction(this)">
+                    Save Interaction
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- UPLOAD DOCS MODAL -->
+<div class="modal fade" id="uploadDocsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    Add Interaction
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <input type="hidden" id="uploadWarningId" value="@Model.WarningId" />
+
+                <div class="mb-3">
+                    <label class="form-label">Files</label>
+                    <input class="form-control" type="file" id="uploadFiles" multiple />
+                    <div class="form-text text-muted">Select one or more files.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control"
+                              id="uploadNotes"
+                              rows="3"
+                              placeholder="Optional Interactions..."></textarea>
+                    <div class="form-text text-muted">
+                        Interactions added with documents will be saved as Investigation Interactions.
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="btn btn-primary"
+                        id="btnUploadDocs"
+                        onclick="uploadDocuments(this)">
+                    Add Interaction
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- COMPLETE MODAL -->
+<div class="modal fade" id="completeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Record Legal Decision</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+
+                <input type="hidden" id="completeWarningId" value="@Model.WarningId" />
+
+                <div class="d-flex justify-content-between mb-3">
+                    <div><strong>Employee Name:</strong> @Model.EmployeeIdDesplayName</div>
+                    <div><strong>Submitter Name:</strong> @Model.CreatedByDesplayName</div>
+                </div>
+
+                <div class="border rounded p-3">
+
+                    <div class="fw-semibold mb-2">Select legal decision</div>
+
+                    @for (var index = 0; index < Model.IssueTypes.Count; index++)
+                    {
+                        var legalDecision = Model.IssueTypes[index];
+                        <div class="form-check @(index == Model.IssueTypes.Count - 1 ? "mb-3" : string.Empty)">
+                            <input class="form-check-input"
+                                   type="radio"
+                                   name="completeIssueType"
+                                   id="issueType-@legalDecision.IssueTypeId"
+                                   value="@legalDecision.IssueTypeId"
+                                   data-subtype-mode="@((int)legalDecision.SubTypeSelectionMode)"
+                                   data-show-subtypes="@(legalDecision.IssueTypeName != "Discussion" ? "true" : "false")"
+                                   checked="@(index == 0)">
+                            <label class="form-check-label" for="issueType-@legalDecision.IssueTypeId">
+                                @legalDecision.IssueTypeName
+                            </label>
+                        </div>
+                    }
+
+                    @if (!Model.IssueTypes.Any())
+                    {
+                        <div class="alert alert-warning mb-3">
+                            No legal decision types are configured.
+                        </div>
+                    }
+
+                    <div class="mb-3 d-none" id="issueSubtypeGroup">
+                        <label class="form-label" for="issueSubtype">Subtype</label>
+                        <select class="form-select" id="issueSubtype">
+                            <option value="">Select a subtype</option>
+                            @foreach (var decisionWithSubtypes in Model.IssueTypes)
+                            {
+                                foreach (var subType in decisionWithSubtypes.SubTypes)
+                                {
+                                    <option value="@subType.IssueSubTypeId"
+                                            data-issue-type-id="@decisionWithSubtypes.IssueTypeId">
+                                        @subType.IssueSubTypeName
+                                    </option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Upload supporting document (optional)</label>
+                        <input class="form-control" type="file" id="completeFile" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="btn btn-primary"
+                        id="btnComplete"
+                        onclick="completeTransgression(this)">
+                    Submit
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- REQUEST MORE INFORMATION MODAL -->
+<div class="modal fade" id="requestTeamLeadInfoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ask Team Lead for More Information</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <input type="hidden" id="requestInfoWarningId" value="@Model.WarningId" />
+
+                <div class="mb-3">
+                    <label class="form-label" for="requestInfoMessage">Message</label>
+                    <textarea class="form-control"
+                              id="requestInfoMessage"
+                              rows="4"
+                              maxlength="1000"
+                              placeholder="Tell the team lead what additional information is needed..."
+                              required></textarea>
+                    <div class="form-text">This message will be included in the email to the team lead.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="requestInfoFile">Supporting document (optional)</label>
+                    <input class="form-control" type="file" id="requestInfoFile" />
+                </div>
+
+                <div id="requestInfoError" class="alert alert-danger d-none mb-0" role="alert"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button"
+                        class="ws-btn-primary-pill"
+                        id="btnRequestTeamLeadInfo"
+                        onclick="requestTeamLeadInformation(this)">
+                    Send Request
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DUE DATE MODAL -->
+<div class="modal fade" id="dueDateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Change Due Date</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <input type="hidden" id="dueDateWarningId" value="@Model.WarningId" />
+
+                <div class="mb-3">
+                    <label class="form-label">New due date</label>
+                    <input type="date" class="form-control" id="dueDateValue" />
+                    <div class="form-text text-muted">
+                        Must be in the future and not on a weekend.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Reason</label>
+                    <textarea class="form-control"
+                              id="dueDateReason"
+                              rows="3"
+                              placeholder="Why are you changing the due date?"></textarea>
+                    <div class="form-text text-muted">
+                        This will be saved into the audit log.
+                    </div>
+                </div>
+
+                <div class="text-muted mt-2" id="dueDateSaveMsg" style="display:none;"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        class="btn btn-primary"
+                        id="btnSaveDueDate"
+                        onclick="updateDueDate(this)">
+                    Save Due Date
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+
+  const legalApplicableDates = @Html.Raw(JsonSerializer.Serialize(applicableDates));
+
+        function toggleLegalUpdateFields() {
+            const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
+            document.getElementById("legalCategoriesFields")?.classList.toggle("d-none", updateType !== "categories");
+            document.getElementById("legalDatesFields")?.classList.toggle("d-none", updateType !== "dates");
+            showLegalDetailsMessage("", false);
+        }
+
+
+
+        async function requestTeamLeadInformation(btn) {
+        const warningId = parseInt(document.getElementById("requestInfoWarningId")?.value || "0", 10);
+        const messageEl = document.getElementById("requestInfoMessage");
+        const fileEl = document.getElementById("requestInfoFile");
+        const errorEl = document.getElementById("requestInfoError");
+        const message = (messageEl?.value || "").trim();
+
+        errorEl?.classList.add("d-none");
+
+        if (!warningId || !message) {
+            if (errorEl) {
+                errorEl.textContent = "Please add a message for the team lead.";
+                errorEl.classList.remove("d-none");
+            }
+            messageEl?.focus();
+            return;
+        }
+
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Sending...";
+
+        try {
+            const formData = new FormData();
+            formData.append("WarningId", warningId.toString());
+            formData.append("Message", message);
+
+            if (fileEl?.files?.length) {
+                formData.append("File", fileEl.files[0], fileEl.files[0].name);
+            }
+
+            const response = await fetch("@Url.Action("RequestTeamLeadInformation", "Legal")", {
+                method: "POST",
+                body: formData
+            });
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(result.message || "The request could not be sent.");
+            }
+
+            const modalElement = document.getElementById("requestTeamLeadInfoModal");
+            bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+            messageEl.value = "";
+            fileEl.value = "";
+            alert(result.message || "The request was sent to the team lead.");
+        } catch (error) {
+            if (errorEl) {
+                errorEl.textContent = error?.message || "The request could not be sent.";
+                errorEl.classList.remove("d-none");
+            }
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+        function renderLegalDates() {
+            const list = document.getElementById("legalDatesList");
+            if (!list) return;
+            list.replaceChildren();
+
+            legalApplicableDates.sort().forEach(date => {
+                const item = document.createElement("span");
+               item.className = "badge text-bg-light border d-inline-flex align-items-center gap-2 p-2";
+               item.style.color = "#000";
+                const label = document.createElement("span");
+                label.textContent = formatLegalDate(date);
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "btn-close";
+                remove.setAttribute("aria-label", `Remove ${date}`);
+                remove.addEventListener("click", () => {
+                    const index = legalApplicableDates.indexOf(date);
+                    if (index >= 0) legalApplicableDates.splice(index, 1);
+                    renderLegalDates();
+                });
+                item.append(label, remove);
+                list.appendChild(item);
+            });
+
+            if (legalApplicableDates.length === 0) {
+                const empty = document.createElement("span");
+                empty.className = "text-muted";
+                empty.textContent = "No applicable dates selected.";
+                list.appendChild(empty);
+            }
+        }
+
+        function formatLegalDate(date) {
+            return date.replaceAll("-", "/");
+        }
+
+        function addLegalDate() {
+            const input = document.getElementById("legalDateInput");
+            const date = input?.value || "";
+
+            if (!date || legalApplicableDates.includes(date)) return;
+
+            legalApplicableDates.push(date); 
+            input.value = "";
+            renderLegalDates();
+        }
+
+        function showLegalDetailsMessage(message, isError) {
+            const element = document.getElementById("legalDetailsSaveMsg");
+            if (!element) return;
+            element.style.display = message ? "block" : "none";
+            element.className = isError ? "text-danger mt-3" : "text-success mt-3";
+            element.textContent = message;
+        }
+
+        async function updateLegalIssueDetails(button) {
+            const updateType = document.querySelector('input[name="legalUpdateType"]:checked')?.value;
+            const categoryIds = Array.from(document.querySelectorAll(".legal-category-checkbox:checked"))
+                .map(input => Number.parseInt(input.value, 10));
+
+            if (updateType === "categories" && categoryIds.length === 0) {
+                showLegalDetailsMessage("Select at least one category.", true);
+                return;
+            }
+
+            button.disabled = true;
+            showLegalDetailsMessage("Saving...", false);
+            try {
+                const response = await fetch("@Url.Action("UpdateIssueDetails", "Legal")", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        warningId: @Model.WarningId,
+                        updateType,
+                        categoryIds,
+                        dates: legalApplicableDates
+                    })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false)
+                    throw new Error(data.message || "The issue could not be updated.");
+
+                showLegalDetailsMessage("Changes saved and logged.", false);
+                setTimeout(() => location.reload(), 500);
+            } catch (error) {
+                showLegalDetailsMessage(error?.message || "The issue could not be updated.", true);
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        renderLegalDates();
+
+    async function addInteraction(btn) {
+        const warningEl = document.getElementById("addInteractionWarningId");
+        const filesEl = document.getElementById("addInteractionFiles");
+        const noteEl = document.getElementById("addInteractionNote");
+
+        if (!warningEl || !filesEl || !noteEl) {
+            console.warn("Missing modal elements:", { warningEl, filesEl, noteEl });
+            alert("Modal inputs not found. Check element IDs.");
+            return;
+        }
+
+        const warningId = parseInt(warningEl.value || "0", 10);
+        const note = (noteEl.value || "").trim();
+
+        if (!warningId) {
+            alert("Invalid warning.");
+            return;
+        }
+
+        if (filesEl.files.length === 0 && !note) {
+            alert("Add a file, a note, or both.");
+            return;
+        }
+
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "Saving...";
+
+        try {
+            const formData = new FormData();
+
+
+            formData.append("WarningId", warningId.toString());
+            formData.append("Notes", note);
+
+            for (const file of filesEl.files) {
+                formData.append("Files", file, file.name);
+            }
+
+            const res = await fetch("/Legal/SaveEvidenceAttachment", {
+                method: "POST",
+                body: formData
+            });
+
+            const result = await res.json();
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || `HTTP ${res.status}`);
+            }
+
+            const modalEl = document.getElementById("addNoteModal");
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+
+            filesEl.value = "";
+            noteEl.value = "";
+
+            location.reload();
+        } catch (err) {
+            console.error("Failed to add interaction:", err);
+            alert("Failed to add interaction: " + (err?.message || err));
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async function uploadDocuments(btn) {
+
+        const warningId = parseInt(document.getElementById("uploadWarningId")?.value || "0", 10);
+        const filesInput = document.getElementById("uploadFiles");
+        const notes = (document.getElementById("uploadNotes")?.value || "").trim();
+
+        if (!warningId) {
+            alert("Missing WarningId.");
+            return;
+        }
+
+        btn.disabled = true;
+
+        try {
+            const fd = new FormData();
+
+            fd.append("WarningId", warningId.toString());
+            fd.append("AttachmentType", "LegalEvidence");
+            fd.append("Notes", notes);
+
+            for (const file of filesInput.files) {
+                fd.append("Files", file, file.name);
+                fd.append("AttachmentNames", file.name);
+            }
+
+            const res = await fetch("/Legal/SaveEvidenceAttachment", {
+                method: "POST",
+                body: fd
+            });
+
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || `HTTP ${res.status}`);
+            }
+
+            const modalEl = document.getElementById("uploadDocsModal");
+            let modal = bootstrap.Modal.getInstance(modalEl);
+            if (!modal) modal = new bootstrap.Modal(modalEl);
+            modal.hide();
+
+            filesInput.value = "";
+
+            const uploadNotesEl = document.getElementById("uploadNotes");
+            if (uploadNotesEl) {
+                uploadNotesEl.value = "";
+            }
+
+            location.reload();
+
+        } catch (err) {
+            alert("Upload failed: " + (err?.message || err));
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function completeTransgression(btn) {
+
+        const warningId = parseInt(document.getElementById("completeWarningId")?.value || "0", 10);
+
+        if (!warningId) {
+            alert("Missing WarningId.");
+            return;
+        }
+
+        const issueTypeEl = document.querySelector('input[name="completeIssueType"]:checked');
+        const issueTypeId = parseInt(issueTypeEl?.value || "0", 10);
+
+        if (!issueTypeId) {
+            alert("Please select an issue type.");
+            return;
+        }
+
+     
+        const subtypeMode = parseInt(issueTypeEl.dataset.subtypeMode || "0", 10);
+        const showSubtypes = issueTypeEl.dataset.showSubtypes === "true";
+        const usesSubtypes = showSubtypes && subtypeMode !== 0;
+
+        const issueSubtypeValue = usesSubtypes
+            ? document.getElementById("issueSubtype")?.value || ""
+            : "";
+
+        const issueSubtypeId = issueSubtypeValue
+            ? parseInt(issueSubtypeValue, 10)
+            : null;
+
+        if (usesSubtypes && subtypeMode === 2 && !issueSubtypeId) {
+            alert("Please select a decision subtype.");
+            return;
+        }
+
+        const fileInput = document.getElementById("completeFile");
+        const file = (fileInput && fileInput.files && fileInput.files.length > 0)
+            ? fileInput.files[0]
+            : null;
+
+        btn.disabled = true;
+
+        try {
+            const fd = new FormData();
+            fd.append("WarningId", warningId.toString());
+            fd.append("IssueTypeId", issueTypeId.toString());
+
+            if (issueSubtypeId) {
+                fd.append("IssueSubTypeId", issueSubtypeId.toString());
+            }
+
+            if (file) {
+                fd.append("File", file, file.name);
+            }
+
+            const res = await fetch("/Legal/CompleteTransgression", {
+                method: "POST",
+                body: fd
+            });
+
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || `HTTP ${res.status}`);
+            }
+
+            const modalEl = document.getElementById("completeModal");
+            let modal = bootstrap.Modal.getInstance(modalEl);
+            if (!modal) modal = new bootstrap.Modal(modalEl);
+            modal.hide();
+
+            if (fileInput) {
+                fileInput.value = "";
+            }
+
+            location.reload();
+
+        } catch (err) {
+            alert("Failed to complete: " + (err?.message || err));
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function validateIssue(btn) {
+        const warningId = @Model.WarningId;
+        const confirmed = confirm(
+            "Confirm that all required steps are complete and the Team Leader or Line Manager added the information to PaySpace."
+        );
+
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = "Validating...";
+
+        try {
+            const res = await fetch("/Legal/ValidateTransgression", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ warningId: warningId })
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || "Failed to validate the issue.");
+            }
+
+            location.reload();
+        } catch (err) {
+            alert("Failed to validate: " + (err?.message || err));
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+
+    async function toggleTeamLeadVisibility(btn) {
+    const warningId = @Model.WarningId;
+    const currentlyHidden = btn.dataset.hidden === "true";
+    const hideFromTeamLead = !currentlyHidden;
+
+    const actionText = hideFromTeamLead
+        ? "hide this issue from Team Leads"
+        : "make this issue visible to Team Leads";
+
+    if (!confirm(`Are you sure you want to ${actionText}?`)) {
+        return;
+    }
+
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = "Saving...";
+
+    try {
+        const res = await fetch("@Url.Action("SetTeamLeadVisibility", "Legal")", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                warningId: warningId,
+                hideFromTeamLead: hideFromTeamLead
+            })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || data.success === false) {
+            throw new Error(data.message || "Could not update Team Lead visibility.");
+        }
+
+        btn.dataset.hidden = data.hideFromTeamLead.toString();
+        btn.textContent = data.hideFromTeamLead
+            ? "Show to Team Leads"
+            : "Hide from Team Leads";
+
+        btn.classList.toggle("ws-sensitive-hidden", data.hideFromTeamLead);
+        btn.classList.toggle("btn-outline-warning", !data.hideFromTeamLead);
+
+    } catch (err) {
+        alert(err.message || "Could not update Team Lead visibility.");
+        btn.textContent = originalText;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+    function updateIssueSubtypeOptions(issueTypeInput) {
+        const group = document.getElementById("issueSubtypeGroup");
+        const select = document.getElementById("issueSubtype");
+        if (!group || !select || !issueTypeInput) return;
+
+        const issueTypeId = issueTypeInput.value;
+        const subtypeMode = parseInt(issueTypeInput.dataset.subtypeMode || "0", 10);
+        const showSubtypes = issueTypeInput.dataset.showSubtypes === "true";
+        let hasSubtypes = false;
+
+        Array.from(select.options).forEach((option, index) => {
+            if (index === 0) return;
+
+            const belongsToType = option.dataset.issueTypeId === issueTypeId;
+            option.hidden = !belongsToType;
+            option.disabled = !belongsToType;
+            hasSubtypes ||= belongsToType;
+        });
+
+        select.value = "";
+        select.required = showSubtypes && subtypeMode === 2;
+        group.classList.toggle("d-none", !showSubtypes || subtypeMode === 0 || !hasSubtypes);
+    }
+
+    const issueTypeInputs = document.querySelectorAll('input[name="completeIssueType"][type="radio"]');
+    issueTypeInputs.forEach(input => {
+        input.addEventListener("change", function () {
+            updateIssueSubtypeOptions(this);
+        });
+    });
+
+    updateIssueSubtypeOptions(
+        document.querySelector('input[name="completeIssueType"]:checked')
+    );
+
+    function showDueDateMsg(text, isError) {
+        const el = document.getElementById("dueDateSaveMsg");
+        if (!el) return;
+
+        el.style.display = "block";
+        el.className = isError ? "text-danger mt-2" : "text-success mt-2";
+        el.textContent = text;
+
+        setTimeout(() => {
+            el.style.display = "none";
+        }, 3500);
+    }
+
+    function isWeekend(dateStr) {
+        const d = new Date(dateStr + "T00:00:00");
+        const day = d.getDay();
+        return day === 0 || day === 6;
+    }
+
+    async function updateDueDate(btn) {
+        const warningId = parseInt(document.getElementById("dueDateWarningId")?.value || "0", 10);
+        const dueDate = (document.getElementById("dueDateValue")?.value || "").trim();
+        const reason = (document.getElementById("dueDateReason")?.value || "").trim();
+
+        if (!warningId) {
+            showDueDateMsg("Missing WarningId.", true);
+            return;
+        }
+
+        if (!dueDate) {
+            showDueDateMsg("Please select a due date.", true);
+            return;
+        }
+
+        if (isWeekend(dueDate)) {
+            showDueDateMsg("Due date cannot be on a weekend.", true);
+            return;
+        }
+
+        if (!reason) {
+            showDueDateMsg("Reason is required.", true);
+            return;
+        }
+
+        btn.disabled = true;
+        showDueDateMsg("Saving...", false);
+
+        try {
+            const res = await fetch("/Legal/UpdateDueDate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    warningId: warningId,
+                    dueDate: dueDate,
+                    reason: reason
+                })
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data.success === false) {
+                showDueDateMsg(data.message || "Save failed.", true);
+                return;
+            }
+
+            showDueDateMsg("Saved ✅", false);
+
+            setTimeout(() => {
+                const modalEl = document.getElementById("dueDateModal");
+                let modal = bootstrap.Modal.getInstance(modalEl);
+                if (!modal) modal = new bootstrap.Modal(modalEl);
+                modal.hide();
+
+                location.reload();
+            }, 600);
+
+        } catch (err) {
+            showDueDateMsg("Network error: " + (err?.message || err), true);
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>

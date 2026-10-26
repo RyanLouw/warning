@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using WarningSystems.core.Models.DTO;
 //using WarningSystems.Core.Models.Enum;
 using WarningSystems.Core.ViewModels;
@@ -9,7 +10,6 @@ namespace WarningSystems.Core.Manager;
 
 public interface ITransgressionManager
 {
-    //public Task<WarningRedirectTarget> RedirectPicker(string status);
 
     public Task<TaskListVM> BuildTaskListAsync();
 
@@ -58,7 +58,6 @@ public interface ITransgressionManager
     public Task SendEmailToTeamLeadAsync(CompleteTransgressionDto dto);
 
     public Task SendMoreInformationRequiredEmailAsync(long warningId, string noteText, IFormFile? file = null);
-    public Task RequestTeamLeadInformationAsync(long warningId, string noteText, IFormFile? file = null);
 
     public Task SendMoreInformationAddedEmailAsync(long warningId, string? noteText, IReadOnlyCollection<IFormFile>? files = null);
 
@@ -66,6 +65,11 @@ public interface ITransgressionManager
 
     public Task NotifyLegalIssueCompletedAsync(long warningId);
     Task<bool?> SetHideFromTeamLeadAsync(long warningId, bool hideFromTeamLead, string changedBy);
+    Task SavePreviousOffencesAsync(SavePreviousOffencesDto dto);
+    
+    Task<IActionResult> CompleteTransgressionAsync(CompleteTransgressionDto dto);
+    Task<IActionResult> SaveEvidenceAttachmentAsync(SaveAttachmentsDto dto);
+    Task<IActionResult> SaveUserEvidenceAttachmentAsync(SaveAttachmentsDto dto);
 
     public Task<(bool Success, string? Message)> UpdateLegalIssueDetailsAsync(UpdateLegalIssueDetailsDto dto, string changedBy);
 }

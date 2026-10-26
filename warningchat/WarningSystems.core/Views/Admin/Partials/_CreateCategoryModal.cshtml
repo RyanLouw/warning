@@ -1,0 +1,42 @@
+﻿<div class="modal fade" id="modalCreateCategory" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <form method="post" action="@Url.Action("CreateCategory", "Admin")">
+                @Html.AntiForgeryToken()
+
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Category</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="mb-3">
+                        <label class="form-label">Category Name</label>
+                        <input name="Name" class="form-control" required />
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="createCategoryIsActive"
+                               name="IsActive"
+                               value="true"
+                               checked />
+                        <label class="form-check-label" for="createCategoryIsActive">Active</label>
+                    </div>
+
+                    <input type="hidden" name="IsActive" value="false" />
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Category</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>

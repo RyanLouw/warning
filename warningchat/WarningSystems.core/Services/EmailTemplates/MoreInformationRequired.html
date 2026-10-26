@@ -1,0 +1,68 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>More Information Required</title>
+</head>
+<body style="margin:0; padding:20px;">
+    <div style="font-family:Arial,sans-serif; color:#333; line-height:1.5;">
+        <h2 style="color:#f47c37; margin-bottom:8px;">
+            More Information Required
+        </h2>
+
+        <p>Hi {{Username}},</p>
+
+        <p>
+            Legal has requested more information for warning
+            <strong>#{{WarningId}}</strong>.
+        </p>
+
+        <table style="border-collapse:collapse; margin:15px 0; width:100%; max-width:650px;">
+            <tr>
+                <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                    Employee
+                </td>
+                <td style="padding:8px; border:1px solid #ddd;">
+                    {{EmployeeDisplayName}}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                    Category
+                </td>
+                <td style="padding:8px; border:1px solid #ddd;">
+                    {{Category}}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;">
+                    Current Status
+                </td>
+                <td style="padding:8px; border:1px solid #ddd;">
+                    {{Status}}
+                </td>
+            </tr>
+        </table>
+
+        <p style="margin-bottom:6px;">
+            <strong>Message from Legal:</strong>
+        </p>
+
+        <div style="border:1px solid #ddd; background:#f8f9fa; padding:12px; border-radius:6px; white-space:pre-wrap; margin-bottom:18px;">{{NoteText}}</div>
+
+        <p>Please open the link below to add the requested information:</p>
+
+        <p>
+            <a href="{{TeamLeadUrl}}"
+               style="display:inline-block; padding:10px 18px; background:#f47c37; color:#fff; text-decoration:none; border-radius:999px; font-weight:bold;">
+                Open Warning
+            </a>
+        </p>
+
+        <p style="font-size:12px; color:#666; margin-top:20px;">
+            If the button does not work, copy and paste this link into your browser:<br />
+            <span>{{TeamLeadUrl}}</span>
+        </p>
+    </div>
+</body>
+</html>

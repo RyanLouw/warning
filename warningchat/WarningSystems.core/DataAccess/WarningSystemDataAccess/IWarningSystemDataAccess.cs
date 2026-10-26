@@ -71,11 +71,10 @@ public interface IWarningSystemDataAccess
     Task<List<Warning>> GetAllWarningsForReportingAsync();
     Task<List<LookupIssueType>> GetActiveIssueTypesAsync();
     Task<LookupIssueStatus?> GetIssueStatusByGroupAsync(IssueStatusGroup group);
-    Task UpdateWarningDecisionAsync(long warningId, LookupIssueType issueType,
-        LookupIssueSubType? issueSubType, string user);
+    Task UpdateWarningDecisionAsync(long warningId, LookupIssueType issueType,LookupIssueSubType? issueSubType, string user);
     Task CompleteDiscussionAsync(long warningId, int issueSubTypeId, string user);
     Task AdvanceWarningStatusAsync(long warningId, IssueStatusGroup requiredGroup, string user);
     Task SetWarningStatusAsync(long warningId, IssueStatusGroup statusGroup, string user);
     Task SaveLegalIssueDetailsAsync(long warningId,IReadOnlyCollection<WarningCategory>? categories, WarningAnswer? answer,WarningNote auditNote);
-    Task<List<TransgressionCategory>> GetAllCategoriesAndEnActiveAsync();
+    Task<List<TransgressionCategory>> GetAllCategoriesIncludingInactiveAsync();
 }

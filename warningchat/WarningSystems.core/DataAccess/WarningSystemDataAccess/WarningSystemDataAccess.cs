@@ -37,8 +37,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
             .ToListAsync();
     }
 
-    public async Task<List<Warning>>
-        GetAllWarningsForTaskListAsync()
+    public async Task<List<Warning>>GetAllWarningsForTaskListAsync()
     {
         return await _context.Warnings
             .AsNoTracking()
@@ -97,7 +96,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
             .OrderBy(c => c.Name)
             .ToListAsync();
     }
-    public async Task<List<TransgressionCategory>> GetAllCategoriesAndEnActiveAsync()
+    public async Task<List<TransgressionCategory>> GetAllCategoriesIncludingInactiveAsync()
     {
         return await _context.TransgressionCategories
             .AsNoTracking()
@@ -594,8 +593,6 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         warning.IssueTypeId = issueType.IssueTypeId;
         warning.IssueSubTypeId = issueSubType?.IssueSubTypeId;
         warning.IssueStatusId = issueType.ResultIssueStatusId;
-
-        // Keep the legacy display columns synchronized during the migration period.
         warning.Type = issueType.IssueTypeName;
         warning.WarningSubtype = issueSubType?.IssueSubTypeName;
         warning.Status = issueType.ResultIssueStatus.IssueStatusName;
@@ -624,7 +621,6 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         warning.IssueSubTypeId = subType.IssueSubTypeId;
         warning.Type = discussion.IssueTypeName;
         warning.WarningSubtype = subType.IssueSubTypeName;
-        // Quick discussions are final when saved and bypass the legal workflow.
         warning.IssueStatusId = validatedStatus.IssueStatusId;
         warning.Status = validatedStatus.IssueStatusName;
         warning.LastStatusChangedOn = NowSast;
@@ -633,10 +629,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
         await _context.SaveChangesAsync();
     }
 
-    public async Task AdvanceWarningStatusAsync(
-        long warningId,
-        IssueStatusGroup requiredGroup,
-        string user)
+    public async Task AdvanceWarningStatusAsync( long warningId, IssueStatusGroup requiredGroup,string user)
     {
         var warning = await _context.Warnings
             .Include(x => x.IssueStatus)
@@ -849,11 +842,7 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
-        var warning = await _context.Warnings
-            .SingleOrDefaultAsync(item => item.WarningId == warningId);
-
-        if (warning is null)
-            throw new KeyNotFoundException("The issue could not be found.");
+        var warning = await _context.Warnings.SingleAsync(item => item.WarningId == warningId);
 
         if (categories is not null)
         {

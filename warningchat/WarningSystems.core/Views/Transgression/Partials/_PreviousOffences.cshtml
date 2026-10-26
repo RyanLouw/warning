@@ -1,0 +1,62 @@
+﻿
+@using WarningSystems.Core.ViewModels
+@model WarningWizardVm
+
+<form id="frmPreviousOffences"
+      asp-controller="Transgression"
+      asp-action="SavePreviousOffences"
+      method="post"
+      enctype="multipart/form-data"
+      class="ws-step-page">
+
+    <div class="ws-step-header">
+        <div>
+            <h3 class="ws-step-title">Previous Offences</h3>
+        </div>
+
+
+        <button type="button" class="btn ws-btn-primary-pill" id="btnSavePreviousOffences">
+            Save &amp; Continue
+        </button>
+    </div>
+
+    <p class="ws-step-subtext">
+        If the employee received any previous warnings for a similar transgression, kindly attach them here.
+    </p>
+
+    <input type="hidden" id="WarningId" name="WarningId" value="@(Model.WarningId ?? 0)" />
+
+    <div class="form-check ws-check-row">
+        <input class="form-check-input"
+               type="checkbox"
+               id="hasPreviousOffences"
+               name="HasPreviousOffences"
+               value="true" />
+
+        <input type="hidden" name="HasPreviousOffences" value="false" />
+
+        <label class="form-check-label" for="hasPreviousOffences">
+            Previous offence predating the system
+            <div class="ws-small-help">
+                If the employee had a transgression predating the system, please upload it here.
+            </div>
+        </label>
+    </div>
+
+    <div class="ws-field">
+        <label class="btn ws-btn-upload" id="btnChooseFiles" style="opacity:.55; pointer-events:none;">
+            Choose file(s) to upload
+            <input type="file"
+                   class="d-none"
+                   id="previousOffenceFile"
+                   name="Files"
+                   multiple
+                   disabled />
+        </label>
+
+        <ul class="ws-file-list" id="wsSelectedFiles"></ul>
+
+        <div class="text-muted mt-2" id="previousOffencesSaveMsg" style="display:none;"></div>
+    </div>
+
+</form>

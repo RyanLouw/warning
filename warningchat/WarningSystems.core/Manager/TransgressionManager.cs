@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
 using System.Net;
@@ -61,11 +62,8 @@ public class TransgressionManager : ITransgressionManager
 
     public async Task<TaskListVM> BuildTaskListAsync()
     {
-        var warningEntities =
-            await _data.GetAllWarningsForTaskListAsync();
-
-        var reportWarningEntities =
-            await _data.GetAllWarningsForReportingAsync();
+        var warningEntities = await _data.GetAllWarningsForTaskListAsync();
+        var reportWarningEntities = warningEntities;
 
         var underMe = await UnderMe();
 
@@ -656,6 +654,7 @@ public class TransgressionManager : ITransgressionManager
         else if (ctx.IsUser)
         {
             filtered = filtered.Where(r =>
+                !r.HideFromTeamLead &&
                 !string.IsNullOrWhiteSpace(r.EmployeeId) &&
                 underMeIds.Contains(r.EmployeeId.Trim()));
         }
@@ -770,7 +769,7 @@ public class TransgressionManager : ITransgressionManager
 
     public async Task<AdminVM> BuildAdminView()
     {
-        var categoryEntities = await _data.GetAllCategoriesAndEnActiveAsync();
+        var categoryEntities = await _data.GetAllCategoriesIncludingInactiveAsync();
         var questionEntities = await _data.GetAllQuestionsAsync();
 
         var userNameCache = new Dictionary<string, string>(
@@ -2031,19 +2030,36 @@ public class TransgressionManager : ITransgressionManager
         return SaveIssueStepResult.Ok(warningId);
     }
 
-    public async Task<SaveIssueStepResult> CreateAbsenceDiscussionAsync(
-        CreateAbsenceDiscussionDto dto)
+    public async Task<SaveIssueStepResult> CreateAbsenceDiscussionAsync(CreateAbsenceDiscussionDto dto)
     {
         const int otherUnknownCategoryId = 31;
 
+        var errors = new List<string>();
+
         if (dto.IssueSubTypeId <= 0)
-            return SaveIssueStepResult.Fail("Please select a discussion subtype.");
-        if (dto.Dates is null || dto.Dates.Count != 1)
-            return SaveIssueStepResult.Fail("Please select exactly one discussion date.");
+        {
+            errors.Add("Please select a discussion subtype.");
+        }
+
+        if (dto.Dates.Count == 0)
+        {
+            errors.Add("Please select at least one date.");
+        }
+
         if (dto.Dates.Any(date => date > DateOnly.FromDateTime(NowSast)))
-            return SaveIssueStepResult.Fail("Discussion dates cannot be in the future.");
+        {
+            errors.Add("Discussion dates cannot be in the future.");
+        }
+
         if (string.IsNullOrWhiteSpace(dto.Description))
-            return SaveIssueStepResult.Fail("Please enter a description.");
+        {
+            errors.Add("Please enter a description.");
+        }
+
+        if (errors.Count > 0)
+        {
+            return SaveIssueStepResult.Fail(string.Join(Environment.NewLine, errors));
+        }
 
         var discussionType = (await _data.GetActiveIssueTypesAsync())
             .SingleOrDefault(type => type.IssueTypeId == (int)LookupIssueTypeEnum.Discussion);
@@ -2084,11 +2100,7 @@ public class TransgressionManager : ITransgressionManager
         await _data.UpsertWarningAnswerAsync(dto.WarningId, dto.QuestionId, dto.AnswerText, dto.AnswerJson);
     }
 
-    public async Task AddWarningNoteAsync(
-        long warningId,
-        long? evidenceId,
-        int noteTypeId,
-        string noteText)
+    public async Task AddWarningNoteAsync(long warningId,long? evidenceId,int noteTypeId,string noteText)
     {
         var user = _currentUser?.ObjectId ?? "system";
 
@@ -2107,14 +2119,56 @@ public class TransgressionManager : ITransgressionManager
 
     }
 
-    public async Task<long?> SaveEvidenceAsync(
-     long warningId,
-     string? fileName,
-     string? mediaType,
-     long? fileSizeBytes,
-     string? notes,
-     int? typeid,
-     bool legal)
+
+    public async Task<IActionResult> SaveUserEvidenceAttachmentAsync(SaveAttachmentsDto dto)
+    {
+        foreach (var file in dto.Files)
+        {
+            if (file is null || file.Length is 0)
+            {
+                continue;
+            }
+
+            var mediaType = _fileStorage.GetAttachmentType(file);
+
+            var originalName =
+                System.IO.Path.GetFileNameWithoutExtension(file.FileName);
+
+            var baseName = !string.IsNullOrWhiteSpace(dto.AttachmentName)
+                ? dto.AttachmentName.Trim()
+                : originalName;
+
+            var invalidChars = System.IO.Path.GetInvalidFileNameChars();
+
+            var safeOriginalName = string.Concat(
+                baseName.Where(c => !invalidChars.Contains(c))
+            ).Trim();
+
+            if (string.IsNullOrWhiteSpace(safeOriginalName))
+            {
+                safeOriginalName = "File";
+            }
+
+            var storagePrefix = $"Evidence_{safeOriginalName}";
+
+            var storedFileName = await _fileStorage.UploadWarningFileAsync(
+                dto.WarningId,
+                storagePrefix,
+                file);
+
+            await SaveEvidenceAsync(
+                dto.WarningId,
+                storedFileName,
+                mediaType,
+                file.Length,
+                dto.Notes,
+                1,
+                false);
+        }
+
+        return new OkObjectResult(new { success = true });
+    }
+    public async Task<long?> SaveEvidenceAsync(long warningId,string? fileName,string? mediaType,long? fileSizeBytes,string? notes,int? typeid,bool legal)
     {
         var user = _currentUser?.ObjectId ?? "system";
 
@@ -2157,10 +2211,9 @@ public class TransgressionManager : ITransgressionManager
         await _data.UpdateWarningDueDateAsync(warningId, duedate, user);
     }
 
-    public async Task ApplyLegalDecisionAsync(long warningId,int issueTypeId, int? issueSubTypeId)
+    public async Task ApplyLegalDecisionAsync( long warningId,int issueTypeId,int? issueSubTypeId)
     {
-        var warning = await _data.GetWarningByIdAsync(warningId)
-            ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
+        var warning = await _data.GetWarningByIdAsync(warningId)?? throw new KeyNotFoundException( $"Warning not found. WarningId={warningId}");
 
         if (warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.LegalDecision &&
             warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.AddedMoreInformation)
@@ -2173,17 +2226,24 @@ public class TransgressionManager : ITransgressionManager
             .SingleOrDefault(type => type.IssueTypeId == issueTypeId)
             ?? throw new InvalidOperationException("Select a valid issue type.");
 
-        var issueSubType = issueSubTypeId.HasValue
-            ? issueType.IssueSubTypes.SingleOrDefault(subType => subType.IssueSubTypeId == issueSubTypeId)
-            : null;
+        bool isDiscussion = string.Equals(issueType.IssueTypeName?.Trim(), "Discussion",StringComparison.OrdinalIgnoreCase);
 
-        if (issueType.SubTypeSelectionMode == SubTypeSelectionMode.Required && issueSubType is null)
-            throw new InvalidOperationException("A valid issue subtype is required.");
+        bool usesSubtypes =!isDiscussion && issueType.SubTypeSelectionMode != SubTypeSelectionMode.None;
 
-        if (issueType.SubTypeSelectionMode == SubTypeSelectionMode.None)
-            issueSubType = null;
+        var issueSubType = usesSubtypes && issueSubTypeId.HasValue ? issueType.IssueSubTypes.SingleOrDefault(
+            subType => subType.IssueSubTypeId == issueSubTypeId.Value) : null;
 
-        await _data.UpdateWarningDecisionAsync(warningId, issueType, issueSubType, _currentUser.ObjectId);
+        if (usesSubtypes && issueType.SubTypeSelectionMode == SubTypeSelectionMode.Required && issueSubType is null)
+        {
+            throw new InvalidOperationException( "A valid issue subtype is required.");
+        }
+
+        if (usesSubtypes && issueSubTypeId.HasValue && issueSubType is null)
+        {
+            throw new InvalidOperationException(  "The selected subtype does not belong to the selected issue type.");
+        }
+
+        await _data.UpdateWarningDecisionAsync( warningId, issueType,issueSubType,_currentUser.ObjectId);
     }
 
     public async Task ValidateWarningAsync(long warningId)
@@ -2431,17 +2491,21 @@ public class TransgressionManager : ITransgressionManager
                 throw new ArgumentNullException(nameof(dto));
 
             if (dto.WarningId is 0)
-                throw new ArgumentException("Invalid warning id.", nameof(dto.WarningId));
+                throw new ArgumentException(
+                    "Invalid warning id.",
+                    nameof(dto.WarningId));
 
             stage = $"Getting warning info. WarningId={dto.WarningId}";
 
             var warningInfo = await _data.GetWarningByIdAsync(dto.WarningId);
 
             if (warningInfo == null)
-                throw new InvalidOperationException($"Warning not found. WarningId={dto.WarningId}");
+                throw new InvalidOperationException(
+                    $"Warning not found. WarningId={dto.WarningId}");
 
             if (string.IsNullOrWhiteSpace(warningInfo.CreatedBy))
-                throw new InvalidOperationException($"Warning CreatedBy is empty. WarningId={dto.WarningId}");
+                throw new InvalidOperationException(
+                    $"Warning CreatedBy is empty. WarningId={dto.WarningId}");
 
             var createdByUserId = warningInfo.CreatedBy.Trim();
 
@@ -2469,12 +2533,11 @@ public class TransgressionManager : ITransgressionManager
 
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={dto.WarningId}";
 
-            var employeeDisplayName = await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
+            var employeeDisplayName =
+                await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
 
             if (string.IsNullOrWhiteSpace(employeeDisplayName))
                 employeeDisplayName = warningInfo.EmployeeId;
-
-            stage = $"Building email request. WarningId={dto.WarningId}, To={userEmail}";
 
             if (string.IsNullOrWhiteSpace(_applicationOptions.BaseUrl))
             {
@@ -2486,6 +2549,7 @@ public class TransgressionManager : ITransgressionManager
                 $"{_applicationOptions.BaseUrl.TrimEnd('/')}" +
                 $"/Transgression/TeamLeadWarning/{warningInfo.WarningId}";
 
+            stage = $"Building email template. WarningId={dto.WarningId}";
             var safeUsername = System.Net.WebUtility.HtmlEncode(username);
             var safeStatus = System.Net.WebUtility.HtmlEncode(warningInfo.Status ?? "");
             var safeEmployeeDisplayName = System.Net.WebUtility.HtmlEncode(employeeDisplayName);
@@ -2500,97 +2564,42 @@ public class TransgressionManager : ITransgressionManager
                     : warningInfo.WarningSubtype);
             var safeWarningUrl = System.Net.WebUtility.HtmlEncode(warningUrl);
 
+            var bodyHtml = await BuildEmailAsync(
+                "IssueUpdated.html",
+                new Dictionary<string, string>
+                {
+                    ["WarningId"] = warningInfo.WarningId.ToString(),
+
+                    ["Username"] =
+                        System.Net.WebUtility.HtmlEncode(username),
+
+                    ["EmployeeDisplayName"] =
+                        System.Net.WebUtility.HtmlEncode(
+                            employeeDisplayName ?? ""),
+
+                    ["Category"] =
+                        System.Net.WebUtility.HtmlEncode(
+                            warningInfo.Category?.Name
+                            ?? warningInfo.CategoryId.ToString()),
+
+                    ["Status"] =
+                        System.Net.WebUtility.HtmlEncode(
+                            warningInfo.Status ?? ""),
+
+                    ["WarningUrl"] =
+                        System.Net.WebUtility.HtmlEncode(warningUrl)
+                });
+
             var req = new SendEmailRequest
             {
-                Subject = $"Warning System | Issue {warningInfo.WarningId} updated",
-                BodyHtml = $@"
-                        <div style=""font-family: Arial, sans-serif; color:#333; line-height:1.5;"">
-
-                            <h2 style=""color:#014678; margin-bottom:8px;"">
-                                Issue Updated
-                            </h2>
-
-                            <p>Hi {safeUsername},</p>
-
-                            <p>
-                                Issue <strong>#{warningInfo.WarningId}</strong> has been updated.
-                            </p>
-
-                            <table style=""border-collapse:collapse; margin-top:15px; margin-bottom:15px; width:100%; max-width:650px;"">
-                                <tr>
-                                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                        Employee
-                                    </td>
-                                    <td style=""padding:8px; border:1px solid #ddd;"">
-                                        {safeEmployeeDisplayName}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                        Category
-                                    </td>
-                                    <td style=""padding:8px; border:1px solid #ddd;"">
-                                        {safeCategory}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                        Type
-                                    </td>
-                                    <td style=""padding:8px; border:1px solid #ddd;"">
-                                        {safeType}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                        Subtype
-                                    </td>
-                                    <td style=""padding:8px; border:1px solid #ddd;"">
-                                        {safeSubtype}
-                                    </td>
-                                </tr>
-
-
-
-                                <tr>
-                                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                        Status
-                                    </td>
-                                    <td style=""padding:8px; border:1px solid #ddd;"">
-                                        {safeStatus}
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <p>
-                                Please open the link below to review the issue:
-                            </p>
-
-                            <p>
-                                <a href=""{warningUrl}""
-                                   style=""
-                                       display:inline-block;
-                                       padding:10px 18px;
-                                       background:#014678;
-                                       color:#ffffff;
-                                       text-decoration:none;
-                                       border-radius:999px;
-                                       font-weight:bold;"">
-                                    Open Issue
-                                </a>
-                            </p>
-
-                            <p style=""font-size:12px; color:#666; margin-top:20px;"">
-                                If the button does not work, copy and paste this link into your browser:<br/>
-                                <span>{safeWarningUrl}</span>
-                            </p>
-
-                        </div>",
+                Subject =
+                    $"Warning System | Issue {warningInfo.WarningId} updated",
+                BodyHtml = bodyHtml,
                 ToRecipients = new List<string> { userEmail },
                 SaveToSentItems = true
             };
 
-            if (dto.File is not null && dto.File.Length is > 0)
+            if (dto.File is not null && dto.File.Length > 0)
             {
                 stage = $"Adding attachment. FileName={dto.File.FileName}, Size={dto.File.Length}, WarningId={dto.WarningId}";
 
@@ -2610,8 +2619,6 @@ public class TransgressionManager : ITransgressionManager
             stage = $"Sending email. WarningId={dto.WarningId}, To={userEmail}, Attachments={req.Attachments.Count}";
 
             await _graphUserDataAccess.SendEmailAsync(req);
-
-            stage = $"Email sent successfully. WarningId={dto.WarningId}, To={userEmail}";
         }
         catch (Exception ex)
         {
@@ -2622,46 +2629,67 @@ public class TransgressionManager : ITransgressionManager
     }
 
 
-    public async Task RequestTeamLeadInformationAsync(long warningId,string noteText,IFormFile? file = null)
-    {
-      
 
-        var user = _currentUser?.ObjectId ?? "system";
-        await _data.AddWarningNoteAsync(
-            warningId,
-            null,
-            4,
-            noteText,
-            user);
-    }
-    public async Task SendMoreInformationRequiredEmailAsync(long warningId,string noteText, IFormFile? file = null)
+    public async Task SendMoreInformationRequiredEmailAsync(long warningId,string noteText,IFormFile? file = null)
     {
-        await RequestTeamLeadInformationAsync(warningId, noteText, file);
-
-        User? me = await _graphUserDataAccess.GetMeAsync();
-        await _data.SetWarningStatusAsync(warningId, IssueStatusGroup.RequestMoreInformation, me.Id.ToString());
         var stage = "Starting";
 
-       
         try
         {
             stage = "Validating input";
 
-            if (warningId is 0)
-                throw new ArgumentException("Invalid warning id.", nameof(warningId));
+            if (warningId <= 0)
+            {
+                throw new ArgumentException(
+                    "Invalid warning id.",
+                    nameof(warningId));
+            }
 
             if (string.IsNullOrWhiteSpace(noteText))
-                throw new ArgumentException("Note text is required.", nameof(noteText));
+            {
+                throw new ArgumentException(
+                    "Note text is required.",
+                    nameof(noteText));
+            }
+
+            noteText = noteText.Trim();
+
+            stage = $"Getting current Graph user. WarningId={warningId}";
+
+            var me = await _graphUserDataAccess.GetMeAsync();
+
+            if (string.IsNullOrWhiteSpace(me?.Id))
+            {
+                throw new InvalidOperationException(
+                    "The current Graph user could not be retrieved or has no ID.");
+            }
+
+            stage = $"Saving team lead information request. WarningId={warningId}";
+
+            var currentuser = _currentUser?.ObjectId ?? "system";
+            await _data.AddWarningNoteAsync( warningId, null, noteTypeId: 4, noteText,currentuser);// note type id id Need More Info
+
+            stage = $"Updating warning status. WarningId={warningId}";
+
+            await _data.SetWarningStatusAsync(
+                warningId,
+                IssueStatusGroup.RequestMoreInformation,
+                me.Id);
 
             stage = $"Getting warning info. WarningId={warningId}";
 
             var warningInfo = await _data.GetWarningByIdAsync(warningId);
 
             if (warningInfo == null)
+            {
                 throw new InvalidOperationException($"Warning not found. WarningId={warningId}");
+            }
 
             if (string.IsNullOrWhiteSpace(warningInfo.CreatedBy))
-                throw new InvalidOperationException($"Warning CreatedBy is empty. WarningId={warningId}");
+            {
+                throw new InvalidOperationException(
+                    $"Warning CreatedBy is empty. WarningId={warningId}");
+            }
 
             var createdByUserId = warningInfo.CreatedBy.Trim();
 
@@ -2670,8 +2698,10 @@ public class TransgressionManager : ITransgressionManager
             var user = await _graphUserDataAccess.GetUserAsync(createdByUserId);
 
             if (user == null)
+            {
                 throw new InvalidOperationException(
                     $"Graph user not found for CreatedBy={createdByUserId} (WarningId={warningId})");
+            }
 
             var username = !string.IsNullOrWhiteSpace(user.DisplayName)
                 ? user.DisplayName
@@ -2689,14 +2719,15 @@ public class TransgressionManager : ITransgressionManager
 
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={warningId}";
 
-            var employeeDisplayName = await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
+            var employeeDisplayName =
+                await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
 
             if (string.IsNullOrWhiteSpace(employeeDisplayName))
             {
                 employeeDisplayName = warningInfo.EmployeeId;
             }
 
-            stage = $"Building email request. WarningId={warningId}, To={userEmail}";
+            stage = $"Validating application base URL. WarningId={warningId}";
 
             if (string.IsNullOrWhiteSpace(_applicationOptions.BaseUrl))
             {
@@ -2708,6 +2739,7 @@ public class TransgressionManager : ITransgressionManager
                 $"{_applicationOptions.BaseUrl.TrimEnd('/')}" +
                 $"/Transgression/TeamLeadWarning/{warningInfo.WarningId}";
 
+            stage = $"Building email template. WarningId={warningId}";
             var safeNoteText = System.Net.WebUtility.HtmlEncode(noteText);
             var safeUsername = System.Net.WebUtility.HtmlEncode(username);
             var safeEmployeeDisplayName = System.Net.WebUtility.HtmlEncode(employeeDisplayName);
@@ -2715,91 +2747,42 @@ public class TransgressionManager : ITransgressionManager
                 await GetEmailCategoryNamesAsync(warningInfo));
             var safeStatus = System.Net.WebUtility.HtmlEncode(warningInfo.Status ?? "");
 
+            var bodyHtml = await BuildEmailAsync(
+                "MoreInformationRequired.html",
+                new Dictionary<string, string>
+                {
+                    ["WarningId"] = warningInfo.WarningId.ToString(),
+
+                    ["Username"] =
+                        System.Net.WebUtility.HtmlEncode(username),
+
+                    ["EmployeeDisplayName"] =
+                        System.Net.WebUtility.HtmlEncode(
+                            employeeDisplayName ?? ""),
+
+                    ["Category"] = safeCategory,
+
+                    ["Status"] =
+                        System.Net.WebUtility.HtmlEncode(
+                            warningInfo.Status ?? ""),
+
+                    ["NoteText"] =
+                        System.Net.WebUtility.HtmlEncode(noteText),
+
+                    ["TeamLeadUrl"] =
+                        System.Net.WebUtility.HtmlEncode(teamLeadUrl)
+                });
+
             var req = new SendEmailRequest
             {
-                Subject = $"Warning System | More information required - Issue {warningInfo.WarningId}",
-                BodyHtml = $@"
-            <div style=""font-family: Arial, sans-serif; color:#333; line-height:1.5;"">
-
-            <h2 style=""color:#f47c37; margin-bottom:8px;"">
-                More Information Required
-            </h2>
-
-            <p>Hi {safeUsername},</p>
-
-            <p>
-                Legal has requested more information for issue
-                <strong>#{warningInfo.WarningId}</strong>.
-            </p>
-
-            <table style=""border-collapse:collapse; margin-top:15px; margin-bottom:15px; width:100%; max-width:650px;"">
-                <tr>
-                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                        Employee
-                    </td>
-                    <td style=""padding:8px; border:1px solid #ddd;"">
-                        {safeEmployeeDisplayName}
-                    </td>
-                </tr>
-                <tr>
-                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                        Category
-                    </td>
-                    <td style=""padding:8px; border:1px solid #ddd;"">
-                        {safeCategory}
-                    </td>
-                </tr>
-                <tr>
-                    <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                        Current Status
-                    </td>
-                    <td style=""padding:8px; border:1px solid #ddd;"">
-                        {safeStatus}
-                    </td>
-                </tr>
-            </table>
-
-            <p style=""margin-bottom:6px;""><strong>Message from Legal:</strong></p>
-
-            <div style=""
-                border:1px solid #ddd;
-                background:#f8f9fa;
-                padding:12px;
-                border-radius:6px;
-                white-space:pre-wrap;
-                margin-bottom:18px;"">
-                {safeNoteText}
-            </div>
-
-            <p>
-                Please open the link below to add the requested information:
-            </p>
-
-            <p>
-                <a href=""{teamLeadUrl}""
-                   style=""
-                       display:inline-block;
-                       padding:10px 18px;
-                       background:#f47c37;
-                       color:#ffffff;
-                       text-decoration:none;
-                       border-radius:999px;
-                       font-weight:bold;"">
-                    Open Issue
-                </a>
-            </p>
-
-            <p style=""font-size:12px; color:#666; margin-top:20px;"">
-                If the button does not work, copy and paste this link into your browser:<br/>
-                <span>{teamLeadUrl}</span>
-            </p>
-
-        </div>",
+                Subject =
+                    $"Warning System | More information required - Issue {warningInfo.WarningId}",
+                BodyHtml = bodyHtml,
                 ToRecipients = new List<string> { userEmail },
                 SaveToSentItems = true
             };
 
-            if (file != null && file.Length > 0)
+            if (file is not null && file.Length > 0)
             {
                 stage = $"Adding attachment. FileName={file.FileName}, Size={file.Length}, WarningId={warningId}";
 
@@ -2819,8 +2802,6 @@ public class TransgressionManager : ITransgressionManager
             stage = $"Sending email. WarningId={warningId}, To={userEmail}, Attachments={req.Attachments.Count}";
 
             await _graphUserDataAccess.SendEmailAsync(req);
-
-            stage = $"Email sent successfully. WarningId={warningId}, To={userEmail}";
         }
         catch (MicrosoftIdentityWebChallengeUserException)
         {
@@ -2829,63 +2810,64 @@ public class TransgressionManager : ITransgressionManager
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"Failed to send more information required email. Stage: {stage}. WarningId={warningId}. Error: {ex.Message}",
+                $"Failed to send more information required email. " +
+                $"Stage: {stage}. WarningId={warningId}. Error: {ex.Message}",
                 ex);
         }
     }
-
-    public async Task SendMoreInformationAddedEmailAsync(
-        long warningId,
-        string? noteText,
-        IReadOnlyCollection<IFormFile>? files = null)
+    public async Task SendMoreInformationAddedEmailAsync(long warningId, string? noteText, IReadOnlyCollection<IFormFile>? files = null)
     {
         var stage = "Starting";
         User? me = await _graphUserDataAccess.GetMeAsync();
-        await _data.SetWarningStatusAsync(warningId, IssueStatusGroup.AddedMoreInformation, me.Id.ToString());
-        
+
+
+        await _data.SetWarningStatusAsync( warningId,IssueStatusGroup.AddedMoreInformation,me.Id.ToString());
+
 
         try
         {
             stage = "Validating input";
 
             if (warningId is 0)
-                throw new ArgumentException("Invalid warning id.", nameof(warningId));
+                throw new ArgumentException(
+                    "Invalid warning id.",
+                    nameof(warningId));
 
             var validFiles = files?
                 .Where(x => x != null && x.Length > 0)
                 .ToList() ?? new List<IFormFile>();
 
             if (string.IsNullOrWhiteSpace(noteText) && !validFiles.Any())
-                throw new ArgumentException("A note or at least one file is required.");
+                throw new ArgumentException(
+                    "A note or at least one file is required.");
 
             stage = $"Getting warning info. WarningId={warningId}";
 
             var warningInfo = await _data.GetWarningByIdAsync(warningId);
 
-            if (warningInfo == null)
+            if (warningInfo is null)
+            {
                 throw new InvalidOperationException($"Warning not found. WarningId={warningId}");
+            }
 
             stage = $"Getting Legal recipients from settings. WarningId={warningId}";
 
-            var to = _emailSettings.LegalRecipients;
+            var legalRecipients = _emailSettings.LegalRecipients?
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList() ?? new List<string>();
 
-            if (to == null || !to.Any() || to.All(x => string.IsNullOrWhiteSpace(x)))
+            if (legalRecipients.Count == 0)
             {
                 throw new InvalidOperationException(
                     $"Legal recipients are not configured. WarningId={warningId}");
             }
 
-            var legalRecipients = to
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Select(x => x.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            var legalUsername = "Legal Team";
-
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={warningId}";
 
-            var employeeDisplayName = await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
+            var employeeDisplayName =
+                await GetDisplayNameFromUserIdAsync(warningInfo.EmployeeId);
 
             if (string.IsNullOrWhiteSpace(employeeDisplayName))
                 employeeDisplayName = warningInfo.EmployeeId;
@@ -2896,13 +2878,12 @@ public class TransgressionManager : ITransgressionManager
 
             if (!string.IsNullOrWhiteSpace(warningInfo.CreatedBy))
             {
-                submittedByDisplayName = await GetDisplayNameFromUserIdAsync(warningInfo.CreatedBy);
+                submittedByDisplayName =
+                    await GetDisplayNameFromUserIdAsync(warningInfo.CreatedBy);
 
                 if (string.IsNullOrWhiteSpace(submittedByDisplayName))
                     submittedByDisplayName = warningInfo.CreatedBy;
             }
-
-            stage = $"Building email request. WarningId={warningId}, To={string.Join(",", legalRecipients)}";
 
             if (string.IsNullOrWhiteSpace(_applicationOptions.BaseUrl))
             {
@@ -2919,117 +2900,38 @@ public class TransgressionManager : ITransgressionManager
                 : noteText.Trim();
 
             var uploadedFilesDisplay = validFiles.Any()
-                ? string.Join("<br/>", validFiles.Select(x => System.Net.WebUtility.HtmlEncode(x.FileName)))
+                ? string.Join(
+                    "<br/>",
+                    validFiles.Select(
+                        x => System.Net.WebUtility.HtmlEncode(x.FileName)))
                 : "No documents were uploaded.";
 
-            var safeNoteText = System.Net.WebUtility.HtmlEncode(noteDisplay);
-            var safeLegalUsername = System.Net.WebUtility.HtmlEncode(legalUsername);
-            var safeEmployeeDisplayName = System.Net.WebUtility.HtmlEncode(employeeDisplayName);
-            var safeSubmittedByDisplayName = System.Net.WebUtility.HtmlEncode(submittedByDisplayName);
-            var safeCategory = System.Net.WebUtility.HtmlEncode(
-                warningInfo.Category.Name ?? warningInfo.CategoryId.ToString());
-            var safeStatus = System.Net.WebUtility.HtmlEncode(warningInfo.Status ?? "");
-            var safeLegalUrl = System.Net.WebUtility.HtmlEncode(legalUrl);
+            stage = $"Building email template. WarningId={warningId}";
+
+            var bodyHtml = await BuildEmailAsync(
+                "MoreInformationAdded.html",
+                new Dictionary<string, string>
+                {
+                    ["WarningId"] = warningInfo.WarningId.ToString(),
+                    ["LegalUsername"] = System.Net.WebUtility.HtmlEncode("Legal Team"),
+                    ["EmployeeDisplayName"] = System.Net.WebUtility.HtmlEncode(
+                        employeeDisplayName ?? ""),
+                    ["SubmittedByDisplayName"] = System.Net.WebUtility.HtmlEncode(
+                        submittedByDisplayName),
+                    ["Category"] = System.Net.WebUtility.HtmlEncode(
+                        warningInfo.Category?.Name ?? warningInfo.CategoryId.ToString()),
+                    ["Status"] = System.Net.WebUtility.HtmlEncode(
+                        warningInfo.Status ?? ""),
+                    ["NoteText"] = System.Net.WebUtility.HtmlEncode(noteDisplay),
+                    ["UploadedFiles"] = uploadedFilesDisplay,
+                    ["LegalUrl"] = System.Net.WebUtility.HtmlEncode(legalUrl)
+                });
 
             var req = new SendEmailRequest
             {
-                Subject = $"Warning System | More information added - Issue {warningInfo.WarningId}",
-                BodyHtml = $@"
-                <div style=""font-family: Arial, sans-serif; color:#333; line-height:1.5;"">
-
-                    <h2 style=""color:#014678; margin-bottom:8px;"">
-                        More Information Added
-                    </h2>
-
-                    <p>Hi {safeLegalUsername},</p>
-
-                    <p>
-                        The requested information has been added for issue
-                        <strong>#{warningInfo.WarningId}</strong>.
-                    </p>
-
-                    <table style=""border-collapse:collapse; margin-top:15px; margin-bottom:15px; width:100%; max-width:650px;"">
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Employee
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeEmployeeDisplayName}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Submitted By
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeSubmittedByDisplayName}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Category
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeCategory}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style=""padding:8px; border:1px solid #ddd; font-weight:bold; background:#f8f9fa;"">
-                                Current Status
-                            </td>
-                            <td style=""padding:8px; border:1px solid #ddd;"">
-                                {safeStatus}
-                            </td>
-                        </tr>
-                    </table>
-
-                    <p style=""margin-bottom:6px;""><strong>Information Added:</strong></p>
-
-                    <div style=""
-                        border:1px solid #ddd;
-                        background:#f8f9fa;
-                        padding:12px;
-                        border-radius:6px;
-                        white-space:pre-wrap;
-                        margin-bottom:18px;"">
-                        {safeNoteText}
-                    </div>
-
-                    <p style=""margin-bottom:6px;""><strong>Documents Uploaded:</strong></p>
-
-                    <div style=""
-                        border:1px solid #ddd;
-                        background:#f8f9fa;
-                        padding:12px;
-                        border-radius:6px;
-                        margin-bottom:18px;"">
-                        {uploadedFilesDisplay}
-                    </div>
-
-                    <p>
-                        Please open the link below to review the submitted information:
-                    </p>
-
-                    <p>
-                        <a href=""{safeLegalUrl}""
-                           style=""
-                               display:inline-block;
-                               padding:10px 18px;
-                               background:#014678;
-                               color:#ffffff;
-                               text-decoration:none;
-                               border-radius:999px;
-                               font-weight:bold;"">
-                            Review Issue
-                        </a>
-                    </p>
-
-                    <p style=""font-size:12px; color:#666; margin-top:20px;"">
-                        If the button does not work, copy and paste this link into your browser:<br/>
-                        <span>{safeLegalUrl}</span>
-                    </p>
-
-                </div>",
+                Subject =
+                    $"Warning System | More information added - Issue {warningInfo.WarningId}",
+                BodyHtml = bodyHtml,
                 ToRecipients = legalRecipients,
                 SaveToSentItems = true
             };
@@ -3054,8 +2956,6 @@ public class TransgressionManager : ITransgressionManager
             stage = $"Sending email. WarningId={warningId}, To={string.Join(",", legalRecipients)}, Attachments={req.Attachments.Count}";
 
             await _graphUserDataAccess.SendEmailAsync(req);
-
-            stage = $"Email sent successfully. WarningId={warningId}, To={string.Join(",", legalRecipients)}";
         }
         catch (Exception ex)
         {
@@ -3064,6 +2964,7 @@ public class TransgressionManager : ITransgressionManager
                 ex);
         }
     }
+
 
     private async Task SendLegalIssueCompletedEmailAsync(long warningId)
     {
@@ -3087,8 +2988,7 @@ public class TransgressionManager : ITransgressionManager
 
             if (warningInfo is null)
             {
-                throw new InvalidOperationException(
-                    $"Warning not found. WarningId={warningId}");
+                throw new InvalidOperationException( $"Warning not found. WarningId={warningId}");
             }
 
             stage =
@@ -3144,8 +3044,7 @@ public class TransgressionManager : ITransgressionManager
 
             var categoryName = await GetEmailCategoryNamesAsync(warningInfo);
 
-            stage =
-                $"Rendering email template. WarningId={warningId}";
+            stage = $"Rendering email template. WarningId={warningId}";
 
             var bodyHtml = _emailTemplateRenderer.Render(
                 "LegalActionRequired",
@@ -3214,8 +3113,43 @@ public class TransgressionManager : ITransgressionManager
             : trimmedUserId;
     }
 
-    public async Task AddTeamLeadEvidenceAsync(
-        AddTeamLeadEvidenceVm model)
+
+
+
+    private static async Task<string> BuildEmailAsync( string templateFileName, IReadOnlyDictionary<string, string> values)
+    {
+        var assembly = typeof(TransgressionManager).Assembly;
+        var resourceName =
+            $"WarningSystems.Core.EmailTemplates.{templateFileName}";
+
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+
+        if (stream is null)
+        {
+            throw new InvalidOperationException(
+                $"Embedded email template '{resourceName}' was not found. " +
+                $"Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}");
+        }
+
+        using var reader = new StreamReader(stream);
+        var template = await reader.ReadToEndAsync();
+
+        return System.Text.RegularExpressions.Regex.Replace(
+            template,
+            @"\{\{([A-Za-z0-9_]+)\}\}",
+            match =>
+            {
+                var key = match.Groups[1].Value;
+
+                return values.TryGetValue(key, out var value)
+                    ? value
+                    : throw new InvalidOperationException(
+                        $"Missing email template value: {key}");
+            });
+    }
+
+
+    public async Task AddTeamLeadEvidenceAsync(AddTeamLeadEvidenceVm model)
     {
         if (model.WarningId <= 0)
         {
@@ -3279,6 +3213,47 @@ public class TransgressionManager : ITransgressionManager
       
     }
 
+
+    public async Task<IActionResult> CompleteTransgressionAsync(CompleteTransgressionDto dto)
+    {
+        try
+        {
+            if (dto.File is not null && dto.File.Length > 0)
+            {
+                var mediaType = _fileStorage.GetAttachmentType(dto.File);
+                const string attachmentType = "LegalDecision";
+
+                var fileName = await _fileStorage.UploadWarningFileAsync(
+                    dto.WarningId,
+                    attachmentType,
+                    dto.File);
+
+                await SaveEvidenceAsync(
+                    dto.WarningId,
+                    fileName,
+                    mediaType,
+                    dto.File.Length,
+                    null,
+                    3,
+                    true);
+            }
+
+            await ApplyLegalDecisionAsync(
+                dto.WarningId,
+                dto.IssueTypeId,
+                dto.IssueSubTypeId);
+
+            await SendEmailToTeamLeadAsync(dto);
+
+            return new OkObjectResult(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new BadRequestObjectResult(ex.Message);
+        }
+    }
+
+
     public async Task NotifyLegalIssueCompletedAsync(long warningId)
     {
         var stage = "Starting";
@@ -3311,4 +3286,58 @@ public class TransgressionManager : ITransgressionManager
                 ex);
         }
     }
+
+    public async Task SavePreviousOffencesAsync(SavePreviousOffencesDto dto)
+    {
+        if (!dto.HasPreviousOffences)
+        {
+            return;
+        }
+
+        const string type = "PreviousOffences";
+
+        foreach (var file in dto.Files)
+        {
+            if (file is null || file.Length == 0)
+            {
+                continue;
+            }
+
+            await _fileStorage.UploadWarningFileAsync(
+                dto.WarningId,
+                type,
+                file);
+        }
+    }
+
+    public async Task<IActionResult> SaveEvidenceAttachmentAsync( SaveAttachmentsDto dto)
+    {
+        foreach (var file in dto.Files)
+        {
+            if (file is null || file.Length is 0)
+            {
+                continue;
+            }
+
+            var mediaType = _fileStorage.GetAttachmentType(file);
+            const string attachmentType = "LegalEvidence";
+
+            var fileName = await _fileStorage.UploadWarningFileAsync(
+                dto.WarningId,
+                attachmentType,
+                file);
+
+            await SaveEvidenceAsync(
+                dto.WarningId,
+                fileName,
+                mediaType,
+                file.Length,
+                dto.Notes,
+                3,
+                true);
+        }
+
+        return new OkObjectResult(new { success = true });
+    }
+
 }

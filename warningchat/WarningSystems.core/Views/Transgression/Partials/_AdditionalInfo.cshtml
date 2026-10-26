@@ -1,0 +1,42 @@
+﻿@using WarningSystems.Core.ViewModels
+@model WarningWizardVm
+
+<form id="frmAdditionalInfo"
+      asp-controller="Transgression"
+      asp-action="SaveAdditionalInfo"
+      method="post"
+      class="ws-step-page">
+
+    <div class="ws-step-header">
+        <div>
+            <h3 class="ws-step-title">Additional Information</h3>
+            <p class="ws-step-subtext mb-0">Add any additional information here.</p>
+        </div>
+
+        <button type="button"
+                class="btn ws-btn-primary-pill"
+                id="btnSaveAdditionalInfo">
+            Save &amp; Continue
+        </button>
+        <div id="additionalInfoSaveMsg"
+             class="text-success mt-2"
+             style="display:none;">
+            Saved ✓
+        </div>
+    </div>
+
+    <input type="hidden"
+           id="WarningId"
+           value="@Model.WarningId" />
+
+    <input type="hidden"
+           id="AdditionalInfoHtml"
+           name="AdditionalInfoHtml"
+           value="@(Model.EvidenceNotes ?? "")" />
+
+    <div class="ws-editor-shell">
+        <div class="ws-editor-card">
+            <div id="wsQuillEditor" class="ws-editor"></div>
+        </div>
+    </div>
+</form>

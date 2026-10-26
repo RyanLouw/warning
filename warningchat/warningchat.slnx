@@ -4,4 +4,5 @@
   <Project Path="warningchat/WarningSystems.csproj" />
   <Project Path="WarningSystems.core/WarningSystems.core.csproj" />
   <Project Path="WarningSystemsAppHost/WarningSystemsAppHost.csproj" />
+  <Project Path="WarningSystemTest/WarningSystemTest.csproj" Id="a20034a3-7ae3-43a6-9fa6-860442cd0d38" />
 </Solution>

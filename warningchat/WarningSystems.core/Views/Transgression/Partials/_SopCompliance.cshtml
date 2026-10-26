@@ -1,0 +1,58 @@
+﻿<p class="mb-2">
+    If the employee failed to comply with an SOP, please select the SOP name
+    (if applicable).
+</p>
+
+<div class="form-check mb-3 d-flex align-items-center">
+    <div class="d-flex align-items-center">
+
+        <input type="hidden"
+               name="IsSopNonCompliance"
+               value="false" />
+
+        <input class="form-check-input"
+               type="checkbox"
+               id="IsSopNonCompliance"
+               name="IsSopNonCompliance"
+               value="true"
+        @(Model.IsSopNonCompliance ? "checked" : null) />
+
+        <label class="form-check-label ms-2"
+               for="IsSopNonCompliance">
+            SOP Not Applicable / Unknown
+        </label>
+    </div>
+
+    <div class="text-muted mt-2 ms-3"
+         id="sopSaveMsg"
+         style="display:none;">
+    </div>
+
+    <button type="button"
+            class="ws-btn-primary-pill ms-auto"
+            id="btnSaveSop">
+        Save & Continue
+    </button>
+</div>
+
+<div class="mb-3" style="max-width: 340px;">
+
+    <select class="form-select"
+            id="SelectedSOPDocumentId"
+            name="SelectedSOPDocumentId"
+        @(Model.IsSopNonCompliance ? "disabled" : null)>
+
+        <option value="">Select an SOP</option>
+
+        @foreach (var sop in Model.SOPs)
+        {
+            <option value="@sop.SOPDocumentId"
+                    data-name="@sop.DocumentName"
+                    selected="@(Model.SelectedSOPDocumentId == sop.SOPDocumentId ? "selected" : null)">
+                @sop.DocumentName
+            </option>
+        }
+
+    </select>
+
+</div>

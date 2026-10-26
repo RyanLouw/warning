@@ -127,7 +127,7 @@ public class GraphUserDataAccess : IGraphUserDataAccess
 
 
         var usersunderme = users.Values
-          //.Where(user => user.AccountEnabled == true)
+          .Where(user => user.AccountEnabled == true)
           .OrderBy(user => user.DisplayName)
           .ThenBy(user => user.UserPrincipalName)
           .ToList();
@@ -196,7 +196,8 @@ public class GraphUserDataAccess : IGraphUserDataAccess
                 "mail",
                 "userPrincipalName",
                 "jobTitle",
-                "department"
+                "department",
+                "accountEnabled"
             };
 
             cfg.QueryParameters.Top = 999;

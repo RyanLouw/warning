@@ -1,0 +1,35 @@
+﻿
+@model WarningSystems.Core.ViewModels.WarningWizardVm
+
+@{
+    var q1 = Model.Questions?.FirstOrDefault(x => x.QuestionId == 1);
+}
+
+<div class="ws-calendar-card">
+    <div class="ws-calendar-header">
+        <div class="ws-help">
+            Select all the dates applicable. Multiple dates can be selected.
+        </div>
+
+        <button type="button" class="ws-btn-primary-pill" id="wsSaveDatesBtn">
+            Save Dates
+        </button>
+    </div>
+
+    <div class="ws-calendar-wrap">
+        <div id="wsCalendar"></div>
+    </div>
+
+    <div class="ws-calendar-footer">
+        <span class="ws-calendar-count">
+            Selected: <strong id="wsSelectedCount">0</strong>
+        </span>
+
+        <div id="wsSaveMsg" class="mt-2" style="display:none;"></div>
+    </div>
+</div>
+
+<input type="hidden" id="Q1_QuestionId" value="1" />
+<input type="hidden" id="Q1_AnswerJson" value="@((q1?.AnswerJson) ?? "")" />
+<input type="hidden" id="Q1_AnswerText" value="@((q1?.AnswerText) ?? "")" />
+<input type="hidden" id="WarningId" value="@(Model.WarningId ?? 0)" />
