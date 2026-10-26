@@ -75,7 +75,7 @@ public class AuthenticationTests
         await transform.TransformAsync(principal);
         await transform.TransformAsync(principal);
         Assert.True(principal.IsInRole(expected));
-        Assert.Single(principal.FindAll(ClaimTypes.Role).Where(c => c.Value == expected));
+        Assert.Single(principal.FindAll(ClaimTypes.Role), c => c.Value == expected);
     }
 
     [Fact]

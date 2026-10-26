@@ -9,6 +9,18 @@ namespace WarningSystems.UnitTests;
 public class HelperTests
 {
     [Theory]
+    [InlineData(" saved text ", "invalid json", "saved text")]
+    [InlineData(null, null, "")]
+    [InlineData(" ", " ", "")]
+    [InlineData(null, "invalid", "")]
+    [InlineData(null, "[]", "")]
+    [InlineData(null, "{}", "")]
+    [InlineData(null, "{\"dates\":true}", "")]
+    [InlineData(null, "{\"dates\":[\"2026-01-01\", null, 123, \" \", \" 2026-01-02 \"]}", "2026-01-01, 2026-01-02")]
+    public void Discussion_dates_handle_saved_text_and_legacy_json(string? text, string? json, string expected) =>
+        Assert.Equal(expected, DiscussionDateFormatter.Format(text, json));
+
+    [Theory]
     [InlineData(null, "")]
     [InlineData("", "")]
     [InlineData("  ", "")]

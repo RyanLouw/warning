@@ -16,14 +16,13 @@ public class WorkflowTests(BrowserFixture fixture) : IClassFixture<BrowserFixtur
             await page.Locator("#btnAbsenceDiscussion").ClickAsync();
             await page.Locator("#absenceEmployeeId").SelectOptionAsync("alice");
             await page.Locator("#absenceSubType").SelectOptionAsync("2");
-            // Replace the default date with a stable past date, then add it twice.
-            await page.Locator("#selectedAbsenceDates button").ClickAsync();
             await page.Locator("#absenceDates").FillAsync("2026-01-05");
-            await page.Locator("#addAbsenceDate").ClickAsync();
-            await page.Locator("#addAbsenceDate").ClickAsync();
-            await Expect(page.Locator("#selectedAbsenceDates button")).ToHaveCountAsync(1);
             await page.Locator("#absenceDescription").FillAsync(description);
-            await page.RunAndWaitForNavigationAsync(() => page.Locator("#saveAbsenceDiscussion").ClickAsync());
+            var saveResponse = await page.RunAndWaitForResponseAsync(
+                () => page.Locator("#saveAbsenceDiscussion").ClickAsync(),
+                response => response.Url.EndsWith("/Home/CreateAbsenceDiscussion") && response.Request.Method == "POST");
+            Assert.True(saveResponse.Ok);
+            await Expect(page.Locator("#absenceDiscussionModal")).ToBeHiddenAsync();
             await using var db = fixture.App.OpenDatabase();
             var answer = await db.WarningAnswers.AsNoTracking().SingleAsync(a => a.QuestionId == 2 && a.AnswerText == description);
             var warning = await db.Warnings.AsNoTracking().SingleAsync(w => w.WarningId == answer.WarningId);
@@ -69,7 +68,11 @@ public class WorkflowTests(BrowserFixture fixture) : IClassFixture<BrowserFixtur
         var modal = page.Locator("#modalCreateQuestion");
         await modal.Locator("[name=QuestionText]").FillAsync(question);
         await modal.Locator("[name=ControlType]").SelectOptionAsync("Text");
-        await page.RunAndWaitForNavigationAsync(() => modal.GetByRole(AriaRole.Button, new() { Name = "Save Question", Exact = true }).ClickAsync());
+        var saveResponse = await page.RunAndWaitForResponseAsync(
+            () => modal.GetByRole(AriaRole.Button, new() { Name = "Save Question", Exact = true }).ClickAsync(),
+            response => response.Url.EndsWith("/Admin/CreateQuestion") && response.Request.Method == "POST");
+        Assert.Equal(302, saveResponse.Status);
+        await Expect(page.Locator("#modalCreateQuestion")).ToBeHiddenAsync();
         await using var db = fixture.App.OpenDatabase();
         var saved = await db.Questions.AsNoTracking().SingleAsync(q => q.QuestionText == question);
         Assert.Equal("Text", saved.ControlType);
@@ -83,8 +86,10 @@ public class WorkflowTests(BrowserFixture fixture) : IClassFixture<BrowserFixtur
     [InlineData("Legal")]
     public Task Non_admin_cannot_open_admin_screen(string role) => fixture.RunAsync($"deny-admin-{role}", async page =>
     {
-        var response = await page.GotoAsync("/Admin/Index");
-        Assert.Equal(403, response!.Status);
+        // Chromium may treat an empty 403 navigation as a network error.
+        // The browser context request still uses this test identity and checks the real route.
+        var response = await page.Context.APIRequest.GetAsync("/Admin/Index");
+        Assert.Equal(403, response.Status);
     }, role);
 
     [Fact]

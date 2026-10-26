@@ -1,4 +1,8 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+using Moq;
+using Microsoft.Identity.Web;
+using WarningSystems.Core.DataAccess.GraphDataAccess;
+using WarningSystems.Core.DataAccess.GraphDataAccess.Context;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Graph;
 using Microsoft.Kiota.Abstractions.Authentication;
 using Microsoft.Kiota.Http.HttpClientLibrary;
@@ -66,7 +70,7 @@ namespace WarningSystemTest.ServicesTest
 
             var graph = CreateGraphClient(handler);
             var cache = CreateCache();
-            var sut = new AppGroupLookup(graph, cache);
+            var sut = new GraphUserDataAccess(new UserGraphClient(graph), Mock.Of<ITokenAcquisition>());
 
             var result = await sut.GetMatchedGroupIdsAsync("user-1", Array.Empty<string>());
 
@@ -90,7 +94,7 @@ namespace WarningSystemTest.ServicesTest
 
             var graph = CreateGraphClient(handler);
             var cache = CreateCache();
-            var sut = new AppGroupLookup(graph, cache);
+            var sut = new GraphUserDataAccess(new UserGraphClient(graph), Mock.Of<ITokenAcquisition>());
 
             var result = await sut.GetMatchedGroupIdsAsync("user-1", new[] { "gid-1", "gid-2", "gid-3" });
 
@@ -99,14 +103,14 @@ namespace WarningSystemTest.ServicesTest
         }
 
         [Fact]
-        public async Task GetMatchedGroupIdsAsync_UsesCache_OnSecondCall_SameUserSameGroups()
+        public async Task GetMatchedGroupIdsAsync_QueriesCurrentMembership_OnEachCall()
         {
             var handler = new FakeGraphHandler(_ =>
                 Task.FromResult(JsonOk(new { value = new[] { "gid-9" } })));
 
             var graph = CreateGraphClient(handler);
             var cache = CreateCache();
-            var sut = new AppGroupLookup(graph, cache);
+            var sut = new GraphUserDataAccess(new UserGraphClient(graph), Mock.Of<ITokenAcquisition>());
 
             var groups = new[] { "gid-9", "gid-10" };
 
@@ -115,7 +119,7 @@ namespace WarningSystemTest.ServicesTest
 
             Assert.Equal(new[] { "gid-9" }, first);
             Assert.Equal(new[] { "gid-9" }, second);
-            Assert.Equal(1, handler.CallCount);
+            Assert.Equal(2, handler.CallCount);
         }
 
         [Fact]
@@ -131,7 +135,7 @@ namespace WarningSystemTest.ServicesTest
 
             var graph = CreateGraphClient(handler);
             var cache = CreateCache();
-            var sut = new AppGroupLookup(graph, cache);
+            var sut = new GraphUserDataAccess(new UserGraphClient(graph), Mock.Of<ITokenAcquisition>());
 
             var result = await sut.GetMatchedGroupIdsAsync("user-1",
                 new[] { "gid-a", "GID-A", "", "   ", null, "gid-b", "gid-b" });

@@ -9,3 +9,4 @@
 **/TestResults/
 **/playwright-artifacts/
 /work/
+**/__pycache__/

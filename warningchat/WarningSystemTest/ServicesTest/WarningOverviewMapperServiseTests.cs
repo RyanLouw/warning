@@ -1,4 +1,4 @@
-﻿using WarningSystems.Core.Services;
+using WarningSystems.Core.Services;
 using WarningSystems.Core.ViewModels;
 
 namespace WarningSystemTest.ServicesTest
@@ -11,7 +11,6 @@ namespace WarningSystemTest.ServicesTest
             {
                 WarningId = 123,
                 EmployeeId = "  John Doe  ",
-                CategoryName = "  Late Coming  ",
                 Questions = new List<WarningQuestionVm>(questions)
             };
         }
@@ -92,14 +91,12 @@ namespace WarningSystemTest.ServicesTest
             {
                 WarningId = 5,
                 EmployeeId = "   ",
-                CategoryName = null,
                 Questions = new List<WarningQuestionVm> { Q(1, text: "2026-02-01") }
             };
 
             var vm = sut.Build(model);
 
             Assert.Equal("—", vm.EmployeeName);
-            Assert.Equal("—", vm.CategoryName);
         }
     }
 }

@@ -18,6 +18,14 @@ public class HttpTests(DatabaseFixture fixture) : IClassFixture<DatabaseFixture>
     [InlineData("User", "/Home/Index", HttpStatusCode.OK)]
     [InlineData("Legal", "/Home/Index", HttpStatusCode.OK)]
     [InlineData("User,Legal", "/Home/Index", HttpStatusCode.OK)]
+    [InlineData("User", "/Transgression/Index", HttpStatusCode.OK)]
+    [InlineData("User", "/Transgression/Index/1", HttpStatusCode.OK)]
+    [InlineData("User", "/Transgression/TeamLeadWarning/2", HttpStatusCode.OK)]
+    [InlineData("Legal", "/Legal/Index/2", HttpStatusCode.OK)]
+    [InlineData("Legal", "/Legal/Index/999999", HttpStatusCode.NotFound)]
+    [InlineData("User", "/Home/EmployeeDashboard?employeeId=alice", HttpStatusCode.OK)]
+    [InlineData("User", "/Home/AccessDenied", HttpStatusCode.OK)]
+    [InlineData("User", "/Home/Error", HttpStatusCode.OK)]
     public async Task Routes_enforce_real_authorization(string roles, string route, HttpStatusCode expected)
     {
         using var client = fixture.App.ClientFor(roles);
@@ -29,6 +37,18 @@ public class HttpTests(DatabaseFixture fixture) : IClassFixture<DatabaseFixture>
             Assert.Contains("Test Manager", body);
             Assert.DoesNotContain("login.microsoftonline.com", response.RequestMessage!.RequestUri!.Host);
         }
+    }
+
+    [Fact]
+    public async Task Pdf_export_is_a_valid_download_for_saved_warning()
+    {
+        using var client = fixture.App.ClientFor("User");
+        var response = await client.GetAsync("/Transgression/ExportOverviewPdf?warningId=1");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/pdf", response.Content.Headers.ContentType!.MediaType);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(bytes[..8]));
+        Assert.True(bytes.Length > 500);
     }
 
     [Fact]

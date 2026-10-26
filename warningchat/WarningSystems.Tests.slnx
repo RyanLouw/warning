@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="WarningSystemTest/WarningSystemTest.csproj" />
   <Project Path="tests/WarningSystems.UnitTests/WarningSystems.UnitTests.csproj" />
   <Project Path="tests/WarningSystems.IntegrationTests/WarningSystems.IntegrationTests.csproj" />
   <Project Path="tests/WarningSystems.UiTests/WarningSystems.UiTests.csproj" />

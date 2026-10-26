@@ -31,4 +31,9 @@
 		<EmbeddedResource Include="EmailTemplates/*.html" LogicalName="WarningSystems.Core.EmailTemplates.%(Filename)%(Extension)" />
 	</ItemGroup>
 
+  <ItemGroup>
+    <!-- These are copies of web/test sources, not domain-library compilation inputs. -->
+    <Compile Remove="Controllers/**/*.cs;Middleware/**/*.cs;ServicesTest/**/*.cs" />
+    <EmbeddedResource Include="Services/EmailTemplates/IssueUpdated.html;Services/EmailTemplates/MoreInformationAdded.html;Services/EmailTemplates/MoreInformationRequired.html" LogicalName="WarningSystems.Core.EmailTemplates.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

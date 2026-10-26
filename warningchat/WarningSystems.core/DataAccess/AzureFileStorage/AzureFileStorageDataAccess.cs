@@ -1,4 +1,4 @@
-﻿using Azure;
+using Azure;
 using Azure.Storage.Files.Shares;
 using Azure.Storage.Files.Shares.Models;
 using Microsoft.AspNetCore.Http;
@@ -13,9 +13,13 @@ public class AzureFileStorageDataAccess : IAzureFileStorageDataAccess
     private readonly Func<ShareClient> _shareClientFactory;
 
     public AzureFileStorageDataAccess(string connectionString)
+        : this(connectionString, () => new ShareClient(connectionString, ShareName)) { }
+
+    internal AzureFileStorageDataAccess(string connectionString, Func<ShareClient> shareClientFactory)
     {
+        ArgumentNullException.ThrowIfNull(shareClientFactory);
         _connectionString = connectionString;
-        _shareClientFactory = () => new ShareClient(_connectionString, ShareName);
+        _shareClientFactory = shareClientFactory;
     }
 
     public async Task<List<string>> ListWarningFilesAsync(long warningId)
