@@ -26,11 +26,19 @@ using WarningSystems.Core.Services.Interface;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Middleware;
 using WarningSystems.Services.Interface;
+#if CENTRAL_CONFIG
 using HW.CentralConfig.Package.Core;
+#endif
 
 
 var builder = WebApplication.CreateBuilder(args);
-await builder.AddCentralConfigAsync();
+#if CENTRAL_CONFIG
+if (!builder.Environment.IsEnvironment("Testing"))
+    await builder.AddCentralConfigAsync();
+#else
+if (!builder.Environment.IsEnvironment("Testing"))
+    throw new InvalidOperationException("This build requires the Testing environment. Rebuild with EnableCentralConfig=true for normal use.");
+#endif
 builder.Host.UseSerilog((ctx, services, config) =>
 {
     config.ReadFrom.Configuration(ctx.Configuration);
@@ -168,12 +176,10 @@ IdentityModelEventSource.ShowPII = true;
 /// manager services would go here
 builder.Services.AddScoped<ITransgressionManager, TransgressionManager>();
 
-var conn = builder.Configuration["Storage:ConnectionString"]
-           ?? throw new InvalidOperationException("Storage connection string missing.");
-
-builder.Services.AddScoped<IAzureFileStorageDataAccess>(
-    _ => new AzureFileStorageDataAccess(conn)
-);
+builder.Services.AddScoped<IAzureFileStorageDataAccess>(sp =>
+    new AzureFileStorageDataAccess(
+        sp.GetRequiredService<IConfiguration>()["Storage:ConnectionString"]
+        ?? throw new InvalidOperationException("Storage connection string missing.")));
 
 builder.Services.AddScoped<IWarningPdfExportService, WarningPdfExportService>();
 builder.Services.AddScoped<WarningOverviewMapperServise>();
@@ -207,3 +213,6 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.Run();
+
+// Exposes the entry point to the external test host; no test login ships in this app.
+public partial class Program { }

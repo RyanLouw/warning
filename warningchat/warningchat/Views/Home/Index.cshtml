@@ -1,4 +1,4 @@
-﻿﻿@using WarningSystems.Core.ViewModels
+@using WarningSystems.Core.ViewModels
 @model WarningSystems.Core.ViewModels.TaskListVM
 
 
@@ -962,7 +962,7 @@
                                                                 value.Trim()
                                                                 .ToLowerInvariant()));
 
-                                                                <tr class="report-row"
+                                                                <tr class="report-row" data-warning-id="@row.WarningId"
                                                                     data-employee="@employeeName"
                                                                     data-department="@department"
                                                                     data-manager="@manager"
