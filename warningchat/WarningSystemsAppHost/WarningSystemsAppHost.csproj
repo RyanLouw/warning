@@ -4,7 +4,7 @@
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsAspireHost>true</IsAspireHost>
@@ -18,11 +18,14 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Database.Migrations\Database.Migrations.csproj" />
-		<ProjectReference Include="..\Warning.System.ServiceDefaults\Warning.System.ServiceDefaults.csproj" />
-		<ProjectReference Include="..\WarningSystems\WarningSystems.csproj" />
+		<ProjectReference Include="..\Warning.System.ServiceDefaults\Warning.System.ServiceDefaults.csproj" IsAspireProjectResource="false" />
+		<ProjectReference Include="../warningchat/WarningSystems.csproj" />
 	</ItemGroup>
 
 
 
 
+  <PropertyGroup Condition="'$(WarningSystemTestingBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);WARNING_SYSTEM_TEST_BUILD</DefineConstants>
+  </PropertyGroup>
 </Project>

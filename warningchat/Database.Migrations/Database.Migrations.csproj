@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
-		<TargetFramework>net8.0</TargetFramework>
+		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
@@ -11,7 +11,6 @@
 
 	<ItemGroup>
 		<PackageReference Include="FluentMigrator.Runner.SqlServer" Version="7.2.0" />
-		<PackageReference Include="HW.CentralConfig.Package" Version="2026.7.24.2" />
 		<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
 		<PackageReference Include="Serilog.Settings.Configuration" Version="10.0.0" />
@@ -22,47 +21,8 @@
 		<ProjectReference Include="..\Warning.System.ServiceDefaults\Warning.System.ServiceDefaults.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-		<None Update="appsettings.json">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0003.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0009.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0008.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0007.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0006.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0005.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0004.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0002.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0001.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0010.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0011.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Update="Migrations\Scripts\0012.sql">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-	</ItemGroup>
-
-
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Migrations/Scripts/*.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

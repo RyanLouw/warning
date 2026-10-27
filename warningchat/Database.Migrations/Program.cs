@@ -1,11 +1,11 @@
-﻿using Database.Migrations;
+using Database.Migrations;
 using FluentMigrator.Runner;
 using FluentMigrator.Runner.Initialization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
-using HW.CentralConfig.Package.Core;
+
 namespace HW.Database.Migrations;
 
 public class Program
@@ -16,7 +16,7 @@ public class Program
         new("PitstopDb", TagNames.Pitstop)
     ];
 
-    public static async Task Main(string[] args)
+    public static void Main(string[] args)
     {
         try
         {
@@ -31,9 +31,8 @@ public class Program
             foreach (var tag in MigratorTags)
             {
                 Log.Information("Entered RunMigrations for {ConnectionKey}", tag.ConnectionKey);
-                IServiceProvider serviceProvider = await CreateServices(tag, configSettings);
-
-                using var scope = serviceProvider.CreateScope();
+                using var host = CreateHost(tag, configSettings, args);
+                using var scope = host.Services.CreateScope();
                 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
                 MigrateUp(scope.ServiceProvider);
                 Log.Information("Finished with {ConnectionKey}", tag.ConnectionKey);
@@ -44,6 +43,7 @@ public class Program
         catch (Exception ex)
         {
             Log.Error(ex, "Main");
+            Environment.ExitCode = 1;
         }
     }
 
@@ -62,7 +62,7 @@ public class Program
 
         builder.AddServiceDefaults();
 
-        var connection = builder.Configuration.GetConnectionString(migratorTag.ConnectionKey);
+        var connection = GetConnectionString(builder.Configuration, migratorTag.ConnectionKey);
 
         builder.Services.AddFluentMigratorCore()
             .ConfigureRunner(rb =>
@@ -77,7 +77,7 @@ public class Program
 
         var app = builder.Build();
         Log.Information("Application services built successfully");
-        return host;
+        return app;
     }
 
     private static string GetConnectionString(IConfiguration configuration, string connectionKey)

@@ -1,4 +1,4 @@
-﻿using FluentMigrator;
+using FluentMigrator;
 
 namespace Database.Migrations;
 
@@ -13,6 +13,6 @@ public class _0005_Categorys : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0005.sql");
+        Execute.Script(Path.Combine("Migrations", "Scripts", "0005.sql"));
     }
 }

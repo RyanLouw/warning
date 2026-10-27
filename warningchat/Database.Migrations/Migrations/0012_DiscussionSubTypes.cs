@@ -13,6 +13,6 @@ public class _0012_DiscussionSubTypes : Migration
 
     public override void Up()
     {
-        Execute.Script("Migrations\\Scripts\\0012.sql");
+        Execute.Script(Path.Combine("Migrations", "Scripts", "0012.sql"));
     }
 }
