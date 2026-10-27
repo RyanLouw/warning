@@ -1,5 +1,5 @@
 using Microsoft.Graph.Models;
-using Moq;
+using FakeItEasy;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
 
 namespace WarningSystemTest.Unit;
@@ -47,14 +47,14 @@ public class TaskListTests
             new() { WarningId = 3, EmployeeId = "outside", CreatedBy = "actor", Status = "New", LegalExpiryDate = today.AddDays(4) },
             new() { WarningId = 4, EmployeeId = "outside", CreatedBy = "actor", Status = "In Progress" }
         };
-        f.Data.Setup(x => x.GetAllWarningsForTaskListAsync()).ReturnsAsync(rows);
-        f.Data.Setup(x => x.GetAllWarningsForReportingAsync()).ReturnsAsync(rows);
-        f.Data.Setup(x => x.GetAllCategoriesAsync()).ReturnsAsync([]);
-        f.Data.Setup(x => x.GetActiveIssueTypesAsync()).ReturnsAsync([]);
-        f.Graph.Setup(x => x.GetUsersBelowMyLevelAsync()).ReturnsAsync([new User { Id = "employee", DisplayName = "Employee One", Department = "Sales" }]);
-        f.Graph.Setup(x => x.GetMeAsync()).ReturnsAsync(new User { Id = "actor", DisplayName = "Manager" });
-        f.Graph.Setup(x => x.GetUserAsync(It.IsAny<string>())).ReturnsAsync((string id) => new User { Id = id, DisplayName = id == "employee" ? "Employee One" : id });
-        f.Roles.Setup(x => x.GetCurrentUserRolesAsync()).ReturnsAsync(roles.Split(','));
+        A.CallTo(() => f.Data.GetAllWarningsForTaskListAsync()).Returns(rows);
+        A.CallTo(() => f.Data.GetAllWarningsForReportingAsync()).Returns(rows);
+        A.CallTo(() => f.Data.GetAllCategoriesAsync()).Returns([]);
+        A.CallTo(() => f.Data.GetActiveIssueTypesAsync()).Returns([]);
+        A.CallTo(() => f.Graph.GetUsersBelowMyLevelAsync()).Returns([new User { Id = "employee", DisplayName = "Employee One", Department = "Sales" }]);
+        A.CallTo(() => f.Graph.GetMeAsync()).Returns(new User { Id = "actor", DisplayName = "Manager" });
+        A.CallTo(() => f.Graph.GetUserAsync(A<string>._)).ReturnsLazily((string id) => new User { Id = id, DisplayName = id == "employee" ? "Employee One" : id });
+        A.CallTo(() => f.Roles.GetCurrentUserRolesAsync()).Returns(roles.Split(','));
         return f;
     }
 }

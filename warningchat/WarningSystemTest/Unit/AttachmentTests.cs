@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Moq;
+using FakeItEasy;
 using WarningSystems.Models.DTO;
 
 namespace WarningSystemTest.Unit;
@@ -16,16 +16,16 @@ public class AttachmentTests
     public async Task No_previous_offences_never_uploads_even_if_files_are_supplied()
     {
         await _f.Manager.SavePreviousOffencesAsync(new() { WarningId = 42, HasPreviousOffences = false, Files = [File()] });
-        _f.Storage.VerifyNoOtherCalls();
+        Assert.Empty(Fake.GetCalls(_f.Storage));
     }
 
     [Fact]
     public async Task Previous_offences_upload_nonempty_files_with_correct_warning_id()
     {
         var file = File();
-        _f.Storage.Setup(x => x.UploadWarningFileAsync(42, "PreviousOffences", file)).ReturnsAsync("saved.pdf");
+        A.CallTo(() => _f.Storage.UploadWarningFileAsync(42, "PreviousOffences", file)).Returns("saved.pdf");
         await _f.Manager.SavePreviousOffencesAsync(new() { WarningId = 42, HasPreviousOffences = true, Files = [null!, File(bytes: []), file] });
-        _f.Storage.VerifyAll();
+        A.CallTo(() => _f.Storage.UploadWarningFileAsync(42, "PreviousOffences", file)).MustHaveHappened();
     }
 
     [Theory]
@@ -36,8 +36,8 @@ public class AttachmentTests
         var dto = new SaveAttachmentsDto { WarningId = 42, Files = [null!, File(bytes: [])] };
         var result = legal ? await _f.Manager.SaveEvidenceAttachmentAsync(dto) : await _f.Manager.SaveUserEvidenceAttachmentAsync(dto);
         Assert.IsType<OkObjectResult>(result);
-        _f.Storage.VerifyNoOtherCalls();
-        _f.Data.VerifyNoOtherCalls();
+        Assert.Empty(Fake.GetCalls(_f.Storage));
+        Assert.Empty(Fake.GetCalls(_f.Data));
     }
 
     [Theory]
@@ -47,22 +47,23 @@ public class AttachmentTests
     public async Task User_attachment_name_and_metadata_are_preserved(string? display, string prefix)
     {
         var file = File();
-        _f.Storage.Setup(x => x.GetAttachmentType(file)).Returns("Document");
-        _f.Storage.Setup(x => x.UploadWarningFileAsync(42, prefix, file)).ReturnsAsync("stored.pdf");
-        _f.Data.Setup(x => x.SaveEvidenceAsync(42, "stored.pdf", "Document", 3, "actor", "note", 1)).ReturnsAsync(7);
+        A.CallTo(() => _f.Storage.GetAttachmentType(file)).Returns("Document");
+        A.CallTo(() => _f.Storage.UploadWarningFileAsync(42, prefix, file)).Returns("stored.pdf");
+        A.CallTo(() => _f.Data.SaveEvidenceAsync(42, "stored.pdf", "Document", 3, "actor", "note", 1)).Returns(7);
         Assert.IsType<OkObjectResult>(await _f.Manager.SaveUserEvidenceAttachmentAsync(new() { WarningId = 42, AttachmentName = display, Files = [file], Notes = "note" }));
-        _f.Data.VerifyAll();
-        _f.Storage.VerifyAll();
+        A.CallTo(() => _f.Data.SaveEvidenceAsync(42, "stored.pdf", "Document", 3, "actor", "note", 1)).MustHaveHappened();
+        A.CallTo(() => _f.Storage.GetAttachmentType(file)).MustHaveHappened();
+        A.CallTo(() => _f.Storage.UploadWarningFileAsync(42, prefix, file)).MustHaveHappened();
     }
 
     [Fact]
     public async Task Legal_attachments_have_legal_note_type()
     {
         var file = File();
-        _f.Storage.Setup(x => x.GetAttachmentType(file)).Returns("Document");
-        _f.Storage.Setup(x => x.UploadWarningFileAsync(42, "LegalEvidence", file)).ReturnsAsync("stored.pdf");
-        _f.Data.Setup(x => x.SaveEvidenceAsync(42, "stored.pdf", "Document", 3, "actor", "note", 3)).ReturnsAsync(7);
+        A.CallTo(() => _f.Storage.GetAttachmentType(file)).Returns("Document");
+        A.CallTo(() => _f.Storage.UploadWarningFileAsync(42, "LegalEvidence", file)).Returns("stored.pdf");
+        A.CallTo(() => _f.Data.SaveEvidenceAsync(42, "stored.pdf", "Document", 3, "actor", "note", 3)).Returns(7);
         Assert.IsType<OkObjectResult>(await _f.Manager.SaveEvidenceAttachmentAsync(new() { WarningId = 42, Files = [file], Notes = "note" }));
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.SaveEvidenceAsync(42, "stored.pdf", "Document", 3, "actor", "note", 3)).MustHaveHappened();
     }
 }

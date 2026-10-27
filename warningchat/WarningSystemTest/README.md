@@ -4,7 +4,9 @@ All tests live in this project. The example project remains reference material.
 UI, HTTP integration and database tests start the real application through the
 existing Aspire AppHost, wait for its migrations, and use its session-only SQL
 Server database. This expansion does not change AppHost or migration files.
-Unit tests start neither Aspire nor a browser.
+Unit tests start neither Aspire nor a browser. Their dependencies use FakeItEasy
+(`A.Fake`, `A.CallTo`, argument matchers and explicit call assertions); Moq is
+not a dependency of this test project.
 
 ## Test groups and files
 
@@ -12,7 +14,7 @@ Paths below are relative to WarningSystemTest:
 
 | Location | Purpose |
 |---|---|
-| `Unit/` | Controllers, manager commands, workflow rules, claims/roles, Graph adapters, email, attachment helpers and view-model mapping using mocks. |
+| `Unit/` | Controllers, manager commands, workflow rules, claims/roles, Graph adapters, email, attachment helpers and view-model mapping using FakeItEasy fakes. |
 | `Tests/LoginTests.cs` | Existing synthetic-role authentication and missing-key checks. |
 | `Tests/UI/ReportTests.cs` | Individual and combined filters, date boundaries, no results, reset, role visibility, every displayed cell, totals and department breakdown. |
 | `Tests/UI/WarningWizardTests.cs` | Draft creation/editing, dates, rich description, SOP, uploads/downloads and submission. |

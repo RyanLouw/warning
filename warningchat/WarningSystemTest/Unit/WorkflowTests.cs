@@ -1,4 +1,4 @@
-using Moq;
+using FakeItEasy;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
 using WarningSystems.Core.Models.Enum;
 
@@ -19,22 +19,23 @@ public class WorkflowTests
     {
         WarningIn(group);
         await Assert.ThrowsAsync<InvalidOperationException>(() => _f.Manager.ValidateWarningAsync(42));
-        _f.Data.Verify(x => x.AdvanceWarningStatusAsync(It.IsAny<long>(), It.IsAny<IssueStatusGroup>(), It.IsAny<string>()), Times.Never);
+        A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(A<long>._, A<IssueStatusGroup>._, A<string>._)).MustNotHaveHappened();
     }
 
     [Fact]
     public async Task Issued_issue_can_be_validated()
     {
         WarningIn(IssueStatusGroup.LegalValidation);
-        _f.Data.Setup(x => x.AdvanceWarningStatusAsync(42, IssueStatusGroup.LegalValidation, "actor")).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(42, IssueStatusGroup.LegalValidation, "actor")).Returns(Task.CompletedTask);
         await _f.Manager.ValidateWarningAsync(42);
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(42, IssueStatusGroup.LegalValidation, "actor")).MustHaveHappened();
     }
 
     [Fact]
     public async Task Missing_issue_cannot_be_validated()
     {
-        _f.Data.Setup(x => x.GetWarningByIdAsync(42)).ReturnsAsync((Warning?)null);
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).Returns((Warning?)null);
         await Assert.ThrowsAsync<KeyNotFoundException>(() => _f.Manager.ValidateWarningAsync(42));
     }
 
@@ -46,7 +47,7 @@ public class WorkflowTests
     {
         WarningIn(group);
         await Assert.ThrowsAsync<InvalidOperationException>(() => _f.Manager.UpdateWarningStatusAsync(42, null, "New"));
-        _f.Data.Verify(x => x.UpdateWarningDueDateAsync(It.IsAny<long>(), It.IsAny<DateOnly?>(), It.IsAny<string>()), Times.Never);
+        A.CallTo(() => _f.Data.UpdateWarningDueDateAsync(A<long>._, A<DateOnly?>._, A<string>._)).MustNotHaveHappened();
     }
 
     [Fact]
@@ -54,18 +55,20 @@ public class WorkflowTests
     {
         WarningIn(IssueStatusGroup.Draft);
         var date = new DateOnly(2027, 1, 4);
-        _f.Data.Setup(x => x.AdvanceWarningStatusAsync(42, IssueStatusGroup.Draft, "actor")).Returns(Task.CompletedTask);
-        _f.Data.Setup(x => x.UpdateWarningDueDateAsync(42, date, "actor")).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(42, IssueStatusGroup.Draft, "actor")).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.UpdateWarningDueDateAsync(42, date, "actor")).Returns(Task.CompletedTask);
         await _f.Manager.UpdateWarningStatusAsync(42, date, "New");
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(42, IssueStatusGroup.Draft, "actor")).MustHaveHappened();
+        A.CallTo(() => _f.Data.UpdateWarningDueDateAsync(42, date, "actor")).MustHaveHappened();
     }
 
     [Fact]
     public async Task Due_date_only_change_does_not_submit()
     {
-        _f.Data.Setup(x => x.UpdateWarningDueDateAsync(42, null, "actor")).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.UpdateWarningDueDateAsync(42, null, "actor")).Returns(Task.CompletedTask);
         await _f.Manager.UpdateWarningStatusAsync(42, null, null);
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.UpdateWarningDueDateAsync(42, null, "actor")).MustHaveHappened();
     }
 
     [Theory]
@@ -85,10 +88,12 @@ public class WorkflowTests
     {
         WarningIn(group);
         var type = new LookupIssueType { IssueTypeId = 2, SubTypeSelectionMode = SubTypeSelectionMode.Required, IssueSubTypes = [new() { IssueSubTypeId = 3 }] };
-        _f.Data.Setup(x => x.GetActiveIssueTypesAsync()).ReturnsAsync([type]);
-        _f.Data.Setup(x => x.UpdateWarningDecisionAsync(42, type, type.IssueSubTypes.Single(), "actor")).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.GetActiveIssueTypesAsync()).Returns([type]);
+        A.CallTo(() => _f.Data.UpdateWarningDecisionAsync(42, type, type.IssueSubTypes.Single(), "actor")).Returns(Task.CompletedTask);
         await _f.Manager.ApplyLegalDecisionAsync(42, 2, 3);
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.GetActiveIssueTypesAsync()).MustHaveHappened();
+        A.CallTo(() => _f.Data.UpdateWarningDecisionAsync(42, type, type.IssueSubTypes.Single(), "actor")).MustHaveHappened();
     }
 
     [Theory]
@@ -97,7 +102,7 @@ public class WorkflowTests
     public async Task Required_subtype_must_belong_to_selected_type(int? subtype)
     {
         WarningIn(IssueStatusGroup.LegalDecision);
-        _f.Data.Setup(x => x.GetActiveIssueTypesAsync()).ReturnsAsync([new() { IssueTypeId = 2, SubTypeSelectionMode = SubTypeSelectionMode.Required }]);
+        A.CallTo(() => _f.Data.GetActiveIssueTypesAsync()).Returns([new() { IssueTypeId = 2, SubTypeSelectionMode = SubTypeSelectionMode.Required }]);
         await Assert.ThrowsAsync<InvalidOperationException>(() => _f.Manager.ApplyLegalDecisionAsync(42, 2, subtype));
     }
 
@@ -105,7 +110,7 @@ public class WorkflowTests
     public async Task Unknown_issue_type_is_rejected()
     {
         WarningIn(IssueStatusGroup.LegalDecision);
-        _f.Data.Setup(x => x.GetActiveIssueTypesAsync()).ReturnsAsync([]);
+        A.CallTo(() => _f.Data.GetActiveIssueTypesAsync()).Returns([]);
         await Assert.ThrowsAsync<InvalidOperationException>(() => _f.Manager.ApplyLegalDecisionAsync(42, 999, null));
     }
 
@@ -114,10 +119,12 @@ public class WorkflowTests
     {
         WarningIn(IssueStatusGroup.LegalDecision);
         var type = new LookupIssueType { IssueTypeId = 1, SubTypeSelectionMode = SubTypeSelectionMode.None };
-        _f.Data.Setup(x => x.GetActiveIssueTypesAsync()).ReturnsAsync([type]);
-        _f.Data.Setup(x => x.UpdateWarningDecisionAsync(42, type, null, "actor")).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.GetActiveIssueTypesAsync()).Returns([type]);
+        A.CallTo(() => _f.Data.UpdateWarningDecisionAsync(42, type, null, "actor")).Returns(Task.CompletedTask);
         await _f.Manager.ApplyLegalDecisionAsync(42, 1, 99);
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.GetActiveIssueTypesAsync()).MustHaveHappened();
+        A.CallTo(() => _f.Data.UpdateWarningDecisionAsync(42, type, null, "actor")).MustHaveHappened();
     }
 
     [Fact]
@@ -127,11 +134,11 @@ public class WorkflowTests
     [Fact]
     public async Task Mark_in_progress_advances_legal_review()
     {
-        _f.Data.Setup(x => x.AdvanceWarningStatusAsync(42, IssueStatusGroup.LegalReview, "actor")).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(42, IssueStatusGroup.LegalReview, "actor")).Returns(Task.CompletedTask);
         await _f.Manager.MarkWarningInProgressAsync(42);
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(42, IssueStatusGroup.LegalReview, "actor")).MustHaveHappened();
     }
 
     private void WarningIn(IssueStatusGroup group) =>
-        _f.Data.Setup(x => x.GetWarningByIdAsync(42)).ReturnsAsync(new Warning { WarningId = 42, IssueStatus = new() { IssueStatusGroup = group } });
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).Returns(new Warning { WarningId = 42, IssueStatus = new() { IssueStatusGroup = group } });
 }

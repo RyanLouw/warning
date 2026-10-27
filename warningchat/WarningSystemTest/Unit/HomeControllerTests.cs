@@ -2,7 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using FakeItEasy;
 using WarningSystems.Controllers;
 using WarningSystems.Core.Manager;
 using WarningSystems.Core.ViewModels;
@@ -14,8 +14,8 @@ namespace WarningSystemTest.Unit;
 [Trait("Category", "Unit")]
 public class HomeControllerTests
 {
-    private readonly Mock<ITransgressionManager> _manager = new(MockBehavior.Strict);
-    private HomeController Create(params string[] roles) => new(NullLogger<HomeController>.Instance, _manager.Object)
+    private readonly ITransgressionManager _manager = A.Fake<ITransgressionManager>(options => options.Strict());
+    private HomeController Create(params string[] roles) => new(NullLogger<HomeController>.Instance, _manager)
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext {
             User = new ClaimsPrincipal(new ClaimsIdentity(roles.Select(r => new Claim(ClaimTypes.Role, r)), "UnitTest"))
@@ -56,7 +56,7 @@ public class HomeControllerTests
     public async Task Index_renders_manager_model()
     {
         var model = new TaskListVM();
-        _manager.Setup(x => x.BuildTaskListAsync()).ReturnsAsync(model);
+        A.CallTo(() => _manager.BuildTaskListAsync()).Returns(model);
         Assert.Same(model, Assert.IsType<ViewResult>(await Create().Index()).Model);
     }
 
@@ -69,7 +69,7 @@ public class HomeControllerTests
     [Fact]
     public async Task Employee_dashboard_checks_access()
     {
-        _manager.Setup(x => x.GetEmployeeDashboardAsync("employee")).ReturnsAsync(new EmployeeDashboardVm { HasAccess = false });
+        A.CallTo(() => _manager.GetEmployeeDashboardAsync("employee")).Returns(new EmployeeDashboardVm { HasAccess = false });
         Assert.IsType<ForbidResult>(await Create().EmployeeDashboard("employee"));
     }
 
@@ -77,7 +77,7 @@ public class HomeControllerTests
     public async Task Employee_dashboard_renders_authorised_data()
     {
         var model = new EmployeeDashboardVm { HasAccess = true };
-        _manager.Setup(x => x.GetEmployeeDashboardAsync("employee")).ReturnsAsync(model);
+        A.CallTo(() => _manager.GetEmployeeDashboardAsync("employee")).Returns(model);
         var result = Assert.IsType<PartialViewResult>(await Create().EmployeeDashboard("employee"));
         Assert.Equal("_EmployeeDashboardModal", result.ViewName);
         Assert.Same(model, result.Model);
@@ -89,7 +89,7 @@ public class HomeControllerTests
         var controller = Create("User");
         controller.ModelState.AddModelError("EmployeeId", "Required");
         Assert.IsType<BadRequestObjectResult>(await controller.CreateAbsenceDiscussion(new()));
-        _manager.VerifyNoOtherCalls();
+        Assert.Empty(Fake.GetCalls(_manager));
     }
 
     [Theory]
@@ -98,7 +98,7 @@ public class HomeControllerTests
     public async Task Discussion_returns_status_matching_result(bool success)
     {
         var dto = new CreateAbsenceDiscussionDto();
-        _manager.Setup(x => x.CreateAbsenceDiscussionAsync(dto)).ReturnsAsync(success ? SaveIssueStepResult.Ok(42) : SaveIssueStepResult.Fail("Rejected"));
+        A.CallTo(() => _manager.CreateAbsenceDiscussionAsync(dto)).Returns(success ? SaveIssueStepResult.Ok(42) : SaveIssueStepResult.Fail("Rejected"));
         var result = await Create("User").CreateAbsenceDiscussion(dto);
         if (success) Assert.IsType<OkObjectResult>(result);
         else Assert.IsType<BadRequestObjectResult>(result);

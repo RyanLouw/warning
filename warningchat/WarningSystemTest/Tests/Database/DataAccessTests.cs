@@ -5,7 +5,7 @@ using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
 using WarningSystems.Core.Models.Enum;
 using WarningSystemTest.Fixtures;
 using WarningSystems.Core.DataAccess.GraphDataAccess;
-using Moq;
+using FakeItEasy;
 
 namespace WarningSystemTest.Tests.Database;
 
@@ -19,7 +19,7 @@ public class DataAccessTests(BrowserFixture fixture) : UiTestBase(fixture)
         return new(new DbContextOptionsBuilder<WarningSystemDbContext>().UseSqlServer(connection.ConnectionString).Options);
     }
 
-    private WarningSystemDataAccess Data(WarningSystemDbContext db) => new(db, Mock.Of<IGraphUserDataAccess>());
+    private WarningSystemDataAccess Data(WarningSystemDbContext db) => new(db, A.Fake<IGraphUserDataAccess>());
 
     private async Task<long> NewWarningAsync(int status = 1)
     {

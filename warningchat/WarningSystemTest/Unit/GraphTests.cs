@@ -5,7 +5,7 @@ using Microsoft.Graph;
 using Microsoft.Identity.Web;
 using Microsoft.Kiota.Abstractions.Authentication;
 using Microsoft.Kiota.Http.HttpClientLibrary;
-using Moq;
+using FakeItEasy;
 using WarningSystems.Core.DataAccess.GraphDataAccess;
 using WarningSystems.Core.DataAccess.GraphDataAccess.Context;
 using WarningSystems.Core.ViewModels;
@@ -28,7 +28,7 @@ public class GraphTests
     private static GraphUserDataAccess Create(Handler handler)
     {
         var adapter = new HttpClientRequestAdapter(new AnonymousAuthenticationProvider(), httpClient: new HttpClient(handler));
-        return new(new UserGraphClient(new GraphServiceClient(adapter)), Mock.Of<ITokenAcquisition>());
+        return new(new UserGraphClient(new GraphServiceClient(adapter)), A.Fake<ITokenAcquisition>());
     }
 
     private static HttpResponseMessage Json(object value) => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json") };

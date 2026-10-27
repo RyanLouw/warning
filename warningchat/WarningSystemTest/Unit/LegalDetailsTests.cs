@@ -1,4 +1,4 @@
-using Moq;
+using FakeItEasy;
 using WarningSystems.core.Models.DTO;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
 
@@ -13,13 +13,13 @@ public class LegalDetailsTests
     public async Task Missing_id_is_rejected_without_database_call()
     {
         Assert.False((await _f.Manager.UpdateLegalIssueDetailsAsync(new(), "actor")).Success);
-        _f.Data.VerifyNoOtherCalls();
+        Assert.Empty(Fake.GetCalls(_f.Data));
     }
 
     [Fact]
     public async Task Missing_issue_is_rejected()
     {
-        _f.Data.Setup(x => x.GetWarningByIdAsync(42)).ReturnsAsync((Warning?)null);
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).Returns((Warning?)null);
         Assert.Equal("The issue could not be found.", (await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42 }, "actor")).Message);
     }
 
@@ -31,7 +31,7 @@ public class LegalDetailsTests
     {
         WarningIn(status);
         Assert.False((await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42, UpdateType = "dates", Dates = [new(2026, 1, 1)] }, "actor")).Success);
-        _f.Data.Verify(x => x.SaveLegalIssueDetailsAsync(It.IsAny<long>(), It.IsAny<IReadOnlyCollection<WarningCategory>?>(), It.IsAny<WarningAnswer?>(), It.IsAny<WarningNote>()), Times.Never);
+        A.CallTo(() => _f.Data.SaveLegalIssueDetailsAsync(A<long>._, A<IReadOnlyCollection<WarningCategory>?>._, A<WarningAnswer?>._, A<WarningNote>._)).MustNotHaveHappened();
     }
 
     [Fact]
@@ -49,13 +49,17 @@ public class LegalDetailsTests
     public async Task Dates_are_deduplicated_sorted_and_audited(string status)
     {
         WarningIn(status);
-        _f.Data.Setup(x => x.GetWarningAnswersByWarningIdAsync(42)).ReturnsAsync([new() { QuestionId = 1, AnswerJson = "{\"dates\":[\"2026-01-01\"]}" }]);
-        _f.Data.Setup(x => x.SaveLegalIssueDetailsAsync(42, null,
-            It.Is<WarningAnswer>(a => a.QuestionId == 1 && a.AnswerText == "2026-01-02, 2026-01-03" && a.AnswerJson!.Contains("2026-01-03")),
-            It.Is<WarningNote>(n => n.CreatedBy == "actor" && n.NoteText.Contains("2026-01-01") && n.NoteText.Contains("2026-01-03")))).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.GetWarningAnswersByWarningIdAsync(42)).Returns([new() { QuestionId = 1, AnswerJson = "{\"dates\":[\"2026-01-01\"]}" }]);
+        A.CallTo(() => _f.Data.SaveLegalIssueDetailsAsync(42, null,
+            A<WarningAnswer>.That.Matches(a => a.QuestionId == 1 && a.AnswerText == "2026-01-02, 2026-01-03" && a.AnswerJson!.Contains("2026-01-03")),
+            A<WarningNote>.That.Matches(n => n.CreatedBy == "actor" && n.NoteText.Contains("2026-01-01") && n.NoteText.Contains("2026-01-03")))).Returns(Task.CompletedTask);
         var result = await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42, UpdateType = " dates ", Dates = [new(2026, 1, 3), new(2026, 1, 2), new(2026, 1, 3)] }, " actor ");
         Assert.True(result.Success);
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.GetWarningAnswersByWarningIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.SaveLegalIssueDetailsAsync(42, null,
+            A<WarningAnswer>.That.Matches(a => a.QuestionId == 1 && a.AnswerText == "2026-01-02, 2026-01-03" && a.AnswerJson!.Contains("2026-01-03")),
+            A<WarningNote>.That.Matches(n => n.CreatedBy == "actor" && n.NoteText.Contains("2026-01-01") && n.NoteText.Contains("2026-01-03")))).MustHaveHappened();
     }
 
     [Theory]
@@ -67,8 +71,8 @@ public class LegalDetailsTests
     public async Task Legacy_or_corrupt_dates_can_be_replaced(string? json)
     {
         WarningIn("New");
-        _f.Data.Setup(x => x.GetWarningAnswersByWarningIdAsync(42)).ReturnsAsync([new() { QuestionId = 1, AnswerJson = json }]);
-        _f.Data.Setup(x => x.SaveLegalIssueDetailsAsync(42, null, It.IsAny<WarningAnswer>(), It.Is<WarningNote>(n => n.CreatedBy == "System"))).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.GetWarningAnswersByWarningIdAsync(42)).Returns([new() { QuestionId = 1, AnswerJson = json }]);
+        A.CallTo(() => _f.Data.SaveLegalIssueDetailsAsync(42, null, A<WarningAnswer>._, A<WarningNote>.That.Matches(n => n.CreatedBy == "System"))).Returns(Task.CompletedTask);
         Assert.True((await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42, UpdateType = "dates", Dates = [new(2026, 1, 1)] }, " ")).Success);
     }
 
@@ -76,7 +80,7 @@ public class LegalDetailsTests
     public async Task Unchanged_dates_do_not_write()
     {
         WarningIn("New");
-        _f.Data.Setup(x => x.GetWarningAnswersByWarningIdAsync(42)).ReturnsAsync([new() { QuestionId = 1, AnswerJson = "{\"dates\":[\"2026-01-01\"]}" }]);
+        A.CallTo(() => _f.Data.GetWarningAnswersByWarningIdAsync(42)).Returns([new() { QuestionId = 1, AnswerJson = "{\"dates\":[\"2026-01-01\"]}" }]);
         Assert.False((await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42, UpdateType = "dates", Dates = [new(2026, 1, 1)] }, "actor")).Success);
     }
 
@@ -91,12 +95,16 @@ public class LegalDetailsTests
     public async Task Categories_are_validated_and_audited()
     {
         WarningIn("New");
-        _f.Data.Setup(x => x.GetAllCategoriesAsync()).ReturnsAsync([new() { CategoryId = 1, Name = "Old", IsActive = true }, new() { CategoryId = 2, Name = "New category", IsActive = true }]);
-        _f.Data.Setup(x => x.GetWarningCategoriesByWarningIdAsync(42)).ReturnsAsync([new() { CategoryId = 1, Category = new() { Name = "Old" } }]);
-        _f.Data.Setup(x => x.SaveLegalIssueDetailsAsync(42, It.Is<IReadOnlyCollection<WarningCategory>>(c => c.Count == 1 && c.First().CategoryId == 2), null,
-            It.Is<WarningNote>(n => n.NoteText.Contains("Old") && n.NoteText.Contains("New category")))).Returns(Task.CompletedTask);
+        A.CallTo(() => _f.Data.GetAllCategoriesAsync()).Returns([new() { CategoryId = 1, Name = "Old", IsActive = true }, new() { CategoryId = 2, Name = "New category", IsActive = true }]);
+        A.CallTo(() => _f.Data.GetWarningCategoriesByWarningIdAsync(42)).Returns([new() { CategoryId = 1, Category = new() { Name = "Old" } }]);
+        A.CallTo(() => _f.Data.SaveLegalIssueDetailsAsync(42, A<IReadOnlyCollection<WarningCategory>>.That.Matches(c => c.Count == 1 && c.First().CategoryId == 2), null,
+            A<WarningNote>.That.Matches(n => n.NoteText.Contains("Old") && n.NoteText.Contains("New category")))).Returns(Task.CompletedTask);
         Assert.True((await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42, UpdateType = "categories", CategoryIds = [2, 2, -1] }, "actor")).Success);
-        _f.Data.VerifyAll();
+        A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.GetAllCategoriesAsync()).MustHaveHappened();
+        A.CallTo(() => _f.Data.GetWarningCategoriesByWarningIdAsync(42)).MustHaveHappened();
+        A.CallTo(() => _f.Data.SaveLegalIssueDetailsAsync(42, A<IReadOnlyCollection<WarningCategory>>.That.Matches(c => c.Count == 1 && c.First().CategoryId == 2), null,
+            A<WarningNote>.That.Matches(n => n.NoteText.Contains("Old") && n.NoteText.Contains("New category")))).MustHaveHappened();
     }
 
     [Theory]
@@ -106,8 +114,8 @@ public class LegalDetailsTests
     public async Task Invalid_or_unchanged_categories_do_not_write(int selection, string expected)
     {
         WarningIn("New");
-        _f.Data.Setup(x => x.GetAllCategoriesAsync()).ReturnsAsync([new() { CategoryId = 1, Name = "Old", IsActive = true }, new() { CategoryId = 2, Name = "Inactive", IsActive = false }]);
-        _f.Data.Setup(x => x.GetWarningCategoriesByWarningIdAsync(42)).ReturnsAsync([new() { CategoryId = 1, Category = new() { Name = "Old" } }]);
+        A.CallTo(() => _f.Data.GetAllCategoriesAsync()).Returns([new() { CategoryId = 1, Name = "Old", IsActive = true }, new() { CategoryId = 2, Name = "Inactive", IsActive = false }]);
+        A.CallTo(() => _f.Data.GetWarningCategoriesByWarningIdAsync(42)).Returns([new() { CategoryId = 1, Category = new() { Name = "Old" } }]);
         Assert.Equal(expected, (await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42, UpdateType = "categories", CategoryIds = [selection] }, "actor")).Message);
     }
 
@@ -115,12 +123,12 @@ public class LegalDetailsTests
     public async Task Data_errors_are_returned_as_validation_messages()
     {
         WarningIn("New");
-        _f.Data.Setup(x => x.GetWarningAnswersByWarningIdAsync(42)).ReturnsAsync([]);
-        _f.Data.Setup(x => x.SaveLegalIssueDetailsAsync(42, null, It.IsAny<WarningAnswer>(), It.IsAny<WarningNote>())).ThrowsAsync(new InvalidOperationException("Concurrent edit"));
+        A.CallTo(() => _f.Data.GetWarningAnswersByWarningIdAsync(42)).Returns([]);
+        A.CallTo(() => _f.Data.SaveLegalIssueDetailsAsync(42, null, A<WarningAnswer>._, A<WarningNote>._)).ThrowsAsync(new InvalidOperationException("Concurrent edit"));
         var result = await _f.Manager.UpdateLegalIssueDetailsAsync(new() { WarningId = 42, UpdateType = "dates", Dates = [new(2026, 1, 1)] }, "actor");
         Assert.False(result.Success);
         Assert.Equal("Concurrent edit", result.Message);
     }
 
-    private void WarningIn(string status) => _f.Data.Setup(x => x.GetWarningByIdAsync(42)).ReturnsAsync(new Warning { WarningId = 42, Status = status });
+    private void WarningIn(string status) => A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).Returns(new Warning { WarningId = 42, Status = status });
 }

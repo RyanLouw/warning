@@ -2,7 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using FakeItEasy;
 using WarningSystems.Controllers;
 using WarningSystems.Core.DataAccess.AzureFileStorage;
 using WarningSystems.Core.Manager;
@@ -16,12 +16,12 @@ namespace WarningSystemTest.Unit;
 [Trait("Category", "Unit")]
 public class EndpointTests
 {
-    private readonly Mock<ITransgressionManager> _manager = new(MockBehavior.Strict);
-    private readonly Mock<IAzureFileStorageDataAccess> _storage = new(MockBehavior.Strict);
-    private LegalController Legal(bool named = true) => new(NullLogger<LegalController>.Instance, _manager.Object, _storage.Object) {
+    private readonly ITransgressionManager _manager = A.Fake<ITransgressionManager>(options => options.Strict());
+    private readonly IAzureFileStorageDataAccess _storage = A.Fake<IAzureFileStorageDataAccess>(options => options.Strict());
+    private LegalController Legal(bool named = true) => new(NullLogger<LegalController>.Instance, _manager, _storage) {
         ControllerContext = new() { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(named ? new[] { new Claim(ClaimTypes.Name, "actor") } : [], "Test")) } }
     };
-    private TransgressionController User() => new(NullLogger<HomeController>.Instance, _manager.Object, _storage.Object, Mock.Of<IWarningPdfExportService>());
+    private TransgressionController User() => new(NullLogger<HomeController>.Instance, _manager, _storage, A.Fake<IWarningPdfExportService>());
 
     [Theory]
     [InlineData(0, 1, "note")]
@@ -30,15 +30,15 @@ public class EndpointTests
     public async Task Legal_note_rejects_invalid_input(long id, int type, string text)
     {
         Assert.IsType<BadRequestObjectResult>(await Legal().AddEvidenceNote(new() { WarningId = id, NoteTypeId = type, NoteText = text }));
-        _manager.VerifyNoOtherCalls();
+        Assert.Empty(Fake.GetCalls(_manager));
     }
 
     [Fact]
     public async Task Legal_note_saves_valid_input()
     {
-        _manager.Setup(x => x.AddWarningNoteAsync(42, null, 1, "note")).Returns(Task.CompletedTask);
+        A.CallTo(() => _manager.AddWarningNoteAsync(42, null, 1, "note")).Returns(Task.CompletedTask);
         Assert.IsType<OkObjectResult>(await Legal().AddEvidenceNote(new() { WarningId = 42, NoteTypeId = 1, NoteText = "note" }));
-        _manager.VerifyAll();
+        A.CallTo(() => _manager.AddWarningNoteAsync(42, null, 1, "note")).MustHaveHappened();
     }
 
     [Theory]
@@ -46,7 +46,7 @@ public class EndpointTests
     [InlineData(false)]
     public async Task Legal_visibility_handles_missing_issue(bool found)
     {
-        _manager.Setup(x => x.SetHideFromTeamLeadAsync(42, true, "actor")).ReturnsAsync(found ? true : null);
+        A.CallTo(() => _manager.SetHideFromTeamLeadAsync(42, true, "actor")).Returns(found ? true : null);
         var result = await Legal().SetTeamLeadVisibility(new() { WarningId = 42, HideFromTeamLead = true });
         if (found) Assert.IsType<OkObjectResult>(result); else Assert.IsType<NotFoundObjectResult>(result);
     }
@@ -59,8 +59,8 @@ public class EndpointTests
     [InlineData(false)]
     public async Task Legal_validation_returns_business_error(bool valid)
     {
-        if (valid) _manager.Setup(x => x.ValidateWarningAsync(42)).Returns(Task.CompletedTask);
-        else _manager.Setup(x => x.ValidateWarningAsync(42)).ThrowsAsync(new InvalidOperationException("Wrong stage"));
+        if (valid) A.CallTo(() => _manager.ValidateWarningAsync(42)).Returns(Task.CompletedTask);
+        else A.CallTo(() => _manager.ValidateWarningAsync(42)).ThrowsAsync(new InvalidOperationException("Wrong stage"));
         var result = await Legal().ValidateTransgression(new() { WarningId = 42 });
         if (valid) Assert.IsType<OkObjectResult>(result); else Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -77,7 +77,7 @@ public class EndpointTests
     public async Task Due_date_update_returns_business_result(bool success)
     {
         var dto = new UpdateDueDateDto { WarningId = 42 };
-        _manager.Setup(x => x.UpdateDueDateWithAuditAsync(dto, "actor")).ReturnsAsync((success, "message"));
+        A.CallTo(() => _manager.UpdateDueDateWithAuditAsync(dto, "actor")).Returns((success, "message"));
         var result = await Legal().UpdateDueDate(dto);
         if (success) Assert.IsType<OkObjectResult>(result); else Assert.IsType<BadRequestObjectResult>(result);
     }
@@ -94,17 +94,25 @@ public class EndpointTests
     public async Task Completion_sends_email_only_after_successful_decision(bool success)
     {
         var dto = new CompleteTransgressionDto { WarningId = 42, IssueTypeId = 2, IssueSubTypeId = 1 };
+        var decisionCompleted = false;
         if (success)
         {
-            var sequence = new MockSequence();
-            _manager.InSequence(sequence).Setup(x => x.ApplyLegalDecisionAsync(42, 2, 1)).Returns(Task.CompletedTask);
-            _manager.InSequence(sequence).Setup(x => x.SendEmailToTeamLeadAsync(dto)).Returns(Task.CompletedTask);
+            A.CallTo(() => _manager.ApplyLegalDecisionAsync(42, 2, 1))
+                .ReturnsLazily(async () => { await Task.Yield(); decisionCompleted = true; });
+            A.CallTo(() => _manager.SendEmailToTeamLeadAsync(dto))
+                .Invokes(() => Assert.True(decisionCompleted)).Returns(Task.CompletedTask);
         }
-        else _manager.Setup(x => x.ApplyLegalDecisionAsync(42, 2, 1)).ThrowsAsync(new InvalidOperationException("Wrong stage"));
+        else A.CallTo(() => _manager.ApplyLegalDecisionAsync(42, 2, 1)).ThrowsAsync(new InvalidOperationException("Wrong stage"));
         var result = await Legal().CompleteTransgression(dto);
-        if (success) Assert.IsType<OkObjectResult>(result); else {
+        if (success)
+        {
+            Assert.IsType<OkObjectResult>(result);
+            A.CallTo(() => _manager.ApplyLegalDecisionAsync(42, 2, 1)).MustHaveHappenedOnceExactly();
+            A.CallTo(() => _manager.SendEmailToTeamLeadAsync(dto)).MustHaveHappenedOnceExactly();
+        }
+        else {
             Assert.IsType<BadRequestObjectResult>(result);
-            _manager.Verify(x => x.SendEmailToTeamLeadAsync(It.IsAny<CompleteTransgressionDto>()), Times.Never);
+            A.CallTo(() => _manager.SendEmailToTeamLeadAsync(A<CompleteTransgressionDto>._)).MustNotHaveHappened();
         }
     }
 
@@ -121,24 +129,24 @@ public class EndpointTests
     [Fact]
     public async Task Information_request_limits_attachment_size()
     {
-        var file = new Mock<IFormFile>();
-        file.SetupGet(x => x.Length).Returns(3 * 1024 * 1024 + 1);
-        Assert.IsType<BadRequestObjectResult>(await Legal().RequestTeamLeadInformation(new() { WarningId = 42, Message = "message", File = file.Object }));
-        _manager.VerifyNoOtherCalls();
+        var file = A.Fake<IFormFile>();
+        A.CallTo(() => file.Length).Returns(3 * 1024 * 1024 + 1);
+        Assert.IsType<BadRequestObjectResult>(await Legal().RequestTeamLeadInformation(new() { WarningId = 42, Message = "message", File = file }));
+        Assert.Empty(Fake.GetCalls(_manager));
     }
 
     [Fact]
     public async Task Valid_information_request_is_trimmed()
     {
-        _manager.Setup(x => x.SendMoreInformationRequiredEmailAsync(42, "message", null)).Returns(Task.CompletedTask);
+        A.CallTo(() => _manager.SendMoreInformationRequiredEmailAsync(42, "message", null)).Returns(Task.CompletedTask);
         Assert.IsType<OkObjectResult>(await Legal().RequestTeamLeadInformation(new() { WarningId = 42, Message = " message " }));
-        _manager.VerifyAll();
+        A.CallTo(() => _manager.SendMoreInformationRequiredEmailAsync(42, "message", null)).MustHaveHappened();
     }
 
     [Fact]
     public async Task Failed_information_request_does_not_expose_internal_exception()
     {
-        _manager.Setup(x => x.SendMoreInformationRequiredEmailAsync(42, "message", null)).ThrowsAsync(new Exception("internal details"));
+        A.CallTo(() => _manager.SendMoreInformationRequiredEmailAsync(42, "message", null)).ThrowsAsync(new Exception("internal details"));
         var result = Assert.IsType<ObjectResult>(await Legal().RequestTeamLeadInformation(new() { WarningId = 42, Message = "message" }));
         Assert.Equal(500, result.StatusCode);
         Assert.DoesNotContain("internal details", System.Text.Json.JsonSerializer.Serialize(result.Value));
@@ -147,19 +155,19 @@ public class EndpointTests
     [Fact]
     public async Task Legal_index_rejects_draft()
     {
-        _manager.Setup(x => x.GetWarningLegalAsync(42)).ReturnsAsync(new LegalWizardVm { IssueStatusGroup = IssueStatusGroup.Draft });
+        A.CallTo(() => _manager.GetWarningLegalAsync(42)).Returns(new LegalWizardVm { IssueStatusGroup = IssueStatusGroup.Draft });
         Assert.IsType<ForbidResult>(await Legal().Index(42));
     }
 
     [Fact]
     public async Task Legal_index_marks_new_issue_in_progress_and_reloads()
     {
-        _manager.SetupSequence(x => x.GetWarningLegalAsync(42))
-            .ReturnsAsync(new LegalWizardVm { IssueStatusGroup = IssueStatusGroup.LegalReview })
-            .ReturnsAsync(new LegalWizardVm { IssueStatusGroup = IssueStatusGroup.LegalDecision });
-        _manager.Setup(x => x.MarkWarningInProgressAsync(42)).Returns(Task.CompletedTask);
+        A.CallTo(() => _manager.GetWarningLegalAsync(42)).ReturnsNextFromSequence(
+            Task.FromResult(new LegalWizardVm { IssueStatusGroup = IssueStatusGroup.LegalReview }),
+            Task.FromResult(new LegalWizardVm { IssueStatusGroup = IssueStatusGroup.LegalDecision }));
+        A.CallTo(() => _manager.MarkWarningInProgressAsync(42)).Returns(Task.CompletedTask);
         Assert.IsType<ViewResult>(await Legal().Index(42));
-        _manager.Verify(x => x.GetWarningLegalAsync(42), Times.Exactly(2));
+        A.CallTo(() => _manager.GetWarningLegalAsync(42)).MustHaveHappenedTwiceExactly();
     }
 
     [Theory]
@@ -172,7 +180,7 @@ public class EndpointTests
     public async Task Answer_batch_cannot_mix_warning_ids()
     {
         Assert.IsType<BadRequestObjectResult>(await User().SaveAnswers([new() { WarningId = 1, QuestionId = 1 }, new() { WarningId = 2, QuestionId = 2 }]));
-        _manager.VerifyNoOtherCalls();
+        Assert.Empty(Fake.GetCalls(_manager));
     }
 
     [Fact]
@@ -182,9 +190,10 @@ public class EndpointTests
     public async Task Valid_answer_batch_saves_all_answers()
     {
         var answers = new List<SaveAnswerDto> { new() { WarningId = 42, QuestionId = 1 }, new() { WarningId = 42, QuestionId = 2 } };
-        foreach (var answer in answers) _manager.Setup(x => x.SaveAnswerAsync(answer)).Returns(Task.CompletedTask);
+        foreach (var answer in answers) A.CallTo(() => _manager.SaveAnswerAsync(answer)).Returns(Task.CompletedTask);
         Assert.IsType<OkObjectResult>(await User().SaveAnswers(answers));
-        _manager.VerifyAll();
+        foreach (var answer in answers)
+            A.CallTo(() => _manager.SaveAnswerAsync(answer)).MustHaveHappenedOnceExactly();
     }
 
     [Theory]
@@ -198,14 +207,14 @@ public class EndpointTests
     [Fact]
     public async Task Missing_legal_download_returns_404()
     {
-        _storage.Setup(x => x.GetFileStreamAsync(42, "missing.pdf")).ThrowsAsync(new FileNotFoundException());
+        A.CallTo(() => _storage.GetFileStreamAsync(42, "missing.pdf")).ThrowsAsync(new FileNotFoundException());
         Assert.IsType<NotFoundResult>(await Legal().Download(42, "missing.pdf"));
     }
 
     [Fact]
     public async Task Missing_user_download_returns_404()
     {
-        _storage.Setup(x => x.GetFileAsync(42, "missing.pdf")).ThrowsAsync(new FileNotFoundException());
+        A.CallTo(() => _storage.GetFileAsync(42, "missing.pdf")).ThrowsAsync(new FileNotFoundException());
         Assert.IsType<NotFoundResult>(await User().DownloadAttachment(42, "missing.pdf"));
     }
 }

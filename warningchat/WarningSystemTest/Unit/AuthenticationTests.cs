@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
-using Moq;
+using FakeItEasy;
 using WarningSystems.Core.Auth;
 using WarningSystems.Core.Auth.Interface;
 using WarningSystems.Core.DataAccess.GraphDataAccess;
@@ -90,15 +90,15 @@ public class AuthenticationTests
     [Fact]
     public async Task Group_roles_respect_exclusions_and_case_insensitive_group_ids()
     {
-        var me = new Mock<ICurrentUserAccessor>();
-        me.SetupGet(x => x.IsAuthenticated).Returns(true);
-        me.SetupGet(x => x.ObjectId).Returns("me");
-        var graph = new Mock<IGraphUserDataAccess>(MockBehavior.Strict);
-        graph.Setup(x => x.GetMatchedGroupIdsAsync("me", It.IsAny<IEnumerable<string>>())).ReturnsAsync(new[] { "GROUP-A", "group-b" });
+        var me = A.Fake<ICurrentUserAccessor>();
+        A.CallTo(() => me.IsAuthenticated).Returns(true);
+        A.CallTo(() => me.ObjectId).Returns("me");
+        var graph = A.Fake<IGraphUserDataAccess>(options => options.Strict());
+        A.CallTo(() => graph.GetMatchedGroupIdsAsync("me", A<IEnumerable<string>>._)).Returns(new[] { "GROUP-A", "group-b" });
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
             ["Roles:Legal"] = "group-a", ["Roles:Admin"] = "group-b", ["Roles:User"] = "group-c", ["RoleExclusions:0"] = "ADMIN"
         }).Build();
-        var service = new UserRoleService(configuration, me.Object, graph.Object);
+        var service = new UserRoleService(configuration, me, graph);
         Assert.Equal(new[] { "Legal" }, await service.GetCurrentUserRolesAsync());
         Assert.True(await service.CurrentUserIsInRoleAsync("LEGAL"));
         Assert.False(await service.CurrentUserIsInRoleAsync("Admin"));
@@ -110,22 +110,22 @@ public class AuthenticationTests
     [InlineData(true, " ")]
     public async Task Anonymous_or_missing_object_id_never_queries_Graph(bool authenticated, string? id)
     {
-        var me = new Mock<ICurrentUserAccessor>();
-        me.SetupGet(x => x.IsAuthenticated).Returns(authenticated);
-        me.SetupGet(x => x.ObjectId).Returns(id);
-        var graph = new Mock<IGraphUserDataAccess>(MockBehavior.Strict);
-        var service = new UserRoleService(new ConfigurationBuilder().Build(), me.Object, graph.Object);
+        var me = A.Fake<ICurrentUserAccessor>();
+        A.CallTo(() => me.IsAuthenticated).Returns(authenticated);
+        A.CallTo(() => me.ObjectId).Returns(id);
+        var graph = A.Fake<IGraphUserDataAccess>(options => options.Strict());
+        var service = new UserRoleService(new ConfigurationBuilder().Build(), me, graph);
         Assert.Empty(await service.GetCurrentUserRolesAsync());
-        graph.VerifyNoOtherCalls();
+        Assert.Empty(Fake.GetCalls(graph));
     }
 
     [Fact]
     public async Task Group_claim_transformation_is_idempotent()
     {
-        var roles = new Mock<IUserRoleService>();
-        roles.Setup(x => x.GetCurrentUserRolesAsync()).ReturnsAsync(new[] { "Legal", "Legal", "User" });
+        var roles = A.Fake<IUserRoleService>();
+        A.CallTo(() => roles.GetCurrentUserRolesAsync()).Returns(new[] { "Legal", "Legal", "User" });
         var principal = Accessor([new(ClaimTypes.Role, "Legal")]).Principal!;
-        var transform = new RoleClaimsTransformation(roles.Object);
+        var transform = new RoleClaimsTransformation(roles);
         await transform.TransformAsync(principal);
         await transform.TransformAsync(principal);
         Assert.Equal(2, principal.FindAll(ClaimTypes.Role).Count());
