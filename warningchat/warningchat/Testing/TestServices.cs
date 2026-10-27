@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Collections.Concurrent;
+using WarningSystems.core.Models.DTO;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Graph.Models;
 using WarningSystems.Core.Auth.Interface;
@@ -19,6 +21,13 @@ public static class TestServices
             throw new InvalidOperationException("Aspire must supply a per-run test authentication key.");
         services.RemoveAll<IGraphUserDataAccess>();
         services.AddScoped<IGraphUserDataAccess, TestGraph>();
+        services.AddSingleton<TestOutbox>();
+        services.PostConfigure<WarningSystems.Core.ViewModels.EmailSettings>(options => options.LegalRecipients = ["legal@example.test"]);
+        services.AddOptions<ApplicationOptions>().Configure<IHttpContextAccessor>((options, accessor) =>
+        {
+            var request = accessor.HttpContext?.Request;
+            if (request is not null) options.BaseUrl = $"{request.Scheme}://{request.Host}";
+        });
         services.RemoveAll<IUserRoleService>();
         services.AddScoped<IUserRoleService, TestRoles>();
         services.RemoveAll<ISOPDataAccess>();
@@ -38,20 +47,50 @@ internal sealed class TestRoles(IHttpContextAccessor accessor) : IUserRoleServic
 
 internal sealed class TestSop : ISOPDataAccess
 {
-    public Task<List<SopDocument>> GetActiveDocumentsAsync() => Task.FromResult(new List<SopDocument>());
+    public Task<List<SopDocument>> GetActiveDocumentsAsync() => Task.FromResult(new List<SopDocument> {
+        new() { SOPDocumentId = 9001, SOPDocumentCategoryId = 1, DocumentName = "UI Safety SOP", DocumentNumber = "UI-001", VersionNumber = "1", Status = 1 }
+    });
 }
 
-// No Graph, Azure AD, mail, or external SOP requests are made by the login checks.
-internal sealed class TestGraph(ICurrentUserAccessor me) : IGraphUserDataAccess
+// External systems stay local in test builds. The warning manager and SQL access
+// remain real; outgoing mail is recorded so workflow tests can inspect it.
+internal sealed class TestGraph(ICurrentUserAccessor me, TestOutbox outbox) : IGraphUserDataAccess
 {
-    private static readonly User Employee = new() { Id = "test-employee", DisplayName = "Test Employee", Department = "Test Department", Mail = "employee@example.test" };
+    private static readonly User[] Employees = [
+        new() { Id = "test-employee", DisplayName = "Test Employee", Department = "Test Department", Mail = "employee@example.test" },
+        new() { Id = "test-employee-alice", DisplayName = "UI Alice", Department = "Sales", Mail = "alice@example.test" },
+        new() { Id = "test-employee-bob", DisplayName = "UI Bob", Department = "Support", Mail = "bob@example.test" },
+        new() { Id = "test-employee-cara", DisplayName = "UI Cara", Department = "Sales", Mail = "cara@example.test" }
+    ];
     public Task<IReadOnlyList<string>> GetMatchedGroupIdsAsync(string userObjectId, IEnumerable<string> groups) => Task.FromResult<IReadOnlyList<string>>([]);
-    public Task<User?> GetMeAsync() => Task.FromResult<User?>(new User { Id = me.ObjectId, DisplayName = me.DisplayName, Mail = me.UpnOrEmail });
-    public Task<User?> GetUserAsync(string id) => Task.FromResult<User?>(id == Employee.Id ? Employee : new User { Id = id, DisplayName = id == me.ObjectId ? me.DisplayName : id });
-    public Task<List<User>> GetUsersUnderMeAsync() => Task.FromResult(new List<User> { Employee });
+    public Task<User?> GetMeAsync() => GetUserAsync(me.ObjectId ?? "test-user");
+    public Task<User?> GetUserAsync(string id)
+    {
+        var employee = Employees.FirstOrDefault(employee => employee.Id == id);
+        if (employee is not null) return Task.FromResult<User?>(employee);
+        var role = id switch { "test-user" => "User", "test-legal" => "Legal", "test-admin" => "Admin", "test-chairperson" => "Chairperson", _ => null };
+        return Task.FromResult<User?>(new User { Id = id, DisplayName = role is null ? id : $"Test {role}", Mail = role is null ? null : $"{role.ToLowerInvariant()}@example.test" });
+    }
+    public Task<List<User>> GetUsersUnderMeAsync() => Task.FromResult(Employees.ToList());
     public Task<List<User>> GetUsersBelowMyLevelAsync() => GetUsersUnderMeAsync();
     public Task<User?> GetManagerAsync(string userId) => GetMeAsync();
     public Task<List<User>> GetDirectReportsUsersAsync(string userId) => GetUsersUnderMeAsync();
-    public Task SendEmailAsync(Message message, bool saveToSentItems = true) => throw new InvalidOperationException("Mail is disabled for login-only tests.");
-    public Task SendEmailAsync(SendEmailRequest request) => throw new InvalidOperationException("Mail is disabled for login-only tests.");
+    public Task SendEmailAsync(Message message, bool saveToSentItems = true)
+    {
+        outbox.Add(new(message.Subject ?? "", message.Body?.Content ?? "", message.ToRecipients?.Select(recipient => recipient.EmailAddress?.Address ?? "").ToArray() ?? [], message.Attachments?.Select(attachment => attachment.Name ?? "").ToArray() ?? []));
+        return Task.CompletedTask;
+    }
+    public Task SendEmailAsync(SendEmailRequest request)
+    {
+        outbox.Add(new(request.Subject, request.BodyHtml, request.ToRecipients.ToArray(), request.Attachments.Select(attachment => attachment.FileName).ToArray()));
+        return Task.CompletedTask;
+    }
+}
+
+public sealed record TestMail(string Subject, string Body, string[] Recipients, string[] Attachments);
+public sealed class TestOutbox
+{
+    private readonly ConcurrentQueue<TestMail> _messages = new();
+    public void Add(TestMail message) => _messages.Enqueue(message);
+    public TestMail[] Messages => _messages.ToArray();
 }

@@ -57,7 +57,7 @@
         }
         function syncHiddenFromPicker() {
             const dates = ($cal.datepicker('getDates') || [])
-                .map(d => d.toISOString().split('T')[0]);
+                .map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
 
             $("#Q1_AnswerJson").val(JSON.stringify({ dates }));
             $("#Q1_AnswerText").val(dates.join(", "));

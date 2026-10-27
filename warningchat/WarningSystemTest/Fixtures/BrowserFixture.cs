@@ -1,4 +1,5 @@
 using Microsoft.Playwright;
+using WarningSystemTest.Helpers;
 using WarningSystemTest.Models;
 using WarningSystemTest.SystemUnderTest;
 
@@ -12,9 +13,11 @@ public sealed class BrowserFixture(WarningSystemSut sut) : IAsyncLifetime
     private IPlaywright? _playwright;
     private IBrowser? _browser;
     public string BaseUrl => sut.BaseUrl;
+    public WarningSystemSut Sut => sut;
 
     public async ValueTask InitializeAsync()
     {
+        await sut.EnsureStartedAsync();
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync(new()
         {
@@ -34,10 +37,7 @@ public sealed class BrowserFixture(WarningSystemSut sut) : IAsyncLifetime
         });
         // Never send the test authentication headers to third-party CDNs.
         var origin = new Uri(BaseUrl).GetLeftPart(UriPartial.Authority);
-        await context.RouteAsync("**/*", route =>
-            new Uri(route.Request.Url).GetLeftPart(UriPartial.Authority) == origin
-                ? route.ContinueAsync()
-                : route.AbortAsync());
+        await context.RouteAsync("**/*", route => BrowserAssets.RouteAsync(route, origin));
         await context.Tracing.StartAsync(new() { Screenshots = true, Snapshots = true });
         return context;
     }

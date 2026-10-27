@@ -21,7 +21,18 @@ public sealed class WarningSystemSut : IAsyncLifetime
     public static TimeSpan DefaultTimeout => TimeSpan.FromMinutes(5);
     public string BaseUrl => _client?.BaseAddress?.ToString() ?? throw new InvalidOperationException("Aspire has not started the warning system.");
 
-    public async ValueTask InitializeAsync()
+    private readonly object _startGate = new();
+    private Task? _startup;
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    // Assembly fixtures also exist for unit-only runs. Start Aspire lazily only
+    // when a browser/database fixture actually requests it.
+    public Task EnsureStartedAsync()
+    {
+        lock (_startGate) return _startup ??= StartAsync();
+    }
+
+    private async Task StartAsync()
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(DefaultTimeout);
@@ -60,7 +71,7 @@ public sealed class WarningSystemSut : IAsyncLifetime
         ["X-Warning-Test-User"] = user.Profile
     };
 
-    // Future data assertions use the SAME migrated database that Aspire gives the app.
+    // Data assertions use the SAME migrated database that Aspire gives the app.
     // Never reads a production connection from appsettings or developer user secrets.
     public SqlConnection OpenDatabaseConnection() => new(_connectionString
         ?? throw new InvalidOperationException("Aspire has not started the test database."));

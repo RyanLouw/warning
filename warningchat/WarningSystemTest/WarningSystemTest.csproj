@@ -9,11 +9,19 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.Testing" Version="9.2.1" />
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Playwright" Version="1.56.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit.v3" Version="3.0.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1" PrivateAssets="all" />
     <Using Include="Xunit" />
+    <ProjectReference Include="../WarningSystems.core/WarningSystems.core.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="../WarningSystems/WarningSystems.csproj" Condition="Exists('../WarningSystems/WarningSystems.csproj')" IsAspireProjectResource="false" AdditionalProperties="WarningSystemTestingBuild=true" />
+    <ProjectReference Include="../warningchat/WarningSystems.csproj" Condition="!Exists('../WarningSystems/WarningSystems.csproj') And Exists('../warningchat/WarningSystems.csproj')" IsAspireProjectResource="false" AdditionalProperties="WarningSystemTestingBuild=true" />
     <ProjectReference Include="../WarningSystemsAppHost/WarningSystemsAppHost.csproj" AdditionalProperties="WarningSystemTestingBuild=true" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="TestAssets/**/*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

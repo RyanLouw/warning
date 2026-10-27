@@ -224,6 +224,7 @@ app.MapControllerRoute(
 
 #if WARNING_SYSTEM_TEST_BUILD
 app.MapGet("/__testing/health", () => Results.Ok()).AllowAnonymous();
+app.MapGet("/__testing/outbox", (TestOutbox outbox) => Results.Json(outbox.Messages)).RequireAuthorization();
 app.MapGet("/__testing/session", (HttpContext context) => Results.Json(new
 {
     authenticated = context.User.Identity?.IsAuthenticated == true,
