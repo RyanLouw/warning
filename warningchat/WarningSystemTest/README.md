@@ -28,7 +28,6 @@ Paths below are relative to WarningSystemTest:
 | `Database/ReportOracle.cs` | Independent SQL calculates expected filtered records without calling the application's report manager or using DOM values. |
 | `SystemUnderTest/WarningSystemSut.cs` | Lazy Aspire startup, health checks, session database connection and per-run auth key. |
 | `Fixtures/BrowserFixture.cs`, `Fixtures/UiTestBase.cs` | Chromium, fresh identity contexts, sequential database resets and failure artifacts. |
-| `Helpers/BrowserAssets.cs`, `TestAssets/` | Pinned editor/calendar libraries served locally in browser tests. |
 | `coverage.runsettings` | Cobertura coverage for application/core code executed inside the test process. |
 
 Before each database-backed test, synthetic Alice/Bob/Cara warnings are replaced
@@ -54,6 +53,9 @@ In this repository checkout the containing directory is `warningchat` instead of
 Use .NET 10 and PowerShell 7. On Linux build agents use
 `playwright.ps1 install --with-deps chromium` and provide a working Docker engine.
 Keep HEADED=0 for a build server; HEADED=1 shows the browser locally.
+Browser tests load editor/calendar libraries from the application's normal CDN
+URLs, so the runner needs network access to those CDNs. Test authentication
+headers are removed from third-party browser requests.
 
 Run only a group by adding a filter to `dotnet test`:
 

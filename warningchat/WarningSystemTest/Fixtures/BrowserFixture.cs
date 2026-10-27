@@ -1,5 +1,4 @@
 using Microsoft.Playwright;
-using WarningSystemTest.Helpers;
 using WarningSystemTest.Models;
 using WarningSystemTest.SystemUnderTest;
 
@@ -37,7 +36,20 @@ public sealed class BrowserFixture(WarningSystemSut sut) : IAsyncLifetime
         });
         // Never send the test authentication headers to third-party CDNs.
         var origin = new Uri(BaseUrl).GetLeftPart(UriPartial.Authority);
-        await context.RouteAsync("**/*", route => BrowserAssets.RouteAsync(route, origin));
+        await context.RouteAsync("**/*", async route =>
+        {
+            if (new Uri(route.Request.Url).GetLeftPart(UriPartial.Authority) == origin)
+            {
+                await route.ContinueAsync();
+                return;
+            }
+
+            var headers = (await route.Request.AllHeadersAsync())
+                .Where(header => !header.Key.Equals("X-Warning-Test-Key", StringComparison.OrdinalIgnoreCase)
+                    && !header.Key.Equals("X-Warning-Test-User", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(header => header.Key, header => header.Value);
+            await route.ContinueAsync(new() { Headers = headers });
+        });
         await context.Tracing.StartAsync(new() { Screenshots = true, Snapshots = true });
         return context;
     }

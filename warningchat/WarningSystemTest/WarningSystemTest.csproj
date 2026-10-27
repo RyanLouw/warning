@@ -21,7 +21,4 @@
     <ProjectReference Include="../warningchat/WarningSystems.csproj" Condition="!Exists('../WarningSystems/WarningSystems.csproj') And Exists('../warningchat/WarningSystems.csproj')" IsAspireProjectResource="false" AdditionalProperties="WarningSystemTestingBuild=true" />
     <ProjectReference Include="../WarningSystemsAppHost/WarningSystemsAppHost.csproj" AdditionalProperties="WarningSystemTestingBuild=true" />
   </ItemGroup>
-  <ItemGroup>
-    <None Update="TestAssets/**/*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
 </Project>
