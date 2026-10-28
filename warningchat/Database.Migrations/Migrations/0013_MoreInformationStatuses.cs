@@ -13,6 +13,6 @@ public class _0013_MoreInformationStatuses : Migration
 
     public override void Up()
     {
-        Execute.Script("Migrations\\Scripts\\0013.sql");
+        Execute.Script(Path.Combine("Migrations", "Scripts", "0013.sql"));
     }
 }

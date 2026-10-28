@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
@@ -8,7 +8,6 @@
 
 	<ItemGroup>
 		<PackageReference Include="Azure.Storage.Files.Shares" Version="12.27.1" />
-		<PackageReference Include="HW.CentralConfig.Package" Version="2026.7.24.2" />
 		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.9" />
@@ -32,4 +31,7 @@
 		<EmbeddedResource Include="EmailTemplates/*.html" LogicalName="WarningSystems.Core.EmailTemplates.%(Filename)%(Extension)" />
 	</ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Controllers/**/*.cs;Middleware/**/*.cs;ServicesTest/**/*.cs" />
+  </ItemGroup>
 </Project>

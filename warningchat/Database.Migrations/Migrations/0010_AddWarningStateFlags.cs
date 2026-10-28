@@ -1,4 +1,4 @@
-﻿using FluentMigrator;
+using FluentMigrator;
 
 namespace Database.Migrations;
 
@@ -13,6 +13,6 @@ public class _0010_AddWarningStateFlags : Migration
 
     public override void Up()
     {
-        Execute.Script("Migrations\\Scripts\\0010.sql");
+        Execute.Script(Path.Combine("Migrations", "Scripts", "0010.sql"));
     }
 }

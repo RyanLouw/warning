@@ -13,6 +13,6 @@ public class _0011_IssueLookups : Migration
 
     public override void Up()
     {
-        Execute.Script("Migrations\\Scripts\\0011.sql");
+        Execute.Script(Path.Combine("Migrations", "Scripts", "0011.sql"));
     }
 }

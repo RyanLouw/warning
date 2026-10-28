@@ -1,4 +1,4 @@
-﻿using FluentMigrator;
+using FluentMigrator;
 
 namespace Database.Migrations;
 
@@ -13,7 +13,7 @@ public class _0004_WarningDummyData : Migration
 
     public override void Up()
     {
-        Execute.Script(@"Migrations\Scripts\0004.sql");
+        Execute.Script(Path.Combine("Migrations", "Scripts", "0004.sql"));
         Execute.Sql("EXEC ws.sp_EnsureDefaultCategoryQuestions @CreatedBy = 'seed';");
     }
 }

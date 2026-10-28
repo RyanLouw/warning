@@ -1,4 +1,4 @@
-namespace warningchat.Models
+namespace WarningSystems.Core
 {
     public class ErrorViewModel
     {

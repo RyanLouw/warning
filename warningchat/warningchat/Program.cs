@@ -26,16 +26,29 @@ using WarningSystems.Core.Services.Interface;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Middleware;
 using WarningSystems.Services.Interface;
+#if !WARNING_SYSTEM_TEST_BUILD
 using HW.CentralConfig.Package.Core;
+#else
+using WarningSystems.Testing;
+#endif
 
 
 var builder = WebApplication.CreateBuilder(args);
+#if WARNING_SYSTEM_TEST_BUILD
+if (!builder.Environment.IsEnvironment("Testing"))
+    throw new InvalidOperationException("This test build can only run in the Testing environment.");
+#else
 await builder.AddCentralConfigAsync();
+#endif
 builder.Host.UseSerilog((ctx, services, config) =>
 {
     config.ReadFrom.Configuration(ctx.Configuration);
 });
 
+#if WARNING_SYSTEM_TEST_BUILD
+builder.Services.AddAuthentication(TestAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestAuthenticationHandler.SchemeName, _ => { });
+#else
 builder.Services
     .AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"))
@@ -48,6 +61,8 @@ builder.Services.Configure<CookieAuthenticationOptions>(
     {
         options.AccessDeniedPath = "/Home/AccessDenied";
     });
+
+#endif
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
@@ -168,15 +183,16 @@ IdentityModelEventSource.ShowPII = true;
 /// manager services would go here
 builder.Services.AddScoped<ITransgressionManager, TransgressionManager>();
 
-var conn = builder.Configuration["Storage:ConnectionString"]
-           ?? throw new InvalidOperationException("Storage connection string missing.");
-
-builder.Services.AddScoped<IAzureFileStorageDataAccess>(
-    _ => new AzureFileStorageDataAccess(conn)
-);
+builder.Services.AddScoped<IAzureFileStorageDataAccess>(sp => new AzureFileStorageDataAccess(
+    sp.GetRequiredService<IConfiguration>()["Storage:ConnectionString"]
+    ?? throw new InvalidOperationException("Storage connection string missing.")));
 
 builder.Services.AddScoped<IWarningPdfExportService, WarningPdfExportService>();
 builder.Services.AddScoped<WarningOverviewMapperServise>();
+
+#if WARNING_SYSTEM_TEST_BUILD
+builder.Services.AddWarningSystemTestServices(builder.Configuration);
+#endif
 
 var app = builder.Build();
 
@@ -205,5 +221,17 @@ app.UseAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+#if WARNING_SYSTEM_TEST_BUILD
+app.MapGet("/__testing/health", () => Results.Ok()).AllowAnonymous();
+app.MapGet("/__testing/outbox", (TestOutbox outbox) => Results.Json(outbox.Messages)).RequireAuthorization();
+app.MapGet("/__testing/session", (HttpContext context) => Results.Json(new
+{
+    authenticated = context.User.Identity?.IsAuthenticated == true,
+    name = context.User.FindFirst("name")?.Value,
+    objectId = context.User.FindFirst("oid")?.Value,
+    roles = context.User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(claim => claim.Value)
+})).RequireAuthorization();
+#endif
 
 app.Run();

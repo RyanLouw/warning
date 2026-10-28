@@ -1,4 +1,4 @@
-﻿using FluentMigrator;
+using FluentMigrator;
 
 namespace Database.Migrations;
 
@@ -17,6 +17,6 @@ public class _0003_StoreProc : Migration
         {
             Create.Schema("ws");
         }
-        Execute.Script(@"Migrations\Scripts\0003.sql");
+        Execute.Script(Path.Combine("Migrations", "Scripts", "0003.sql"));
     }
 }
