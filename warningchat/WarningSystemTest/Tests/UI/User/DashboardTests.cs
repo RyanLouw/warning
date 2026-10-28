@@ -1,11 +1,13 @@
 using Microsoft.Playwright;
+using WarningSystemTest.Pages;
 using WarningSystemTest.Fixtures;
 using static Microsoft.Playwright.Assertions;
 
-namespace WarningSystemTest.Tests.UI;
+namespace WarningSystemTest.Tests.UI.User;
 
 [Collection("Warning browser")]
 [Trait("Category", "UI")]
+[Trait("Role", "User")]
 public sealed class DashboardTests(BrowserFixture browser) : UiTestBase(browser)
 {
     [Theory]
@@ -14,7 +16,7 @@ public sealed class DashboardTests(BrowserFixture browser) : UiTestBase(browser)
     [InlineData("UI Cara", "test-employee-cara")]
     public Task Task_search_matches_database_count(string name,string employee) => RunAsync($"task-{employee}", async page =>
     {
-        await page.GotoAsync("/");
+        await new HomePage(page).OpenAsync();
         await page.Locator("#taskListSearch").FillAsync(name);
         var expected=Convert.ToInt32(Assert.Single(await Database.QueryAsync("SELECT COUNT(*) AS Total FROM ws.Warning WHERE EmployeeId=@Employee AND IsDeleted=0", ("@Employee", employee)))["Total"]);
         var rows=page.Locator("#taskListTable tr.task-list-row:visible");
@@ -28,7 +30,7 @@ public sealed class DashboardTests(BrowserFixture browser) : UiTestBase(browser)
     [Fact]
     public Task Employee_table_counts_and_department_values_match_database() => RunAsync("employee-table",async page =>
     {
-        await page.GotoAsync("/");
+        await new HomePage(page).OpenAsync();
         await page.Locator("#employee-tab").ClickAsync();
         foreach(var (id,name,department) in new[] {
             ("test-employee-alice","UI Alice","Sales"),

@@ -28,7 +28,7 @@ public class EmailTests
     }
 
     // Keep the two previously failing cases visible in Test Explorer.
-    // Re-enable by removing InlineData Skip after review of the template packaging fix.
+    // Kept skipped at user request; application template packaging is unchanged.
     [Theory]
     [InlineData(false, Skip = "Temporarily disabled at user request after the initial missing-template failure.")]
     [InlineData(true, Skip = "Temporarily disabled at user request after the initial missing-template failure.")]

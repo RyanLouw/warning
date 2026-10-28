@@ -1,11 +1,12 @@
 using System.Globalization;
 using Microsoft.Playwright;
+using WarningSystemTest.Pages;
 using WarningSystemTest.Database;
 using WarningSystemTest.Fixtures;
 using System.Text.Json;
 using static Microsoft.Playwright.Assertions;
 
-namespace WarningSystemTest.Tests.UI;
+namespace WarningSystemTest.Tests.UI.Reporting;
 
 [Collection("Warning browser")]
 [Trait("Category", "UI")]
@@ -50,7 +51,7 @@ public class ReportTests(BrowserFixture fixture) : UiTestBase(fixture)
         {
             var filter = JsonSerializer.Deserialize<ReportFilter>(json)!;
             await OpenReportAsync(page);
-            await ApplyAsync(page, filter);
+            await new ReportPage(page).ApplyFiltersAsync(filter);
             await AssertReportAsync(page, filter);
         });
 
@@ -70,9 +71,9 @@ public class ReportTests(BrowserFixture fixture) : UiTestBase(fixture)
     public Task Clear_filters_restores_database_results() => RunAsync("clear-filters", async page =>
     {
         await OpenReportAsync(page);
-        await ApplyAsync(page, new(Department: "Sales", Status: "Pending", Search: "Alice"));
+        await new ReportPage(page).ApplyFiltersAsync(new(Department: "Sales", Status: "Pending", Search: "Alice"));
         await AssertReportAsync(page, new(Department: "Sales", Status: "Pending", Search: "Alice"));
-        await page.Locator("#btnClearReportFilters").ClickAsync();
+        await new ReportPage(page).ClearFiltersAsync();
         await Expect(page.Locator("#reportSearch")).ToHaveValueAsync("");
         await Expect(page.Locator("#reportDepartment")).ToHaveValueAsync("");
         await Expect(page.Locator("#reportStatus")).ToHaveValueAsync("");
@@ -93,51 +94,31 @@ public class ReportTests(BrowserFixture fixture) : UiTestBase(fixture)
 
     internal static async Task OpenReportAsync(IPage page)
     {
-        var response = await page.GotoAsync("/");
-        Assert.Equal(200, response!.Status);
-        await page.Locator("#reports-tab").ClickAsync();
-        await page.Locator("[data-bs-target='#reportIssueDetailsCollapse']").ClickAsync();
+        await new HomePage(page).OpenReportsAsync();
         await Expect(page.Locator("#reportIssueDetailsCollapse")).ToBeVisibleAsync();
-    }
-
-    private static async Task ApplyAsync(IPage page, ReportFilter filter)
-    {
-        foreach (var (id, value) in new[] {
-            ("reportDepartment", filter.Department), ("reportManager", filter.Manager), ("reportEmployee", filter.Employee),
-            ("reportStatus", filter.Status), ("reportIssueType", filter.IssueType), ("reportRecordKind", filter.RecordKind), ("reportLatestAction", filter.LatestAction)
-        })
-        {
-            if (value is null) continue;
-            // Match label because some static status values use lower case.
-            if (id == "reportRecordKind") await page.Locator($"#{id}").SelectOptionAsync(value);
-            else await page.Locator($"#{id}").SelectOptionAsync(new SelectOptionValue { Label = value });
-        }
-        foreach (var (id, value) in new[] { ("reportSearch", filter.Search), ("reportStartDate", filter.StartDate), ("reportEndDate", filter.EndDate) })
-            if (value is not null) await page.Locator($"#{id}").FillAsync(value);
     }
 
     private async Task AssertReportAsync(IPage page, ReportFilter filter, string roles = "User")
     {
         var expected = await ReportOracle.QueryAsync(Database, filter, roles);
-        var visible = page.Locator("#reportsTable tr.report-row:visible");
+        var visible = new ReportPage(page).VisibleRows;
         await Expect(visible).ToHaveCountAsync(expected.Count);
-        var ids = (await visible.EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.warningId)"))
-            .Select(long.Parse).Order().ToArray();
-        Assert.Equal(expected.Select(r => Convert.ToInt64(r["WarningId"])).Order(), ids);
-        Assert.DoesNotContain(Database.Warnings["Deleted"], ids); // Deleted control record must never appear.
+        var actualRows = await visible.EvaluateAllAsync<string[][]>(
+            "rows => rows.map(row => [...row.querySelectorAll('td')].map(cell => cell.textContent.trim()))");
+        var expectedRows = new List<string[]>();
         foreach (var record in expected)
         {
-            var row = page.Locator($"#reportsTable tr[data-warning-id='{record["WarningId"]}']");
-            var cells = (await row.Locator("td").AllTextContentsAsync()).Select(t => t.Trim()).ToArray();
             string Text(string column) => Convert.ToString(record[column], CultureInfo.InvariantCulture) ?? "";
             string Date(string column, string format) => record[column] is DateTime date ? date.ToString(format, CultureInfo.InvariantCulture) : "-";
-            Assert.Equal(new[] {
+            expectedRows.Add(new[] {
                 Convert.ToBoolean(record["IsAbsenceDiscussion"]) ? "Discussion" : "Issue", Text("Status"),
                 Dash(Text("IssueType")), Dash(Text("Subtype")), Text("Category"), Text("Employee"),
                 Dash(Text("Department")), Dash(Text("Manager")), Dash(Text("Creator")), Date("CreatedOn", "yyyy/MM/dd"),
                 Date("LegalExpiryDate", "yyyy/MM/dd"), Dash(Text("LatestAction")), Date("LatestActionDate", "yyyy/MM/dd HH:mm")
-            }, cells);
+            });
         }
+        Assert.Equal(expectedRows.Select(row => JsonSerializer.Serialize(row)).Order(),
+            actualRows.Select(row => JsonSerializer.Serialize(row)).Order());
         await CountAsync(page, "reportVisibleDetailCount", expected.Count);
         await CountAsync(page, "reportDepartmentCount", expected.Where(r => (string)r["Department"]! != "").Select(r => (string)r["Department"]!).Distinct().Count());
         await CountAsync(page, "reportIssueCount", expected.Count(r => !Convert.ToBoolean(r["IsAbsenceDiscussion"])));

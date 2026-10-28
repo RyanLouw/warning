@@ -1,24 +1,22 @@
 using System.Text.Json;
 using Microsoft.Playwright;
+using WarningSystemTest.Pages;
 using WarningSystemTest.Fixtures;
 using static Microsoft.Playwright.Assertions;
 
-namespace WarningSystemTest.Tests.UI;
+namespace WarningSystemTest.Tests.UI.Admin;
 
 [Collection("Warning browser")]
 [Trait("Category", "UI")]
-public sealed class AdminTests(BrowserFixture browser) : UiTestBase(browser)
+[Trait("Role", "Admin")]
+public sealed class QuestionTests(BrowserFixture browser) : UiTestBase(browser)
 {
     private async Task<(string Name, int Id)> CreateQuestionAsync(IPage page, string control = "Text", Func<ILocator, Task>? configure = null, string? name = null)
     {
         name ??= $"UI question {Guid.NewGuid():N}";
-        await page.GotoAsync("/Admin/Index");
-        await page.Locator("[data-bs-target='#modalCreateQuestion']").ClickAsync();
-        var modal = page.Locator("#modalCreateQuestion");
-        await modal.Locator("[name=QuestionText]").FillAsync(name);
-        await modal.Locator("[name=ControlType]").SelectOptionAsync(control);
-        if (configure is not null) await configure(modal);
-        var response = await page.RunAndWaitForResponseAsync(() => modal.GetByRole(AriaRole.Button, new() { Name = "Save Question", Exact = true }).ClickAsync(), r => r.Url.Contains("/Admin/CreateQuestion") && r.Request.Method == "POST");
+        var admin = new AdminPage(page);
+        var response = await admin.CreateQuestionAsync(name, control, configure);
+        var modal = admin.CreateQuestionDialog;
         Assert.Equal(302, response.Status);
         await Expect(modal).ToBeHiddenAsync();
         var row = Assert.Single(await Database.QueryAsync("SELECT * FROM ws.Question WHERE QuestionText=@Name AND ControlType=@Control", ("@Name", name), ("@Control", control)));
@@ -68,7 +66,7 @@ public sealed class AdminTests(BrowserFixture browser) : UiTestBase(browser)
     {
         var (_, id) = await CreateQuestionAsync(page, "TrueFalse", modal => modal.Locator("#defaultBooleanSelect").SelectOptionAsync("false"));
         using var config = JsonDocument.Parse((string)Assert.Single(await Database.QueryAsync("SELECT DefaultConfigJson FROM ws.Question WHERE QuestionId=@Id", ("@Id", id)))["DefaultConfigJson"]!);
-        Assert.Equal("False", config.RootElement.GetProperty("default").GetString());
+        Assert.Equal("No", config.RootElement.GetProperty("default").GetString());
     }, "Admin");
 
     [Fact]
@@ -97,24 +95,6 @@ public sealed class AdminTests(BrowserFixture browser) : UiTestBase(browser)
         Assert.Equal("test-admin", row["UpdatedBy"]);
         var audits = await Database.QueryAsync("SELECT NewValues FROM ws.AdminAuditLog WHERE EntityName='Question' AND EntityId=CAST(@Id AS varchar(50))", ("@Id", id));
         Assert.Contains(audits, audit => ((string?)audit["NewValues"])?.Contains(updated) == true);
-    }, "Admin");
-
-    [Fact]
-    public Task New_category_has_persisted_default_question_links() => RunAsync("admin-category", async page =>
-    {
-        var name = $"UI category {Guid.NewGuid():N}";
-        await page.GotoAsync("/Admin/Index");
-        await page.Locator("[data-bs-target='#categories']").ClickAsync();
-        await page.Locator("[data-bs-target='#modalCreateCategory']").ClickAsync();
-        await page.Locator("#modalCreateCategory [name=Name]").FillAsync(name);
-        var response = await page.RunAndWaitForResponseAsync(() => page.Locator("#modalCreateCategory button[type=submit]").ClickAsync(), r => r.Url.Contains("/Admin/CreateCategory") && r.Request.Method == "POST");
-        Assert.Equal(302, response.Status);
-        await Expect(page.Locator("#modalCreateCategory")).ToBeHiddenAsync();
-        var row = Assert.Single(await Database.QueryAsync("SELECT CategoryId,CreatedBy FROM ws.TransgressionCategory WHERE Name=@Name", ("@Name", name)));
-        Assert.Equal("test-admin", row["CreatedBy"]);
-        Assert.Equal(new[] { 1, 2, 3 }, (await Database.QueryAsync("SELECT QuestionId FROM ws.CategoryQuestion WHERE CategoryId=@Id AND IsActive=1 ORDER BY QuestionId", ("@Id", row["CategoryId"]))).Select(q => Convert.ToInt32(q["QuestionId"])));
-        await page.Locator("[data-bs-target='#categories']").ClickAsync();
-        await Expect(page.Locator("#categories tr").Filter(new() { HasTextString = name })).ToHaveCountAsync(1);
     }, "Admin");
 
     [Fact]

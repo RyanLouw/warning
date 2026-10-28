@@ -51,7 +51,7 @@ public class HelperTests
     [Fact]
     public void Recipients_are_trimmed_parsed_deduplicated_and_invalid_values_removed()
     {
-        var result = EmailRecipientNormalizer.Normalize([
+        var result = NormalizeRecipients([
             " user@example.test ", "USER@example.test", "Name <other@example.test>",
             "not an email", "", "   ", null!]);
         Assert.Equal(2, result.Count);
@@ -60,7 +60,7 @@ public class HelperTests
     }
 
     [Fact]
-    public void Null_recipients_are_empty() => Assert.Empty(EmailRecipientNormalizer.Normalize(null));
+    public void Null_recipients_are_empty() => Assert.Empty(NormalizeRecipients(null));
 
     [Theory]
     [InlineData(-10)]
@@ -135,4 +135,11 @@ public class HelperTests
     [Fact]
     public void Template_values_are_required() =>
         Assert.Throws<ArgumentNullException>(() => new EmbeddedEmailTemplateRenderer().Render("IssueCreated", null!));
+    // Exercise the internal helper without adding InternalsVisibleTo to production code.
+    private static List<string> NormalizeRecipients(IEnumerable<string>? addresses)
+    {
+        var helper = typeof(TransgressionManager).Assembly.GetType(
+            "WarningSystems.Core.Services.EmailRecipientNormalizer", throwOnError: true)!;
+        return (List<string>)helper.GetMethod("Normalize")!.Invoke(null, [addresses])!;
+    }
 }

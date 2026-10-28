@@ -420,7 +420,6 @@ public class WarningSystemDataAccess : IWarningSystemDataAccess
                 categoryIds,
                 warning.CreatedBy);
 
-            await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
             return warning.WarningId;

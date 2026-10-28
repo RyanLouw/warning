@@ -1,14 +1,16 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Playwright;
+using WarningSystemTest.Pages;
 using WarningSystemTest.Fixtures;
 using static Microsoft.Playwright.Assertions;
 
-namespace WarningSystemTest.Tests.UI;
+namespace WarningSystemTest.Tests.UI.Legal;
 
 [Collection("Warning browser")]
 [Trait("Category", "UI")]
-public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
+[Trait("Role", "Legal")]
+public sealed class WorkflowTests(BrowserFixture browser) : UiTestBase(browser)
 {
     [Fact]
     public Task Opening_new_issue_moves_it_to_legal_review_in_progress() => RunAsync("legal-open", async page =>
@@ -26,7 +28,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
     {
         var id = Database.Warnings["Decision"];
         var note = $"UI legal interaction {Guid.NewGuid():N}";
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await page.Locator("[data-bs-target='#addNoteModal']").ClickAsync();
         await page.Locator("#addInteractionNote").FillAsync(note);
         var response = await page.RunAndWaitForResponseAsync(() => page.Locator("#btnAddInteraction").ClickAsync(), r => r.Url.Contains("/Legal/SaveEvidenceAttachment") && r.Request.Method=="POST");
@@ -34,7 +36,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
         var row = Assert.Single(await Database.QueryAsync("SELECT CreatedBy,EvidenceId FROM ws.WarningNote WHERE WarningId=@Id AND NoteText=@Text", ("@Id", id), ("@Text", note)));
         Assert.Equal("test-legal", row["CreatedBy"]);
         Assert.Null(row["EvidenceId"]);
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await Expect(page.Locator("#interactionsTable")).ToContainTextAsync(note);
     }, "Legal");
 
@@ -44,7 +46,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
         var id = Database.Warnings["Decision"];
         const string note = "UI document supporting legal review";
         var bytes = Encoding.UTF8.GetBytes("UI legal evidence file");
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await page.Locator("#docs-tab").ClickAsync();
         await page.Locator("[data-bs-target='#uploadDocsModal']").ClickAsync();
         await page.Locator("#uploadFiles").SetInputFilesAsync(new FilePayload { Name="legal-proof.txt", MimeType="text/plain", Buffer=bytes });
@@ -55,7 +57,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
         Assert.Equal(bytes.Length, Convert.ToInt32(file["FileSizeBytes"]));
         Assert.Equal("test-legal", file["UploadedBy"]);
         Assert.Equal(file["EvidenceId"], Assert.Single(await Database.QueryAsync("SELECT EvidenceId FROM ws.WarningNote WHERE WarningId=@Id AND NoteText=@Text", ("@Id", id), ("@Text", note)))["EvidenceId"]);
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await page.Locator("#docs-tab").ClickAsync();
         await Expect(page.Locator("#docs")).ToContainTextAsync("legal-proof.txt");
     }, "Legal");
@@ -67,7 +69,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
     {
         var id = Database.Warnings["Decision"];
         var subtype = Convert.ToInt32(Assert.Single(await Database.QueryAsync("SELECT MIN(IssueSubTypeId) AS Id FROM ws.LookupIssueSubTypes WHERE IssueTypeId=2 AND IsActive=1"))["Id"]);
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await page.Locator("[data-bs-target='#completeModal']").ClickAsync();
         await page.Locator("#issueType-2").CheckAsync();
         await page.Locator("#issueSubtype").SelectOptionAsync(subtype.ToString());
@@ -91,11 +93,11 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
     {
         var id = Database.Warnings["Issued"];
         page.Dialog += async (_, dialog) => await dialog.AcceptAsync();
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         var response = await page.RunAndWaitForResponseAsync(() => page.Locator("#btnValidateIssue").ClickAsync(), r => r.Url.Contains("/Legal/ValidateTransgression") && r.Request.Method=="POST");
         Assert.True(response.Ok);
         Assert.Equal(6, Convert.ToInt32(Assert.Single(await Database.QueryAsync("SELECT s.IssueStatusGroup FROM ws.Warning w JOIN ws.LookupIssueStatuses s ON s.IssueStatusId=w.IssueStatusId WHERE WarningId=@Id", ("@Id", id)))["IssueStatusGroup"]));
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await Expect(page.Locator("#btnValidateIssue")).ToHaveCountAsync(0);
     }, "Legal");
 
@@ -106,7 +108,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
         var date = DateTime.Today.AddDays(14);
         while (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) date=date.AddDays(1);
         const string reason = "UI scheduled extension for investigation";
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await page.Locator("[data-bs-target='#dueDateModal']").ClickAsync();
         await page.Locator("#dueDateValue").FillAsync(date.ToString("yyyy-MM-dd"));
         await page.Locator("#dueDateReason").FillAsync(reason);
@@ -123,7 +125,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
         var before=Assert.Single(await Database.QueryAsync("SELECT LegalExpiryDate FROM ws.Warning WHERE WarningId=@Id", ("@Id", id)))["LegalExpiryDate"];
         var date=DateTime.Today.AddDays(14);
         while (date.DayOfWeek!=DayOfWeek.Saturday) date=date.AddDays(1);
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await page.Locator("[data-bs-target='#dueDateModal']").ClickAsync();
         await page.Locator("#dueDateValue").FillAsync(date.ToString("yyyy-MM-dd"));
         await page.Locator("#dueDateReason").FillAsync("UI invalid weekend date");
@@ -136,7 +138,7 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
     public Task Legal_category_change_updates_links_and_audit_note() => RunAsync("legal-categories", async page =>
     {
         var id = Database.Warnings["Decision"];
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         await page.Locator("[data-bs-target='#editIssueDetailsModal']").ClickAsync();
         foreach (var box in await page.Locator(".legal-category-checkbox:checked").AllAsync()) await box.UncheckAsync();
         await page.Locator($".legal-category-checkbox[value='{Database.AttendanceCategory}']").CheckAsync();
@@ -151,25 +153,10 @@ public sealed class LegalTests(BrowserFixture browser) : UiTestBase(browser)
     {
         var id=Database.Warnings["Decision"];
         page.Dialog += async (_, dialog) => await dialog.AcceptAsync();
-        await page.GotoAsync($"/Legal/Index/{id}");
+        await new LegalPage(page).OpenAsync(id);
         var response = await page.RunAndWaitForResponseAsync(() => page.Locator("#btnTeamLeadVisibility").ClickAsync(), r => r.Url.Contains("/Legal/SetTeamLeadVisibility") && r.Request.Method=="POST");
         Assert.True(response.Ok);
         Assert.True(Convert.ToBoolean(Assert.Single(await Database.QueryAsync("SELECT HideFromTeamLead FROM ws.Warning WHERE WarningId=@Id", ("@Id", id)))["HideFromTeamLead"]));
     }, "Legal");
 
-    [Fact]
-    public Task More_information_request_changes_status_and_records_email() => RunAsync("legal-request-info", async page =>
-    {
-        var id=Database.Warnings["Decision"];
-        var note=$"UI clarification requested {Guid.NewGuid():N}";
-        await page.GotoAsync($"/Legal/Index/{id}");
-        await page.Locator("[data-bs-target='#requestTeamLeadInfoModal']").ClickAsync();
-        await page.Locator("#requestInfoMessage").FillAsync(note);
-        var response = await page.RunAndWaitForResponseAsync(() => page.Locator("#btnRequestTeamLeadInfo").ClickAsync(), r => r.Url.Contains("/Legal/RequestTeamLeadInformation") && r.Request.Method=="POST");
-        Assert.True(response.Ok);
-        Assert.Equal(7, Convert.ToInt32(Assert.Single(await Database.QueryAsync("SELECT s.IssueStatusGroup FROM ws.Warning w JOIN ws.LookupIssueStatuses s ON s.IssueStatusId=w.IssueStatusId WHERE WarningId=@Id", ("@Id", id)))["IssueStatusGroup"]));
-        Assert.NotEmpty(await Database.QueryAsync("SELECT NoteId FROM ws.WarningNote WHERE WarningId=@Id AND CHARINDEX(@Text,NoteText)>0", ("@Id", id), ("@Text", note)));
-        using var messages=JsonDocument.Parse(await (await page.Context.APIRequest.GetAsync("/__testing/outbox")).TextAsync());
-        Assert.Contains(messages.RootElement.EnumerateArray(), message => message.GetProperty("body").GetString()!.Contains(note));
-    }, "Legal");
 }

@@ -37,11 +37,46 @@ public class TaskListTests
         Assert.Equal("Sales", employee.Department);
     }
 
-    private static ManagerFixture Setup(string roles)
+    [Fact]
+    public async Task Creator_cannot_see_their_own_hidden_issue()
+    {
+        var fixture = Setup("User", [new Warning { WarningId = 42, EmployeeId = "employee",
+            CreatedBy = "actor", HideFromTeamLead = true, Status = "New" }]);
+
+        var result = await fixture.Manager.BuildTaskListAsync();
+
+        Assert.Empty(result.TaskList);
+    }
+
+    [Fact]
+    public async Task Hidden_issue_is_still_visible_to_another_team_lead_in_the_hierarchy()
+    {
+        // HideFromTeamLead applies to the creator, not every team lead.
+        var fixture = Setup("User", [new Warning { WarningId = 42, EmployeeId = "employee",
+            CreatedBy = "another-creator", HideFromTeamLead = true, Status = "New" }]);
+
+        var result = await fixture.Manager.BuildTaskListAsync();
+
+        Assert.Contains(result.TaskList, issue => issue.WarningId == 42);
+    }
+
+    [Fact]
+    public async Task Chairperson_cannot_see_a_hearing_issue_type()
+    {
+        var fixture = Setup("Chairperson", [new Warning { WarningId = 42, EmployeeId = "employee",
+            CreatedBy = "actor", Status = "Validated", IssueTypeId = 4,
+            IssueType = new() { IssueTypeId = 4, IssueTypeName = "Hearing" } }]);
+
+        var result = await fixture.Manager.BuildTaskListAsync();
+
+        Assert.DoesNotContain(result.TaskList, issue => issue.WarningId == 42);
+    }
+
+    private static ManagerFixture Setup(string roles, List<Warning>? suppliedRows = null)
     {
         var f = new ManagerFixture();
         var today = DateOnly.FromDateTime(DateTime.Now);
-        var rows = new List<Warning> {
+        var rows = suppliedRows ?? new List<Warning> {
             new() { WarningId = 1, EmployeeId = "employee", CreatedBy = "actor", Status = "Draft", LegalExpiryDate = today.AddDays(-1) },
             new() { WarningId = 2, EmployeeId = "employee", CreatedBy = "actor", Status = "Hearing", LegalExpiryDate = today.AddDays(3) },
             new() { WarningId = 3, EmployeeId = "outside", CreatedBy = "actor", Status = "New", LegalExpiryDate = today.AddDays(4) },

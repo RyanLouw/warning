@@ -571,16 +571,47 @@
                                                 Status
                                             </label>
 
-                                            <select id="reportStatus" class="form-select report-filter">
-                                                <option value="">All statuses</option>
-                                                @foreach (var reportStatus in reportRows
-                                                    .Select(row => row.Status?.Trim())
-                                                    .Where(status => !string.IsNullOrWhiteSpace(status))
-                                                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                                                    .OrderBy(status => status))
-                                                {
-                                                    <option value="@reportStatus">@reportStatus</option>
-                                                }
+                                            <select id="reportStatus"
+                                                    class="form-select report-filter">
+
+                                                <option value="">
+                                                    All statuses
+                                                </option>
+
+                                                <option value="draft">
+                                                    Draft
+                                                </option>
+
+                                                <option value="new">
+                                                    New
+                                                </option>
+                                                <option value="In Progress">
+                                                    In Progress
+                                                </option>
+                                                <option value="Pending">
+                                                    Pending
+                                                </option>
+                                                <option value="Completed">
+                                                    Completed
+                                                </option>
+                                                <option value="Validated">
+                                                    Validated
+                                                </option>
+                                                <option value="Invalid">
+                                                    Invalid
+                                                </option>
+                                                <option value="More Information Added">
+                                                    More Information Added
+                                                </option>
+
+
+                                                <option value="added more information">
+                                                    Added More Information
+                                                </option>
+
+                                                <option value="completed">
+                                                    Completed
+                                                </option>
                                             </select>
                                         </div>
 
@@ -931,7 +962,7 @@
                                                                 value.Trim()
                                                                 .ToLowerInvariant()));
 
-                                                                <tr class="report-row" data-warning-id="@row.WarningId"
+                                                                <tr class="report-row"
                                                                     data-employee="@employeeName"
                                                                     data-department="@department"
                                                                     data-manager="@manager"
