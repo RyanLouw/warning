@@ -139,6 +139,17 @@ public class WorkflowTests
         A.CallTo(() => _f.Data.AdvanceWarningStatusAsync(42, IssueStatusGroup.LegalReview, "actor")).MustHaveHappened();
     }
 
+    [Fact]
+    public async Task Completion_rejects_a_draft_without_sending_email()
+    {
+        WarningIn(IssueStatusGroup.Draft);
+
+        var result = await _f.Manager.CompleteTransgressionAsync(new() { WarningId = 42, IssueTypeId = 2 });
+
+        Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result);
+        Assert.Empty(Fake.GetCalls(_f.Graph));
+    }
+
     private void WarningIn(IssueStatusGroup group) =>
         A.CallTo(() => _f.Data.GetWarningByIdAsync(42)).Returns(new Warning { WarningId = 42, IssueStatus = new() { IssueStatusGroup = group } });
 }

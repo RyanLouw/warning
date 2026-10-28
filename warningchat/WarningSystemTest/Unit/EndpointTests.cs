@@ -91,9 +91,16 @@ public class EndpointTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Completion_sends_email_only_after_successful_decision(bool success)
+    public async Task Completion_returns_success_or_business_error(bool success)
     {
         var dto = new CompleteTransgressionDto { WarningId = 42, IssueTypeId = 2, IssueSubTypeId = 1 };
+        IActionResult serviceResult = success
+            ? new OkObjectResult(new { success = true })
+            : new BadRequestObjectResult("Wrong stage");
+        // Current controllers delegate completion to the manager. The checked-in
+        // baseline controller still calls decision/email separately; support both
+        // public contracts without changing application code.
+        A.CallTo(() => _manager.CompleteTransgressionAsync(dto)).Returns(serviceResult);
         var decisionCompleted = false;
         if (success)
         {
@@ -104,6 +111,16 @@ public class EndpointTests
         }
         else A.CallTo(() => _manager.ApplyLegalDecisionAsync(42, 2, 1)).ThrowsAsync(new InvalidOperationException("Wrong stage"));
         var result = await Legal().CompleteTransgression(dto);
+        var delegated = Fake.GetCalls(_manager).Any(call =>
+            call.Method.Name == nameof(ITransgressionManager.CompleteTransgressionAsync));
+        if (delegated)
+        {
+            Assert.Same(serviceResult, result);
+            A.CallTo(() => _manager.CompleteTransgressionAsync(dto)).MustHaveHappenedOnceExactly();
+            A.CallTo(() => _manager.SendEmailToTeamLeadAsync(A<CompleteTransgressionDto>._)).MustNotHaveHappened();
+            return;
+        }
+
         if (success)
         {
             Assert.IsType<OkObjectResult>(result);

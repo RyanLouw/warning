@@ -111,8 +111,9 @@ suite's web-process coverage. There is no 100% gate: external Graph/Azure calls,
 full browser execution and remaining uncovered branches need separate evidence.
 
 The unit suite was executed against the application without the earlier product
-fixes. It reports **281 passed, 4 failed, 2 skipped**. The four failures expose
-business-rule/template problems listed in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+fixes. It exposes the business-rule/template problems listed in
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md); exact failures depend on the application
+version being tested.
 The two team-lead email cases remain skipped at your earlier request; remove
 their InlineData Skip to re-enable them. No additional failures are skipped.
 SQL/Aspire browser tests must be run on your working machine/build agent: this
@@ -153,3 +154,18 @@ No new product feature, authorization fix, status rule, AppHost or migration
 change is included. Existing test-only authentication/external adapters and the
 fake email outbox remain available for Aspire tests; normal builds exclude them.
 Product defects should be reviewed and fixed separately from this test work.
+
+## Reading a startup failure
+
+A collection-fixture failure is not a failed browser assertion. If every UI,
+SQL and HTTP test reports the same Aspire timeout, none of those checks ran.
+The exception names the startup log in
+`WarningSystemTest/bin/Debug/net10.0/TestResults/Aspire/`. Inspect/share that log
+before changing tests, application code or startup timeout settings. The TRX
+contains the timeout and stack trace, but not the separate startup log contents.
+
+Controller completion tests accept both the baseline controller (which calls
+ApplyLegalDecisionAsync/SendEmailToTeamLeadAsync) and the controller that
+forwards completion to CompleteTransgressionAsync. The delegated path verifies
+that the controller returns the manager's exact result without sending another
+email itself. A separate manager test checks that a rejected draft sends no mail.
