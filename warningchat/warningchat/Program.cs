@@ -1,4 +1,5 @@
 using Azure.Identity;
+using HW.CentralConfig.Package.Core;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -9,6 +10,8 @@ using Microsoft.Identity.Web.UI;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.Kiota.Abstractions.Authentication;
 using Serilog;
+using WarningSystems.core.DataAccess.ADUsersDataAccess;
+using WarningSystems.core.DataAccess.ADUsersDataAccess.Context;
 using WarningSystems.core.Models.DTO;
 using WarningSystems.core.Services.Interface;
 using WarningSystems.Core.Auth;
@@ -26,7 +29,6 @@ using WarningSystems.Core.Services.Interface;
 using WarningSystems.Core.ViewModels;
 using WarningSystems.Middleware;
 using WarningSystems.Services.Interface;
-using HW.CentralConfig.Package.Core;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +37,8 @@ builder.Host.UseSerilog((ctx, services, config) =>
 {
     config.ReadFrom.Configuration(ctx.Configuration);
 });
+
+builder.AddServiceDefaults();
 
 builder.Services
     .AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
@@ -50,7 +54,10 @@ builder.Services.Configure<CookieAuthenticationOptions>(
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
+builder.Services.AddSingleton<WarningSystems.Core.Caching.IssueWizardCache>();
+builder.Services.AddControllersWithViews(options =>
+    options.Filters.Add<WarningSystems.IssueWizardCacheInvalidationFilter>())
+    .AddMicrosoftIdentityUI();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
@@ -152,15 +159,24 @@ builder.Services.AddScoped<
     IWarningSystemDataAccess,
     WarningSystemDataAccess>();
 
-builder.Services.AddDbContext<SopDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("SopDb")));
-builder.Services.AddScoped<
-    ISOPDataAccess,
-    SOPDataAccess>();
+builder.Services.AddDbContext<ADUsersDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("ADUsers")));
+builder.Services.AddScoped<IADUsersDataAccess, ADUsersDataAccess>();
 
 builder.Services.AddScoped<
     IGraphUserDataAccess,
     GraphUserDataAccess>();
+
+builder.Services.AddDbContext<SopDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("SopDb")));
+builder.Services.AddScoped<ISOPDataAccess, SOPDataAccess>();
+
+
+
+
+
+
+
 
 builder.Services.AddScoped<AdminAuditSaveChangesInterceptor>();
 IdentityModelEventSource.ShowPII = true;

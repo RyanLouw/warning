@@ -5,27 +5,14 @@
     if (!loader) return;
 
     let pendingOperations = 0;
-    let showTimer = null;
-    let navigationInProgress = false;
+    // let showTimer = null;
+    // let navigationInProgress = false;
 
     function render() {
         const isBusy = pendingOperations > 0;
         document.body.classList.toggle("app-is-loading", isBusy);
+        loader.classList.toggle("app-loader--visible", isBusy);
         loader.setAttribute("aria-hidden", String(!isBusy));
-
-        if (!isBusy) {
-            clearTimeout(showTimer);
-            showTimer = null;
-            loader.classList.remove("app-loader--visible");
-            return;
-        }
-
-        if (!showTimer && !loader.classList.contains("app-loader--visible")) {
-            showTimer = window.setTimeout(() => {
-                loader.classList.add("app-loader--visible");
-                showTimer = null;
-            }, 120);
-        }
     }
 
     function show() {
@@ -40,21 +27,21 @@
 
     function reset() {
         pendingOperations = 0;
-        navigationInProgress = false;
+        // navigationInProgress = false;
         render();
     }
 
-    function beginNavigation() {
-        if (navigationInProgress) return;
+    // function beginNavigation() {
+    //     if (navigationInProgress) return;
 
-        navigationInProgress = true;
-        show();
+    //     navigationInProgress = true;
+    //     show();
 
 
-        clearTimeout(showTimer);
-        showTimer = null;
-        loader.classList.add("app-loader--visible");
-    }
+    //     clearTimeout(showTimer);
+    //     showTimer = null;
+    //     loader.classList.add("app-loader--visible");
+    // }
 
     window.appLoader = {
         show,
@@ -70,53 +57,55 @@
         }
     };
 
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async (...args) => {
-        show();
-        try {
-            return await originalFetch(...args);
-        } finally {
-            hide();
-        }
-    };
+    // const originalFetch = window.fetch.bind(window);
+    // window.fetch = async (...args) => {
+    //     show();
+    //     try {
+    //         return await originalFetch(...args);
+    //     } finally {
+    //         hide();
+    //     }
+    // };
 
-    const originalXhrSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function (...args) {
-        show();
-        this.addEventListener("loadend", hide, { once: true });
+    // const originalXhrSend = XMLHttpRequest.prototype.send;
+    // XMLHttpRequest.prototype.send = function (...args) {
+    //     show();
+    //     this.addEventListener("loadend", hide, { once: true });
 
-        try {
-            return originalXhrSend.apply(this, args);
-        } catch (error) {
-            hide();
-            throw error;
-        }
-    };
+    //     try {
+    //         return originalXhrSend.apply(this, args);
+    //     } catch (error) {
+    //         hide();
+    //         throw error;
+    //     }
+    // };
 
 
     document.addEventListener("submit", event => {
-        if (!event.defaultPrevented) beginNavigation();
+        window.setTimeout(() => {
+            if (!event.defaultPrevented) beginNavigation();
+        }, 0);
     });
 
-    document.addEventListener("click", event => {
-        const link = event.target.closest("a[href]");
-        if (!link || event.defaultPrevented || event.button !== 0) return;
-        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-        if (link.target && link.target.toLowerCase() !== "_self") return;
-        if (link.hasAttribute("download") || link.dataset.bsToggle) return;
+    // document.addEventListener("click", event => {
+    //     const link = event.target.closest("a[href]");
+    //     if (!link || event.defaultPrevented || event.button !== 0) return;
+    //     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    //     if (link.target && link.target.toLowerCase() !== "_self") return;
+    //     if (link.hasAttribute("download") || link.dataset.bsToggle) return;
 
-        const href = link.getAttribute("href") || "";
-        if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+    //     const href = link.getAttribute("href") || "";
+    //     if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
 
-        const destination = new URL(link.href, window.location.href);
-        if (destination.origin !== window.location.origin) return;
+    //     const destination = new URL(link.href, window.location.href);
+    //     if (destination.origin !== window.location.origin) return;
 
-        if (!event.defaultPrevented) beginNavigation();
-    });
-
-
-    window.addEventListener("beforeunload", beginNavigation);
+    //     if (!event.defaultPrevented) beginNavigation();
+    // });
 
 
-    window.addEventListener("pageshow", reset);
+    // window.addEventListener("beforeunload", beginNavigation);
+
+
+    // window.addEventListener("pageshow", reset);
 })();

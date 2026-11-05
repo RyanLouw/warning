@@ -52,7 +52,7 @@ namespace WarningSystems.Controllers
         [Authorize(Roles = "User")]
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateTransgression(CreateTransgressionDTO dto)
+        public async Task<IActionResult> CreateTransgression(CreateTransgressionDTO dto, [FromForm] string? responseMode = null)
         {
             var result = await _transgression.SaveIssueStepAsync(dto);
 
@@ -65,7 +65,12 @@ namespace WarningSystems.Controllers
                 });
             }
 
-            if (dto.WarningId.HasValue && dto.WarningId.Value > 0)
+            if ((dto.WarningId.HasValue && dto.WarningId.Value > 0) ||
+                  Request.GetTypedHeaders().Accept?.Any(type =>
+                      string.Equals(
+                          type.MediaType.Value,
+                          "application/json",
+                          StringComparison.OrdinalIgnoreCase)) == true)
             {
                 return Json(new
                 {

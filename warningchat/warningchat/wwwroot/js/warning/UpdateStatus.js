@@ -103,23 +103,22 @@
             dueDate: toIsoDateOnly(due)
         };
 
+        const oldText = btn.textContent;
+
         try {
             btn.disabled = true;
-            const oldText = btn.textContent;
             btn.textContent = "Saving...";
+            window.appLoader.show();
 
             await postJson(saveUrl, dto);
 
-            showMsg(`Saved ✓ Status = New, Due = ${dto.dueDate}`, false);
-
-            btn.textContent = oldText;
-            btn.disabled = false;
-            window.location.href = "/";
+            window.location.assign("/");
         } catch (e) {
+            window.appLoader.hide();
             console.error(e);
             showMsg(e.message || "Save failed.", true);
             btn.disabled = false;
-            btn.textContent = "Submit to Legal";
+            btn.textContent = oldText;
         }
     }
 
