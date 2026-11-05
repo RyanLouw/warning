@@ -50,7 +50,10 @@ builder.Services.Configure<CookieAuthenticationOptions>(
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
+builder.Services.AddSingleton<WarningSystems.Core.Caching.IssueWizardCache>();
+builder.Services.AddControllersWithViews(options =>
+    options.Filters.Add<WarningSystems.IssueWizardCacheInvalidationFilter>())
+    .AddMicrosoftIdentityUI();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();

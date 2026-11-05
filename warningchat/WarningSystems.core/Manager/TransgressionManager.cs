@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+using WarningSystems.Core.Caching;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
@@ -26,6 +27,7 @@ namespace WarningSystems.Core.Manager;
 
 public class TransgressionManager : ITransgressionManager
 {
+    private readonly IssueWizardCache _wizardCache;
     private readonly IWarningSystemDataAccess _data;
     private readonly IGraphUserDataAccess _graphUserDataAccess;
     private readonly ICurrentUserAccessor _currentUser;
@@ -45,8 +47,10 @@ public class TransgressionManager : ITransgressionManager
         IUserRoleService roles,
         IOptions<EmailSettings> emailOptions,
         IOptions<ApplicationOptions> applicationOptions,
-        IEmailTemplateRenderer emailTemplateRenderer)
+        IEmailTemplateRenderer emailTemplateRenderer,
+        IssueWizardCache wizardCache)
     {
+        _wizardCache = wizardCache;
         _data = data;
         _graphUserDataAccess = graphUserDataAccess;
         _currentUser = currentUser;
@@ -1103,50 +1107,61 @@ public class TransgressionManager : ITransgressionManager
 
     public async Task<WarningWizardVm> GetWarningWizardAsync(long? id)
     {
-        var underMe = await UnderMe();
+        var userId = _currentUser.ObjectId;
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new UnauthorizedAccessException("Current user could not be identified.");
 
-        var sopEntities = await _sop.GetActiveDocumentsAsync();
-
-        var sopDocuments = sopEntities
-            .Select(document => new SopDocumentLiteVm(document))
-            .ToList();
+        // Cache only the picker fields, not Graph SDK objects and backing stores.
+        var employees = await _wizardCache.GetAsync(userId, "employees", true, async () =>
+            (await UnderMe()).Select(user => new WizardEmployee(
+                user.Id, user.DisplayName, user.UserPrincipalName)).ToList());
+        var underMe = employees.Select(user => new User
+        {
+            Id = user.Id, DisplayName = user.DisplayName,
+            UserPrincipalName = user.UserPrincipalName
+        }).ToList();
+        var sopDocuments = await _wizardCache.GetAsync(userId, "sops", true, async () =>
+            (await _sop.GetActiveDocumentsAsync())
+                .Select(document => new SopDocumentLiteVm(document)).ToList());
 
         if (!id.HasValue || id.Value <= 0)
         {
-            var categoryEntities = await _data.GetAllCategoriesAsync();
+            var categories = await _wizardCache.GetAsync(userId, "categories", true, async () =>
+                (await _data.GetAllCategoriesAsync()).Select(category => new CategoryVM(category)).ToList());
 
             return new WarningWizardVm
             {
-                Categories = categoryEntities
-                    .Select(category => new CategoryVM(category))
-                    .ToList(),
+                Categories = categories,
 
                 SOPs = sopDocuments,
                 UnderMe = underMe
             };
         }
 
-        var existingVm = await BuildWarningWizardAsync(id.Value);
-
+        var existingVm = await _wizardCache.GetAsync(userId, $"warning:{id.Value}", false, async () =>
+        {
+            var vm = await BuildWarningWizardAsync(id.Value);
+            // Do not list remote files for an issue this user cannot open.
+            if (vm.CreatedBy == userId)
+            {
+                var storedFiles = await _fileStorage.ListWarningFilesAsync(id.Value);
+                vm.EvidenceStored = storedFiles
+                    .Concat((vm.Evidence ?? []).Select(e => e.FileName)
+                        .Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name!))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            }
+            return vm;
+        });
         existingVm.SOPs = sopDocuments;
         existingVm.UnderMe = underMe;
-
-        var storedFiles = await _fileStorage.ListWarningFilesAsync(id.Value);
-        var recordedFiles = (existingVm.Evidence ?? [])
-            .Select(evidence => evidence.FileName)
-            .Where(fileName => !string.IsNullOrWhiteSpace(fileName))
-            .Select(fileName => fileName!);
-
-        existingVm.EvidenceStored = storedFiles
-            .Concat(recordedFiles)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
 
         existingVm.HasAccess =
             existingVm.CreatedBy == _currentUser.ObjectId;
 
         return existingVm;
     }
+
+    private sealed record WizardEmployee(string? Id, string? DisplayName, string? UserPrincipalName);
 
     private async Task<WarningWizardVm> BuildWarningWizardAsync(long warningId)
     {
@@ -1186,20 +1201,8 @@ public class TransgressionManager : ITransgressionManager
         var user = await _graphUserDataAccess.GetUserAsync(
             warning.EmployeeId);
 
-        var categoryEntities = await _data.GetAllCategoriesAsync();
-
-        var categoryVms = categoryEntities
-            .Select(category => new CategoryVM
-            {
-                CategoryId = category.CategoryId,
-                Name = category.Name,
-                IsActive = category.IsActive,
-                CreatedOn = category.CreatedOn,
-                CreatedBy = category.CreatedBy,
-                UpdatedOn = category.UpdatedOn,
-                UpdatedBy = category.UpdatedBy
-            })
-            .ToList();
+        var categoryVms = await _wizardCache.GetAsync(_currentUser.ObjectId!, "categories", true, async () =>
+            (await _data.GetAllCategoriesAsync()).Select(category => new CategoryVM(category)).ToList());
 
         var categoryQuestions =
             await _data.GetActiveCategoryQuestionsAsync(categoryIds);

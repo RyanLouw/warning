@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     "use strict";
 
     function initialise() {
@@ -27,10 +27,6 @@
 
             const warningId =
                 warningIdElement?.value?.trim() ?? "";
-
-            if (!warningId || warningId === "0") {
-                return;
-            }
 
             event.preventDefault();
 
@@ -72,8 +68,13 @@
                         `Failed to save.HTTP ${response.status} `
                     );
                 }
-                const savedWarningId = data.warningId || warningId;
+                if (data.success !== true || !data.warningId) {
+                    throw new Error("The server did not confirm the saved issue. Please refresh before trying again.");
+                }
+                const savedWarningId = data.warningId;
 
+                // Navigate once after create or update. The POST returns JSON
+                // rather than making fetch follow a redirect and load HTML twice.
                 // Reload the wizard from the server after the Issue step is
                 // updated. Category changes determine which questions appear
                 // in later steps, so moving through the existing DOM would
