@@ -1,4 +1,5 @@
 ﻿using Microsoft.Graph.Models;
+using WarningSystems.core.Models.ViewModels;
 
 namespace WarningSystems.Core.ViewModels;
 
@@ -10,7 +11,7 @@ public class TaskListVM
 
     public LegalOverviewVm? LegalOverview { get; set; }
 
-    public List<User> UnderME { get; set; } = [];
+    public List<ADUserModel> UnderME { get; set; } = [];
     public List<EmployeeRowVm> EmployeeRows { get; set; } = [];
 
     public int DraftCount { get; set; }
@@ -39,7 +40,7 @@ public class TaskListVM
 
     public TaskListVM(
         List<TransgretionsVM> rows,
-        List<User> underme)
+        List<ADUserModel> underme)
     {
         TaskList = rows;
         UnderME = underme;

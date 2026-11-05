@@ -115,14 +115,14 @@
     var transgressionDateQuestion = Model.Questions?
         .FirstOrDefault(question => question.QuestionId == 1);
     var datesAnswer = transgressionDateQuestion?.AnswerJson;
-    if (!string.IsNullOrWhiteSpace(datesAnswer))
+    try
     {
-
         using var datesDocument = JsonDocument.Parse(datesAnswer);
         if (datesDocument.RootElement.TryGetProperty("dates", out var datesElement) &&
             datesElement.ValueKind == JsonValueKind.Array)
         {
             applicableDates = datesElement.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
                 .Select(item => item.GetString())
                 .Where(date => !string.IsNullOrWhiteSpace(date))
                 .Select(date => date!)
@@ -130,8 +130,11 @@
                 .OrderBy(date => date)
                 .ToList();
         }
-
-    }  
+    }
+    catch (JsonException)
+    {
+        // Preserve page rendering when a legacy answer contains malformed JSON.
+    }
     
          string FormatOffenseDates(string dates)
             {
@@ -827,7 +830,7 @@
                         <input type="date" class="form-control" id="legalDateInput" />
                         <button type="button" class="btn btn-outline-secondary" onclick="addLegalDate()">Add date</button>
                     </div>
-                    <div id="legalDatesList" class="d-flex flex-wrap gap-2" style="color: #000;">></div>
+                    <div id="legalDatesList" class="d-flex flex-wrap gap-2" style="color: #000;"></div>
                     <div class="form-text">Use Remove to delete an existing date. All dates may be removed.</div>
                 </div>
 
@@ -1436,11 +1439,20 @@
             return;
         }
 
+     
         const subtypeMode = parseInt(issueTypeEl.dataset.subtypeMode || "0", 10);
-        const issueSubtypeValue = document.getElementById("issueSubtype")?.value || "";
-        const issueSubtypeId = issueSubtypeValue ? parseInt(issueSubtypeValue, 10) : null;
+        const showSubtypes = issueTypeEl.dataset.showSubtypes === "true";
+        const usesSubtypes = showSubtypes && subtypeMode !== 0;
 
-        if (subtypeMode === 2 && !issueSubtypeId) {
+        const issueSubtypeValue = usesSubtypes
+            ? document.getElementById("issueSubtype")?.value || ""
+            : "";
+
+        const issueSubtypeId = issueSubtypeValue
+            ? parseInt(issueSubtypeValue, 10)
+            : null;
+
+        if (usesSubtypes && subtypeMode === 2 && !issueSubtypeId) {
             alert("Please select a decision subtype.");
             return;
         }

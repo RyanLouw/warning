@@ -119,19 +119,7 @@ namespace WarningSystems.Controllers
         [HttpPost]
         public async Task<IActionResult> SavePreviousOffences(SavePreviousOffencesDto dto)
         {
-            string type = "PreviousOffences";
-            if (dto.HasPreviousOffences)
-            {
-                foreach (var file in dto.Files)
-                {
-                    if (file is null || file.Length is 0)
-                    {
-                        continue;
-                    }
-
-                    await _fileStorage.UploadWarningFileAsync(dto.WarningId, type, file);
-                }
-            }
+            await _transgression.SavePreviousOffencesAsync(dto);
 
             return Ok(new { success = true });
         }
@@ -168,52 +156,16 @@ namespace WarningSystems.Controllers
                 return BadRequest();
             }
 
-
             if (dto.Files is null || dto.Files.Count is 0)
             {
-                return BadRequest(new { success = false, message = "No files selected." });
-            }
-
-
-            foreach (var file in dto.Files)
-            {
-                if (file is null || file.Length is 0)
+                return BadRequest(new
                 {
-                    continue;
-                }
-
-
-                var mediaType = _fileStorage.GetAttachmentType(file);
-
-                var originalName = System.IO.Path.GetFileNameWithoutExtension(file.FileName);
-                var ext = System.IO.Path.GetExtension(file.FileName);
-
-                var baseName = !string.IsNullOrWhiteSpace(dto.AttachmentName)
-                    ? dto.AttachmentName.Trim()
-                    : originalName;
-
-                var safeOriginalName = string.Concat(
-                    baseName.Where(c => !System.IO.Path.GetInvalidFileNameChars().Contains(c))
-                ).Trim();
-
-                if (string.IsNullOrWhiteSpace(safeOriginalName))
-                    safeOriginalName = "File";
-
-                var storagePrefix = $"Evidence_{safeOriginalName}";
-                var storedFileName = await _fileStorage.UploadWarningFileAsync(dto.WarningId, storagePrefix, file);
-
-                await _transgression.SaveEvidenceAsync(
-                    dto.WarningId,
-                    storedFileName,
-                    mediaType,
-                    file.Length,
-                    dto.Notes,
-                    1,
-                    false
-                );
+                    success = false,
+                    message = "No files selected."
+                });
             }
 
-            return Ok(new { success = true });
+            return await _transgression.SaveUserEvidenceAttachmentAsync(dto);
         }
 
         [Authorize(Roles = "User")]
@@ -282,6 +234,14 @@ namespace WarningSystems.Controllers
         [Authorize(Roles = "User")]
         public async Task<IActionResult> AddTeamLeadEvidence(AddTeamLeadEvidenceVm model)
         {
+            var hasFiles = model.Files != null && model.Files.Any(file => file.Length > 0);
+            var hasNote = !string.IsNullOrWhiteSpace(model.NoteText);
+            if (!hasFiles && !hasNote)
+            {
+                TempData["Error"] = "Please add at least one document or note.";
+                return RedirectToAction(nameof(TeamLeadWarning), new { id = model.WarningId });
+            }
+
             await _transgression.AddTeamLeadEvidenceAsync(model);
 
             TempData["Success"] = "Additional information was saved successfully.";

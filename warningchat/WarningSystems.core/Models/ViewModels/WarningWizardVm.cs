@@ -1,4 +1,5 @@
 ﻿using Microsoft.Graph.Models;
+using WarningSystems.core.Models.ViewModels;
 
 namespace WarningSystems.Core.ViewModels;
 
@@ -7,7 +8,7 @@ public class WarningWizardVm
     public long? WarningId { get; set; }
     public bool IsNew => !WarningId.HasValue || WarningId.Value <= 0;
 
-    public List<User> UnderMe { get; set; } = [];
+    public List<ADUserModel> UnderMe { get; set; } = [];
     public  string EmployeeId { get; set; }
     public  string EmployeeName { get; set; }
 

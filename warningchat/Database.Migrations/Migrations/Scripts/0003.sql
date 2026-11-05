@@ -57,4 +57,11 @@ BEGIN
             NULL, @SetIsActive, SYSUTCDATETIME(), @CreatedBy, NULL, NULL
         );
 
-END
+
+
+END;
+GO
+
+EXEC ws.sp_EnsureDefaultCategoryQuestions
+    @CreatedBy = 'seed',
+    @SetIsActive = 1;

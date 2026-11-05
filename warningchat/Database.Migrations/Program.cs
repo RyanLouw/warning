@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
-using HW.CentralConfig.Package.Core;
+
 namespace HW.Database.Migrations;
 
 public class Program
@@ -16,7 +16,7 @@ public class Program
         new("PitstopDb", TagNames.Pitstop)
     ];
 
-    public static async Task Main(string[] args)
+    public static void Main(string[] args)
     {
         try
         {
@@ -31,9 +31,9 @@ public class Program
             foreach (var tag in MigratorTags)
             {
                 Log.Information("Entered RunMigrations for {ConnectionKey}", tag.ConnectionKey);
-                IServiceProvider serviceProvider = await CreateServices(tag, configSettings);
+                using IHost host = CreateHost(tag, configSettings, args);
 
-                using var scope = serviceProvider.CreateScope();
+                using var scope = host.Services.CreateScope();
                 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
                 MigrateUp(scope.ServiceProvider);
                 Log.Information("Finished with {ConnectionKey}", tag.ConnectionKey);
@@ -44,6 +44,7 @@ public class Program
         catch (Exception ex)
         {
             Log.Error(ex, "Main");
+            throw;
         }
     }
 
@@ -56,13 +57,13 @@ public class Program
             .AddCommandLine(args);
 
         Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(configSettings)
+            .ReadFrom.Configuration(builder.Configuration)
             .Enrich.FromLogContext()
             .CreateLogger();
 
         builder.AddServiceDefaults();
 
-        var connection = builder.Configuration.GetConnectionString(migratorTag.ConnectionKey);
+        var connection = GetConnectionString(builder.Configuration, migratorTag.ConnectionKey);
 
         builder.Services.AddFluentMigratorCore()
             .ConfigureRunner(rb =>
@@ -75,7 +76,7 @@ public class Program
             .Configure<RunnerOptions>(opt => opt.Tags = [migratorTag.Tag])
             .AddSingleton(Log.Logger);
 
-        var app = builder.Build();
+        var host = builder.Build();
         Log.Information("Application services built successfully");
         return host;
     }
@@ -89,22 +90,6 @@ public class Program
             throw new InvalidOperationException(
                 $"Connection string 'ConnectionStrings:{connectionKey}' is not configured.");
         }
-
-        connection = connection.Trim();
-
-        if (connection.Length >= 2 &&
-            ((connection[0] == '"' && connection[^1] == '"') ||
-             (connection[0] == '\'' && connection[^1] == '\'')))
-        {
-            connection = connection[1..^1].Trim();
-        }
-
-        if (string.IsNullOrWhiteSpace(connection))
-        {
-            throw new InvalidOperationException(
-                $"Connection string 'ConnectionStrings:{connectionKey}' is empty.");
-        }
-
         return connection;
     }
 

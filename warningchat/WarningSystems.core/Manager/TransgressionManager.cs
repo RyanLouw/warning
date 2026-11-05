@@ -2,11 +2,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
-using System.Net;
 using Microsoft.Identity.Web;
 using System.Net;
+using System.Net;
 using System.Text.RegularExpressions;
+using WarningSystems.core.DataAccess.ADUsersDataAccess;
+using WarningSystems.core.DataAccess.ADUsersDataAccess.Context.Entities;
 using WarningSystems.core.Models.DTO;
+using WarningSystems.core.Models.ViewModels;
 using WarningSystems.core.Services.Interface;
 using WarningSystems.Core.Auth.Interface;
 using WarningSystems.Core.DataAccess.AzureFileStorage;
@@ -32,6 +35,7 @@ public class TransgressionManager : ITransgressionManager
     private readonly ISOPDataAccess _sop;
     private readonly IAzureFileStorageDataAccess _fileStorage;
     private readonly IUserRoleService _roles;
+    private readonly IADUsersDataAccess _adUsersDataAccess;
     private readonly EmailSettings _emailSettings;
     private readonly ApplicationOptions _applicationOptions;
     private readonly IEmailTemplateRenderer _emailTemplateRenderer;
@@ -45,6 +49,7 @@ public class TransgressionManager : ITransgressionManager
         IUserRoleService roles,
         IOptions<EmailSettings> emailOptions,
         IOptions<ApplicationOptions> applicationOptions,
+        IADUsersDataAccess adUsersDataAccess,
         IEmailTemplateRenderer emailTemplateRenderer)
     {
         _data = data;
@@ -53,7 +58,7 @@ public class TransgressionManager : ITransgressionManager
         _sop = sop;
         _fileStorage = fileStorage;
         _roles = roles;
-
+        _adUsersDataAccess = adUsersDataAccess;
         _emailSettings = emailOptions.Value;
         _applicationOptions = applicationOptions.Value;
         _emailTemplateRenderer = emailTemplateRenderer;
@@ -437,11 +442,12 @@ public class TransgressionManager : ITransgressionManager
         return vm;
     }
 
-    private async Task PopulateEmployeeDashboardDisplayNamesAsync(
-     EmployeeDashboardVm vm)
+    private async Task PopulateEmployeeDashboardDisplayNamesAsync(EmployeeDashboardVm vm)
     {
         if (vm is null)
+        {
             return;
+        }
 
         var warnings =
             vm.Warnings ?? Enumerable.Empty<EmployeeWarningCardVm>();
@@ -484,13 +490,11 @@ public class TransgressionManager : ITransgressionManager
         {
             try
             {
-                var user =
-                    await _graphUserDataAccess.GetUserAsync(id);
+                var user =await _adUsersDataAccess.GetUserAsync(id);
 
-                var displayName =
-                    string.IsNullOrWhiteSpace(user?.DisplayName)
-                        ? id
-                        : user.DisplayName;
+                var displayName =string.IsNullOrWhiteSpace(user?.DisplayName)
+                                        ? id
+                                        : user.DisplayName;
 
                 return (
                     Id: id,
@@ -591,7 +595,7 @@ public class TransgressionManager : ITransgressionManager
         {
             try
             {
-                var user = await _graphUserDataAccess.GetUserAsync(id);
+                var user = await _adUsersDataAccess.GetUserAsync(id);
 
                 var displayName =
                     string.IsNullOrWhiteSpace(user?.DisplayName)
@@ -631,7 +635,7 @@ public class TransgressionManager : ITransgressionManager
 
     private record FilterContext(
         List<TransgretionsVM> AllRows,
-        List<User> UnderMe,
+        List<ADUserModel> UnderMe,
         bool IsLegal,
         bool IsChairperson,
         bool IsUser
@@ -668,11 +672,11 @@ public class TransgressionManager : ITransgressionManager
         return filtered.ToList();
     }
 
-    private static HashSet<string> BuildUnderMeIdSet(List<User> underme)
+    private static HashSet<string> BuildUnderMeIdSet(List<ADUserModel> underme)
     {
         return new HashSet<string>(
-            underme.Where(u => !string.IsNullOrWhiteSpace(u.Id))
-                   .Select(u => u.Id!.Trim()),
+            underme.Where(u => !string.IsNullOrWhiteSpace(u.ID))
+                   .Select(u => u.ID!.Trim()),
             StringComparer.OrdinalIgnoreCase
         );
     }
@@ -709,7 +713,7 @@ public class TransgressionManager : ITransgressionManager
 
 
 
-    private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(List<TransgretionsVM> rows, List<User> underme,string managerName)
+    private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(List<TransgretionsVM> rows, List<ADUserModel> underme,string managerName)
     {
         var warningsByEmployee = rows
             .Where(r => !string.IsNullOrWhiteSpace(r.EmployeeId))
@@ -728,15 +732,15 @@ public class TransgressionManager : ITransgressionManager
 
         var result = new List<EmployeeRowVm>();
 
-        foreach (var u in underme.Where(u => !string.IsNullOrWhiteSpace(u.Id)))
+        foreach (var u in underme.Where(u => !string.IsNullOrWhiteSpace(u.ID)))
         {
-            warningsByEmployee.TryGetValue(u.Id!.Trim(), out var info);
+            warningsByEmployee.TryGetValue(u.ID!.Trim(), out var info);
 
             var employeeName = u.DisplayName ?? "(No name)";
 
             try
             {
-                var user = await _graphUserDataAccess.GetUserAsync(u.Id!.Trim());
+                var user = await _adUsersDataAccess.GetUserAsync(u.ID!.Trim());
                 if (!string.IsNullOrWhiteSpace(user?.DisplayName))
                     employeeName = user.DisplayName;
             }
@@ -746,7 +750,7 @@ public class TransgressionManager : ITransgressionManager
 
             result.Add(new EmployeeRowVm
             {
-                EmployeeId = u.Id!,
+                EmployeeId = u.ID!,
                 EmployeeName = employeeName,
                 Department = u.Department ?? "",
                 TeamLeader = "",
@@ -762,11 +766,22 @@ public class TransgressionManager : ITransgressionManager
             .ToList();
     }
 
-    private async Task<List<User>> UnderMe()
+    private async Task<List<ADUserModel>> UnderMe()
     {
-        return await _graphUserDataAccess.GetUsersBelowMyLevelAsync();
-    }
+        var me = await _graphUserDataAccess.GetMeAsync();
 
+        if (string.IsNullOrWhiteSpace(me?.Id))
+        {
+            return [];
+        }
+
+        var users = await _adUsersDataAccess
+            .GetUsersBelowMyLevelAsync(me.Id);
+
+        return users
+            .Select(user => new ADUserModel(user))
+            .ToList();
+    }
     public async Task<AdminVM> BuildAdminView()
     {
         var categoryEntities = await _data.GetAllCategoriesIncludingInactiveAsync();
@@ -844,7 +859,7 @@ public class TransgressionManager : ITransgressionManager
         if (cache.TryGetValue(value, out var cachedName))
             return cachedName;
 
-        var user = await _graphUserDataAccess.GetUserAsync(value);
+        var user = await _adUsersDataAccess.GetUserAsync(value);
 
         var displayName =
             user?.DisplayName
@@ -1183,7 +1198,7 @@ public class TransgressionManager : ITransgressionManager
             }
         }
 
-        var user = await _graphUserDataAccess.GetUserAsync(
+        var user = await _adUsersDataAccess.GetUserAsync(
             warning.EmployeeId);
 
         var categoryEntities = await _data.GetAllCategoriesAsync();
@@ -1913,7 +1928,7 @@ public class TransgressionManager : ITransgressionManager
         {
             try
             {
-                var user = await _graphUserDataAccess.GetUserAsync(userId);
+                var user = await _adUsersDataAccess.GetUserAsync(userId);
 
                 lookup[userId] = !string.IsNullOrWhiteSpace(user?.DisplayName)
                     ? user.DisplayName
@@ -2511,7 +2526,7 @@ public class TransgressionManager : ITransgressionManager
 
             stage = $"Getting created by user from Graph. CreatedBy={createdByUserId}, WarningId={dto.WarningId}";
 
-            var user = await _graphUserDataAccess.GetUserAsync(createdByUserId);
+            var user = await _adUsersDataAccess.GetUserAsync(createdByUserId);
 
             if (user == null)
                 throw new InvalidOperationException(
@@ -2528,7 +2543,7 @@ public class TransgressionManager : ITransgressionManager
             if (string.IsNullOrWhiteSpace(userEmail))
             {
                 throw new InvalidOperationException(
-                    $"Creator has no Mail/UPN. UserId={user.Id}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={dto.WarningId}");
+                    $"Creator has no Mail/UPN. UserId={user.ID}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={dto.WarningId}");
             }
 
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={dto.WarningId}";
@@ -2695,7 +2710,7 @@ public class TransgressionManager : ITransgressionManager
 
             stage = $"Getting created by user from Graph. CreatedBy={createdByUserId}, WarningId={warningId}";
 
-            var user = await _graphUserDataAccess.GetUserAsync(createdByUserId);
+            var user = await _adUsersDataAccess.GetUserAsync(createdByUserId);
 
             if (user == null)
             {
@@ -2714,7 +2729,7 @@ public class TransgressionManager : ITransgressionManager
             if (string.IsNullOrWhiteSpace(userEmail))
             {
                 throw new InvalidOperationException(
-                    $"Creator has no Mail/UPN. UserId={user.Id}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={warningId}");
+                    $"Creator has no Mail/UPN. UserId={user.ID}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={warningId}");
             }
 
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={warningId}";
@@ -3103,7 +3118,7 @@ public class TransgressionManager : ITransgressionManager
 
         var trimmedUserId = userId.Trim();
 
-        var user = await _graphUserDataAccess.GetUserAsync(trimmedUserId);
+        var user = await _adUsersDataAccess.GetUserAsync(trimmedUserId);
 
         if (user == null)
             return trimmedUserId;
