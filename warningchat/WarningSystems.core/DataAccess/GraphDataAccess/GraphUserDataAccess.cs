@@ -1,6 +1,9 @@
-﻿using Microsoft.Graph;
+﻿using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Identity.Web;
+using Serilog;
+using System.Diagnostics;
 using WarningSystems.Core.DataAccess.GraphDataAccess.Context;
 using WarningSystems.Core.Services;
 using WarningSystems.Core.ViewModels;
@@ -10,12 +13,11 @@ namespace WarningSystems.Core.DataAccess.GraphDataAccess;
 public class GraphUserDataAccess : IGraphUserDataAccess
 {
     private readonly GraphServiceClient _graph;
-    private readonly ITokenAcquisition _tokenAcquisition;
 
-    public GraphUserDataAccess(IUserGraphClient userGraph, ITokenAcquisition tokenAcquisition)
+
+    public GraphUserDataAccess(IUserGraphClient userGraph)
     {
         _graph = userGraph.Client;
-        _tokenAcquisition = tokenAcquisition;
     }
 
     public async Task<IReadOnlyList<string>> GetMatchedGroupIdsAsync(string userObjectId, IEnumerable<string> groupIdsToCheck)
@@ -26,9 +28,9 @@ public class GraphUserDataAccess : IGraphUserDataAccess
             .ToArray();
 
         if (groupsToCheck.Length == 0)
+        {
             return Array.Empty<string>();
-
-        var cacheKey = $"grpcheck:{userObjectId}:{string.Join("|", groupsToCheck)}";
+        }
 
         var body = new Microsoft.Graph.Users.Item.CheckMemberGroups.CheckMemberGroupsPostRequestBody
         {
@@ -57,197 +59,12 @@ public class GraphUserDataAccess : IGraphUserDataAccess
         });
     }
 
-    public async Task<List<User>> GetUsersUnderMeAsync()
-    {
-        var me = await GetMeAsync();
-        if (me?.Id is null) return new List<User>();
-
-        var users = new Dictionary<string, User>(StringComparer.OrdinalIgnoreCase);
-        var visitedManagers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        await AddReportsRecursiveAsync(me.Id, users, visitedManagers);
-
-        return users.Values
-            .OrderBy(u => u.DisplayName)
-            .ThenBy(u => u.UserPrincipalName)
-            .ToList();
-    }
-
-
-    public async Task<List<User>> GetUsersBelowMyLevelAsync()
-    {
-       var me = await GetMeAsync();
-       // var me = await GetUserAsync("42730445-5c09-456a-be93-a0a3f22e7974");
-        if (string.IsNullOrWhiteSpace(me?.Id))
-            return [];
-
-        var users = new Dictionary<string, User>(StringComparer.OrdinalIgnoreCase);
-        var visitedManagers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
- 
-        await AddReportsRecursiveAsync(me.Id, users, visitedManagers);
-
-        var manager = await GetManagerAsync(me.Id);
-        if (!string.IsNullOrWhiteSpace(manager?.Id))
-        {
-            var allsameLevelUsers = await GetDirectReportsUsersAsync(manager.Id);
-            var myDepartment = me.Department?.Trim();
-            var myJobTitle = me.JobTitle?.Trim();
-
-            var sameLevelUsers = allsameLevelUsers
-                .Where(user =>
-                    string.Equals(
-                        user.Department?.Trim(),
-                        myDepartment,
-                        StringComparison.OrdinalIgnoreCase)
-                    &&
-                    string.Equals(
-                        user.JobTitle?.Trim(),
-                        myJobTitle,
-                        StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            foreach (var sameLevelUser in sameLevelUsers)
-            {
-                if (string.IsNullOrWhiteSpace(sameLevelUser.Id) ||
-                    sameLevelUser.Id.Equals(me.Id, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-
-                await AddReportsRecursiveAsync(
-                    sameLevelUser.Id,
-                    users,
-                    visitedManagers);
-            }
-        }
-
-        users.Remove(me.Id);
-
-
-        var usersunderme = users.Values
-          .Where(user => user.AccountEnabled == true)
-          .OrderBy(user => user.DisplayName)
-          .ThenBy(user => user.UserPrincipalName)
-          .ToList();
-
-
-       return usersunderme;
-    }
-
-    public async Task<User?> GetManagerAsync(string userId)
-    {
-        if (string.IsNullOrWhiteSpace(userId))
-            return null;
-
-        try
-        {
-            var manager = await _graph.Users[userId].Manager.GetAsync(cfg =>
-            {
-                cfg.QueryParameters.Select =
-                [
-                    "id",
-                    "displayName",
-                    "mail",
-                    "userPrincipalName",
-                    "jobTitle",
-                    "department"
-                ];
-            });
-
-            return manager as User;
-        }
-        catch (Microsoft.Kiota.Abstractions.ApiException ex)
-            when (ex.ResponseStatusCode == 404)
-        {
-            return null;
-        }
-    }
-
-    private async Task AddReportsRecursiveAsync( string managerId, Dictionary<string, User> users,HashSet<string> visitedManagers)
-    {
-        if (!visitedManagers.Add(managerId))
-            return;
-
-        var directReports = await GetDirectReportsUsersAsync(managerId);
-
-        foreach (var u in directReports)
-        {
-            if (u.Id is null) continue;
-
-            users[u.Id] = u;
-
-            await AddReportsRecursiveAsync(u.Id, users, visitedManagers);
-        }
-    }
-
-    public async Task<List<User>> GetDirectReportsUsersAsync(string userId)
-    {
-        if (string.IsNullOrWhiteSpace(userId))
-            return [];
-
-        var response = await _graph.Users[userId].DirectReports.GetAsync(cfg =>
-        {
-            cfg.QueryParameters.Select = new[]
-            {
-                "id",
-                "displayName",
-                "mail",
-                "userPrincipalName",
-                "jobTitle",
-                "department",
-                "accountEnabled"
-            };
-
-            cfg.QueryParameters.Top = 999;
-        });
-
-        var results = new List<User>();
-
-        if (response?.Value is null)
-            return results;
-
-        var pageIterator =
-            PageIterator<DirectoryObject, DirectoryObjectCollectionResponse>.CreatePageIterator(
-                _graph,
-                response,
-                (obj) =>
-                {
-                    if (obj is User user && user.Id is not null)
-                        results.Add(user);
-
-                    return true;
-                });
-
-        await pageIterator.IterateAsync();
-
-        return results;
-    }
-
-    public async Task<User?> GetUserAsync(string userIdOrUpn)
-    {
-        if (string.IsNullOrWhiteSpace(userIdOrUpn))
-            return null;
-
-        return await _graph.Users[userIdOrUpn].GetAsync(cfg =>
-        {
-            cfg.QueryParameters.Select = new[]
-            {
-            "id",
-            "displayName",
-            "mail",
-            "userPrincipalName",
-            "jobTitle",
-            "department"
-        };
-        });
-    }
-
     public async Task SendEmailAsync(SendEmailRequest request)
     {
         if (request == null)
+        {
             throw new ArgumentNullException(nameof(request));
+        }
 
         var message = new Message
         {

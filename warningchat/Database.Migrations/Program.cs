@@ -43,7 +43,6 @@ public class Program
         catch (Exception ex)
         {
             Log.Error(ex, "Main");
-            Environment.ExitCode = 1;
         }
     }
 
@@ -56,7 +55,7 @@ public class Program
             .AddCommandLine(args);
 
         Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(configSettings)
+            .ReadFrom.Configuration(builder.Configuration)
             .Enrich.FromLogContext()
             .CreateLogger();
 
@@ -75,7 +74,7 @@ public class Program
             .Configure<RunnerOptions>(opt => opt.Tags = [migratorTag.Tag])
             .AddSingleton(Log.Logger);
 
-        var app = builder.Build();
+        var host = builder.Build();
         Log.Information("Application services built successfully");
         return app;
     }
@@ -89,22 +88,6 @@ public class Program
             throw new InvalidOperationException(
                 $"Connection string 'ConnectionStrings:{connectionKey}' is not configured.");
         }
-
-        connection = connection.Trim();
-
-        if (connection.Length >= 2 &&
-            ((connection[0] == '"' && connection[^1] == '"') ||
-             (connection[0] == '\'' && connection[^1] == '\'')))
-        {
-            connection = connection[1..^1].Trim();
-        }
-
-        if (string.IsNullOrWhiteSpace(connection))
-        {
-            throw new InvalidOperationException(
-                $"Connection string 'ConnectionStrings:{connectionKey}' is empty.");
-        }
-
         return connection;
     }
 

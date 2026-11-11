@@ -14,7 +14,7 @@ public class SOPDataAccess : ISOPDataAccess
 
     public async Task<List<SopDocument>> GetActiveDocumentsAsync()
     {
-        return await _context.SopDocuments
+        var result = await _context.SopDocuments
             .AsNoTracking()
             .Where(d => d.Status != 2)
             .OrderBy(d => d.SOPDocumentCategoryId)
@@ -23,8 +23,10 @@ public class SOPDataAccess : ISOPDataAccess
             {
                 SOPDocumentId = d.SOPDocumentId,
                 DocumentName = d.DocumentName,
+                DocumentNumber =d.DocumentNumber,
                 SOPDocumentCategoryId = d.SOPDocumentCategoryId
             })
             .ToListAsync();
+        return result;
     }
 }

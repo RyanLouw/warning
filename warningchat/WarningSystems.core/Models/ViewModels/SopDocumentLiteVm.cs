@@ -14,7 +14,7 @@ public class SopDocumentLiteVm
        
         SOPDocumentCategoryId = entity.SOPDocumentCategoryId;
 
-        DocumentName = $"{entity.SOPDocumentCategoryId} - {entity.DocumentName}";
+        DocumentName = $"{entity.SOPDocumentCategoryId}.{entity.DocumentNumber} - {entity.DocumentName}";
 
     }
 

@@ -28,10 +28,6 @@
             const warningId =
                 warningIdElement?.value?.trim() ?? "";
 
-            if (!warningId || warningId === "0") {
-                return;
-            }
-
             event.preventDefault();
 
             const submitButton =
@@ -48,12 +44,14 @@
                 }
 
                 const formData = new FormData(form);
+                formData.set("responseMode", "json");
 
                 const response = await fetch(form.action, {
                     method: "POST",
                     body: formData,
                     headers: {
-                        "X-Requested-With": "XMLHttpRequest"
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Accept": "application/json"
                     }
                 });
 
@@ -66,18 +64,32 @@
                     data = await response.json();
                 }
 
-                if (!response.ok || data.success === false) {
-                    throw new Error(
-                        data.message ||
-                        `Failed to save.HTTP ${response.status} `
-                    );
-                }
-                const savedWarningId = data.warningId || warningId;
+                const success = data.success ?? data.Success;
+                const message = data.message ?? data.Message;
+                let savedWarningId = data.warningId ?? data.WarningId;
 
-                // Reload the wizard from the server after the Issue step is
-                // updated. Category changes determine which questions appear
-                // in later steps, so moving through the existing DOM would
-                // leave those steps (and the overview) with stale data.
+                if (!contentType.includes("application/json") && response.redirected && response.url) {
+                    const redirected = new URL(response.url, window.location.href);
+                    const wizardRoute = redirected.pathname.match(/^\/Transgression(?:\/Index)?(?:\/(\d+))?\/?$/i);
+                    if (redirected.origin === new URL(window.location.href).origin && wizardRoute) {
+                        savedWarningId = redirected.searchParams.get("id") || wizardRoute[1];
+                    }
+                }
+
+                if (!response.ok || success === false) {
+                    throw new Error(message || `Failed to save. HTTP ${response.status}`);
+                }
+                if (!savedWarningId || !/^[1-9]\d*$/.test(String(savedWarningId)) ||
+                    (contentType.includes("application/json") && success !== true)) {
+                    console.error("Unexpected issue save response", {
+                        status: response.status, contentType, redirected: response.redirected,
+                        url: response.url, data
+                    });
+                    throw new Error(contentType.includes("application/json")
+                        ? "The save response is missing the issue ID. Refresh before trying again to avoid creating a duplicate."
+                        : "The save returned a page instead of confirmation. Refresh and check whether the issue was created before trying again.");
+                }
+
                 const url = new URL(window.location.href);
                 url.searchParams.set("id", savedWarningId);
 

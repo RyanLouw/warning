@@ -4,7 +4,7 @@ public class SopDocument
 {
     public int SOPDocumentId { get; set; }
     public int SOPDocumentCategoryId { get; set; }
-    public string DocumentNumber { get; set; }
+    public int DocumentNumber { get; set; }
     public string DocumentName { get; set; }
     public DateTime? ReviewDate { get; set; }
     public DateTime? EffectiveDate { get; set; }

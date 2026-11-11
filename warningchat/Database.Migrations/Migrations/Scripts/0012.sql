@@ -21,11 +21,11 @@ SET IDENTITY_INSERT ws.LookupIssueSubTypes OFF;
 
 
 
- UPDATE [PitStop_Demo].[ws].[LookupIssueSubTypes]
+ UPDATE [LookupIssueSubTypes]
 	SET IssueSubTypeName = 'Final Written Warning '
 	WHERE IssueSubTypeId = 4;
 
-	INSERT INTO [PitStop_Demo].[ws].[LookupIssueSubTypes]
+	INSERT INTO [LookupIssueSubTypes]
 (
     IssueTypeId,
     IssueSubTypeName,

@@ -1,12 +1,16 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using WarningSystems.Core.Caching;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.Graph.Models;
-using System.Net;
 using Microsoft.Identity.Web;
 using System.Net;
+using System.Net;
 using System.Text.RegularExpressions;
+using WarningSystems.core.DataAccess.ADUsersDataAccess;
+using WarningSystems.core.DataAccess.ADUsersDataAccess.Context.Entities;
 using WarningSystems.core.Models.DTO;
+using WarningSystems.core.Models.ViewModels;
 using WarningSystems.core.Services.Interface;
 using WarningSystems.Core.Auth.Interface;
 using WarningSystems.Core.DataAccess.AzureFileStorage;
@@ -26,12 +30,14 @@ namespace WarningSystems.Core.Manager;
 
 public class TransgressionManager : ITransgressionManager
 {
+    private readonly IssueWizardCache _wizardCache;
     private readonly IWarningSystemDataAccess _data;
     private readonly IGraphUserDataAccess _graphUserDataAccess;
     private readonly ICurrentUserAccessor _currentUser;
     private readonly ISOPDataAccess _sop;
     private readonly IAzureFileStorageDataAccess _fileStorage;
     private readonly IUserRoleService _roles;
+    private readonly IADUsersDataAccess _adUsersDataAccess;
     private readonly EmailSettings _emailSettings;
     private readonly ApplicationOptions _applicationOptions;
     private readonly IEmailTemplateRenderer _emailTemplateRenderer;
@@ -45,15 +51,18 @@ public class TransgressionManager : ITransgressionManager
         IUserRoleService roles,
         IOptions<EmailSettings> emailOptions,
         IOptions<ApplicationOptions> applicationOptions,
-        IEmailTemplateRenderer emailTemplateRenderer)
+        IADUsersDataAccess adUsersDataAccess,
+        IEmailTemplateRenderer emailTemplateRenderer,
+        IssueWizardCache wizardCache)
     {
+        _wizardCache = wizardCache;
         _data = data;
         _graphUserDataAccess = graphUserDataAccess;
         _currentUser = currentUser;
         _sop = sop;
         _fileStorage = fileStorage;
         _roles = roles;
-
+        _adUsersDataAccess = adUsersDataAccess;
         _emailSettings = emailOptions.Value;
         _applicationOptions = applicationOptions.Value;
         _emailTemplateRenderer = emailTemplateRenderer;
@@ -134,7 +143,7 @@ public class TransgressionManager : ITransgressionManager
 
         ApplyStatusAndDueCounts(vm, rows);
 
-        vm.EmployeeRows = await BuildEmployeeRowsAsync(rows,underMe,me?.DisplayName ?? "Me");
+        vm.EmployeeRows = await BuildEmployeeRowsAsync(rows, underMe, me?.DisplayName ?? "Me");
 
         var employeeLookup = vm.EmployeeRows
             .Where(employee =>
@@ -282,9 +291,9 @@ public class TransgressionManager : ITransgressionManager
 
 
 
-        var answers =await _data.GetWarningAnswersByWarningIdsAsync(warningIds);
+        var answers = await _data.GetWarningAnswersByWarningIdsAsync(warningIds);
 
-        var warningNotes =await _data.GetWarningNotesByWarningIdsAsync(warningIds);
+        var warningNotes = await _data.GetWarningNotesByWarningIdsAsync(warningIds);
 
         var discussionDatesLookup = answers
             .Where(answer => answer.QuestionId == 1)
@@ -321,7 +330,7 @@ public class TransgressionManager : ITransgressionManager
             {
                 WarningId = note.WarningId,
                 CreatedOn = note.CreatedOn,
-              
+
                 CreatedBy = note.CreatedBy ?? string.Empty,
                 NoteType = note.EvidenceId.HasValue
                     ? "Evidence Note"
@@ -437,11 +446,12 @@ public class TransgressionManager : ITransgressionManager
         return vm;
     }
 
-    private async Task PopulateEmployeeDashboardDisplayNamesAsync(
-     EmployeeDashboardVm vm)
+    private async Task PopulateEmployeeDashboardDisplayNamesAsync(EmployeeDashboardVm vm)
     {
         if (vm is null)
+        {
             return;
+        }
 
         var warnings =
             vm.Warnings ?? Enumerable.Empty<EmployeeWarningCardVm>();
@@ -484,13 +494,11 @@ public class TransgressionManager : ITransgressionManager
         {
             try
             {
-                var user =
-                    await _graphUserDataAccess.GetUserAsync(id);
+                var user = await _adUsersDataAccess.GetUserAsync(id);
 
-                var displayName =
-                    string.IsNullOrWhiteSpace(user?.DisplayName)
-                        ? id
-                        : user.DisplayName;
+                var displayName = string.IsNullOrWhiteSpace(user?.DisplayName)
+                                        ? id
+                                        : user.DisplayName;
 
                 return (
                     Id: id,
@@ -591,7 +599,7 @@ public class TransgressionManager : ITransgressionManager
         {
             try
             {
-                var user = await _graphUserDataAccess.GetUserAsync(id);
+                var user = await _adUsersDataAccess.GetUserAsync(id);
 
                 var displayName =
                     string.IsNullOrWhiteSpace(user?.DisplayName)
@@ -631,7 +639,7 @@ public class TransgressionManager : ITransgressionManager
 
     private record FilterContext(
         List<TransgretionsVM> AllRows,
-        List<User> UnderMe,
+        List<ADUserModel> UnderMe,
         bool IsLegal,
         bool IsChairperson,
         bool IsUser
@@ -668,11 +676,11 @@ public class TransgressionManager : ITransgressionManager
         return filtered.ToList();
     }
 
-    private static HashSet<string> BuildUnderMeIdSet(List<User> underme)
+    private static HashSet<string> BuildUnderMeIdSet(List<ADUserModel> underme)
     {
         return new HashSet<string>(
-            underme.Where(u => !string.IsNullOrWhiteSpace(u.Id))
-                   .Select(u => u.Id!.Trim()),
+            underme.Where(u => !string.IsNullOrWhiteSpace(u.ID))
+                   .Select(u => u.ID!.Trim()),
             StringComparer.OrdinalIgnoreCase
         );
     }
@@ -709,7 +717,7 @@ public class TransgressionManager : ITransgressionManager
 
 
 
-    private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(List<TransgretionsVM> rows, List<User> underme,string managerName)
+    private async Task<List<EmployeeRowVm>> BuildEmployeeRowsAsync(List<TransgretionsVM> rows, List<ADUserModel> underme, string managerName)
     {
         var warningsByEmployee = rows
             .Where(r => !string.IsNullOrWhiteSpace(r.EmployeeId))
@@ -728,25 +736,15 @@ public class TransgressionManager : ITransgressionManager
 
         var result = new List<EmployeeRowVm>();
 
-        foreach (var u in underme.Where(u => !string.IsNullOrWhiteSpace(u.Id)))
+        foreach (var u in underme.Where(u => !string.IsNullOrWhiteSpace(u.ID)))
         {
-            warningsByEmployee.TryGetValue(u.Id!.Trim(), out var info);
+            warningsByEmployee.TryGetValue(u.ID!.Trim(), out var info);
 
             var employeeName = u.DisplayName ?? "(No name)";
 
-            try
-            {
-                var user = await _graphUserDataAccess.GetUserAsync(u.Id!.Trim());
-                if (!string.IsNullOrWhiteSpace(user?.DisplayName))
-                    employeeName = user.DisplayName;
-            }
-            catch
-            {
-            }
-
             result.Add(new EmployeeRowVm
             {
-                EmployeeId = u.Id!,
+                EmployeeId = u.ID!,
                 EmployeeName = employeeName,
                 Department = u.Department ?? "",
                 TeamLeader = "",
@@ -762,11 +760,22 @@ public class TransgressionManager : ITransgressionManager
             .ToList();
     }
 
-    private async Task<List<User>> UnderMe()
+    private async Task<List<ADUserModel>> UnderMe()
     {
-        return await _graphUserDataAccess.GetUsersBelowMyLevelAsync();
-    }
+        var me = await _graphUserDataAccess.GetMeAsync();
 
+        if (string.IsNullOrWhiteSpace(me?.Id))
+        {
+            return [];
+        }
+
+        var users = await _adUsersDataAccess
+            .GetUsersBelowMyLevelAsync(me.Id);
+
+        return users
+            .Select(user => new ADUserModel(user))
+            .ToList();
+    }
     public async Task<AdminVM> BuildAdminView()
     {
         var categoryEntities = await _data.GetAllCategoriesIncludingInactiveAsync();
@@ -813,7 +822,7 @@ public class TransgressionManager : ITransgressionManager
 
             if (!string.IsNullOrWhiteSpace(question.UpdatedBy))
             {
-                updatedByDisplayName = await ResolveUserDisplayNameAsync(question.UpdatedBy,userNameCache);
+                updatedByDisplayName = await ResolveUserDisplayNameAsync(question.UpdatedBy, userNameCache);
             }
 
             questions.Add(new QuestionVM(
@@ -844,7 +853,7 @@ public class TransgressionManager : ITransgressionManager
         if (cache.TryGetValue(value, out var cachedName))
             return cachedName;
 
-        var user = await _graphUserDataAccess.GetUserAsync(value);
+        var user = await _adUsersDataAccess.GetUserAsync(value);
 
         var displayName =
             user?.DisplayName
@@ -1103,44 +1112,46 @@ public class TransgressionManager : ITransgressionManager
 
     public async Task<WarningWizardVm> GetWarningWizardAsync(long? id)
     {
-        var underMe = await UnderMe();
+        var userId = _currentUser.ObjectId;
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new UnauthorizedAccessException("Current user could not be identified.");
 
-        var sopEntities = await _sop.GetActiveDocumentsAsync();
-
-        var sopDocuments = sopEntities
-            .Select(document => new SopDocumentLiteVm(document))
-            .ToList();
+        // Keep the AD-backed hierarchy and cache detached AD view models.
+        var underMe = await _wizardCache.GetAsync(userId, "employees", true, UnderMe);
+        var sopDocuments = await _wizardCache.GetAsync(userId, "sops", true, async () =>
+            (await _sop.GetActiveDocumentsAsync())
+                .Select(document => new SopDocumentLiteVm(document)).ToList());
 
         if (!id.HasValue || id.Value <= 0)
         {
-            var categoryEntities = await _data.GetAllCategoriesAsync();
+            var categories = await _wizardCache.GetAsync(userId, "categories", true, async () =>
+                (await _data.GetAllCategoriesAsync()).Select(category => new CategoryVM(category)).ToList());
 
             return new WarningWizardVm
             {
-                Categories = categoryEntities
-                    .Select(category => new CategoryVM(category))
-                    .ToList(),
+                Categories = categories,
 
                 SOPs = sopDocuments,
                 UnderMe = underMe
             };
         }
 
-        var existingVm = await BuildWarningWizardAsync(id.Value);
-
+        var existingVm = await _wizardCache.GetAsync(userId, $"warning:{id.Value}", false, async () =>
+        {
+            var vm = await BuildWarningWizardAsync(id.Value);
+            // Do not list remote files for an issue this user cannot open.
+            if (vm.CreatedBy == userId)
+            {
+                var storedFiles = await _fileStorage.ListWarningFilesAsync(id.Value);
+                vm.EvidenceStored = storedFiles
+                    .Concat((vm.Evidence ?? []).Select(e => e.FileName)
+                        .Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name!))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            }
+            return vm;
+        });
         existingVm.SOPs = sopDocuments;
         existingVm.UnderMe = underMe;
-
-        var storedFiles = await _fileStorage.ListWarningFilesAsync(id.Value);
-        var recordedFiles = (existingVm.Evidence ?? [])
-            .Select(evidence => evidence.FileName)
-            .Where(fileName => !string.IsNullOrWhiteSpace(fileName))
-            .Select(fileName => fileName!);
-
-        existingVm.EvidenceStored = storedFiles
-            .Concat(recordedFiles)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
 
         existingVm.HasAccess =
             existingVm.CreatedBy == _currentUser.ObjectId;
@@ -1183,23 +1194,10 @@ public class TransgressionManager : ITransgressionManager
             }
         }
 
-        var user = await _graphUserDataAccess.GetUserAsync(
-            warning.EmployeeId);
+        var user = await _adUsersDataAccess.GetUserAsync(warning.EmployeeId);
 
-        var categoryEntities = await _data.GetAllCategoriesAsync();
-
-        var categoryVms = categoryEntities
-            .Select(category => new CategoryVM
-            {
-                CategoryId = category.CategoryId,
-                Name = category.Name,
-                IsActive = category.IsActive,
-                CreatedOn = category.CreatedOn,
-                CreatedBy = category.CreatedBy,
-                UpdatedOn = category.UpdatedOn,
-                UpdatedBy = category.UpdatedBy
-            })
-            .ToList();
+        var categoryVms = await _wizardCache.GetAsync(_currentUser.ObjectId!, "categories", true, async () =>
+            (await _data.GetAllCategoriesAsync()).Select(category => new CategoryVM(category)).ToList());
 
         var categoryQuestions =
             await _data.GetActiveCategoryQuestionsAsync(categoryIds);
@@ -1253,9 +1251,6 @@ public class TransgressionManager : ITransgressionManager
             .ThenBy(x => x.QuestionText)
             .ToList();
 
-        // Older databases can be missing category links for the three core
-        // wizard questions. Never discard an answer that was successfully
-        // saved just because its CategoryQuestion row is absent or inactive.
         var missingAnsweredQuestionIds = answerMap.Keys
             .Where(questionId => questionVms.All(question =>
                 question.QuestionId != questionId))
@@ -1379,7 +1374,7 @@ public class TransgressionManager : ITransgressionManager
         {
             WarningId = warning.WarningId,
             EmployeeId = warning.EmployeeId,
-            EmployeeName = user.DisplayName,
+            EmployeeName = user?.DisplayName ?? "Unknown employee",
             CategoryIds = categoryIds,
             CategoryNames = categoryNames,
             Categories = categoryVms,
@@ -1464,11 +1459,11 @@ public class TransgressionManager : ITransgressionManager
             .GroupBy(categoryQuestion => categoryQuestion.QuestionId)
             .Select(group =>
             {
-               var categoryQuestion = group
-                   .OrderBy(link => link.SortOrder)
-                   .ThenBy(link => link.CategoryId)
-                   .First();
-               var question = categoryQuestion.Question!;
+                var categoryQuestion = group
+                    .OrderBy(link => link.SortOrder)
+                    .ThenBy(link => link.CategoryId)
+                    .First();
+                var question = categoryQuestion.Question!;
 
                 answerLookup.TryGetValue(
                     question.QuestionId,
@@ -1583,10 +1578,10 @@ public class TransgressionManager : ITransgressionManager
                 WarningId = historyWarning.WarningId,
                 CreatedOn = historyWarning.CreatedOn,
                 Status = historyWarning.Status,
-                LastStatusChangedOn =historyWarning.LastStatusChangedOn,
-                LastStatusChangedBy =historyWarning.LastStatusChangedBy,
-                CategoryName =historyWarning.Category?.Name?? string.Empty,
-                IssueType =historyWarning.IssueType?.IssueTypeName?? historyWarning.Type,
+                LastStatusChangedOn = historyWarning.LastStatusChangedOn,
+                LastStatusChangedBy = historyWarning.LastStatusChangedBy,
+                CategoryName = historyWarning.Category?.Name ?? string.Empty,
+                IssueType = historyWarning.IssueType?.IssueTypeName ?? historyWarning.Type,
                 Subtype = historyWarning.WarningSubtype
             })
             .OrderByDescending(item => item.CreatedOn)
@@ -1707,7 +1702,7 @@ public class TransgressionManager : ITransgressionManager
     }
 
 
-    public async Task<(bool Success, string? Message)> UpdateLegalIssueDetailsAsync(UpdateLegalIssueDetailsDto dto,string changedBy)
+    public async Task<(bool Success, string? Message)> UpdateLegalIssueDetailsAsync(UpdateLegalIssueDetailsDto dto, string changedBy)
     {
         if (dto.WarningId <= 0)
             return (false, "Missing warning id.");
@@ -1913,7 +1908,7 @@ public class TransgressionManager : ITransgressionManager
         {
             try
             {
-                var user = await _graphUserDataAccess.GetUserAsync(userId);
+                var user = await _adUsersDataAccess.GetUserAsync(userId);
 
                 lookup[userId] = !string.IsNullOrWhiteSpace(user?.DisplayName)
                     ? user.DisplayName
@@ -2100,14 +2095,14 @@ public class TransgressionManager : ITransgressionManager
         await _data.UpsertWarningAnswerAsync(dto.WarningId, dto.QuestionId, dto.AnswerText, dto.AnswerJson);
     }
 
-    public async Task AddWarningNoteAsync(long warningId,long? evidenceId,int noteTypeId,string noteText)
+    public async Task AddWarningNoteAsync(long warningId, long? evidenceId, int noteTypeId, string noteText)
     {
         var user = _currentUser?.ObjectId ?? "system";
 
         if (noteTypeId == 4)
         {
             await SendMoreInformationRequiredEmailAsync(warningId, noteText, null);
-           
+
         }
 
         await _data.AddWarningNoteAsync(
@@ -2168,14 +2163,14 @@ public class TransgressionManager : ITransgressionManager
 
         return new OkObjectResult(new { success = true });
     }
-    public async Task<long?> SaveEvidenceAsync(long warningId,string? fileName,string? mediaType,long? fileSizeBytes,string? notes,int? typeid,bool legal)
+    public async Task<long?> SaveEvidenceAsync(long warningId, string? fileName, string? mediaType, long? fileSizeBytes, string? notes, int? typeid, bool legal)
     {
         var user = _currentUser?.ObjectId ?? "system";
 
         if (typeid == 4 && legal)
         {
             await SendMoreInformationRequiredEmailAsync(warningId, notes, null);
-        
+
 
         }
         else if (typeid == 4)
@@ -2211,9 +2206,9 @@ public class TransgressionManager : ITransgressionManager
         await _data.UpdateWarningDueDateAsync(warningId, duedate, user);
     }
 
-    public async Task ApplyLegalDecisionAsync( long warningId,int issueTypeId,int? issueSubTypeId)
+    public async Task ApplyLegalDecisionAsync(long warningId, int issueTypeId, int? issueSubTypeId)
     {
-        var warning = await _data.GetWarningByIdAsync(warningId)?? throw new KeyNotFoundException( $"Warning not found. WarningId={warningId}");
+        var warning = await _data.GetWarningByIdAsync(warningId) ?? throw new KeyNotFoundException($"Warning not found. WarningId={warningId}");
 
         if (warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.LegalDecision &&
             warning.IssueStatus?.IssueStatusGroup != IssueStatusGroup.AddedMoreInformation)
@@ -2226,24 +2221,24 @@ public class TransgressionManager : ITransgressionManager
             .SingleOrDefault(type => type.IssueTypeId == issueTypeId)
             ?? throw new InvalidOperationException("Select a valid issue type.");
 
-        bool isDiscussion = string.Equals(issueType.IssueTypeName?.Trim(), "Discussion",StringComparison.OrdinalIgnoreCase);
+        bool isDiscussion = string.Equals(issueType.IssueTypeName?.Trim(), "Discussion", StringComparison.OrdinalIgnoreCase);
 
-        bool usesSubtypes =!isDiscussion && issueType.SubTypeSelectionMode != SubTypeSelectionMode.None;
+        bool usesSubtypes = !isDiscussion && issueType.SubTypeSelectionMode != SubTypeSelectionMode.None;
 
         var issueSubType = usesSubtypes && issueSubTypeId.HasValue ? issueType.IssueSubTypes.SingleOrDefault(
             subType => subType.IssueSubTypeId == issueSubTypeId.Value) : null;
 
         if (usesSubtypes && issueType.SubTypeSelectionMode == SubTypeSelectionMode.Required && issueSubType is null)
         {
-            throw new InvalidOperationException( "A valid issue subtype is required.");
+            throw new InvalidOperationException("A valid issue subtype is required.");
         }
 
         if (usesSubtypes && issueSubTypeId.HasValue && issueSubType is null)
         {
-            throw new InvalidOperationException(  "The selected subtype does not belong to the selected issue type.");
+            throw new InvalidOperationException("The selected subtype does not belong to the selected issue type.");
         }
 
-        await _data.UpdateWarningDecisionAsync( warningId, issueType,issueSubType,_currentUser.ObjectId);
+        await _data.UpdateWarningDecisionAsync(warningId, issueType, issueSubType, _currentUser.ObjectId);
     }
 
     public async Task ValidateWarningAsync(long warningId)
@@ -2511,7 +2506,7 @@ public class TransgressionManager : ITransgressionManager
 
             stage = $"Getting created by user from Graph. CreatedBy={createdByUserId}, WarningId={dto.WarningId}";
 
-            var user = await _graphUserDataAccess.GetUserAsync(createdByUserId);
+            var user = await _adUsersDataAccess.GetUserAsync(createdByUserId);
 
             if (user == null)
                 throw new InvalidOperationException(
@@ -2528,7 +2523,7 @@ public class TransgressionManager : ITransgressionManager
             if (string.IsNullOrWhiteSpace(userEmail))
             {
                 throw new InvalidOperationException(
-                    $"Creator has no Mail/UPN. UserId={user.Id}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={dto.WarningId}");
+                    $"Creator has no Mail/UPN. UserId={user.ID}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={dto.WarningId}");
             }
 
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={dto.WarningId}";
@@ -2630,7 +2625,7 @@ public class TransgressionManager : ITransgressionManager
 
 
 
-    public async Task SendMoreInformationRequiredEmailAsync(long warningId,string noteText,IFormFile? file = null)
+    public async Task SendMoreInformationRequiredEmailAsync(long warningId, string noteText, IFormFile? file = null)
     {
         var stage = "Starting";
 
@@ -2667,7 +2662,7 @@ public class TransgressionManager : ITransgressionManager
             stage = $"Saving team lead information request. WarningId={warningId}";
 
             var currentuser = _currentUser?.ObjectId ?? "system";
-            await _data.AddWarningNoteAsync( warningId, null, noteTypeId: 4, noteText,currentuser);// note type id id Need More Info
+            await _data.AddWarningNoteAsync(warningId, null, noteTypeId: 4, noteText, currentuser);// note type id id Need More Info
 
             stage = $"Updating warning status. WarningId={warningId}";
 
@@ -2695,7 +2690,7 @@ public class TransgressionManager : ITransgressionManager
 
             stage = $"Getting created by user from Graph. CreatedBy={createdByUserId}, WarningId={warningId}";
 
-            var user = await _graphUserDataAccess.GetUserAsync(createdByUserId);
+            var user = await _adUsersDataAccess.GetUserAsync(createdByUserId);
 
             if (user == null)
             {
@@ -2714,7 +2709,7 @@ public class TransgressionManager : ITransgressionManager
             if (string.IsNullOrWhiteSpace(userEmail))
             {
                 throw new InvalidOperationException(
-                    $"Creator has no Mail/UPN. UserId={user.Id}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={warningId}");
+                    $"Creator has no Mail/UPN. UserId={user.ID}, DisplayName={user.DisplayName}, CreatedBy={createdByUserId}, WarningId={warningId}");
             }
 
             stage = $"Getting employee display name. EmployeeId={warningInfo.EmployeeId}, WarningId={warningId}";
@@ -2821,7 +2816,7 @@ public class TransgressionManager : ITransgressionManager
         User? me = await _graphUserDataAccess.GetMeAsync();
 
 
-        await _data.SetWarningStatusAsync( warningId,IssueStatusGroup.AddedMoreInformation,me.Id.ToString());
+        await _data.SetWarningStatusAsync(warningId, IssueStatusGroup.AddedMoreInformation, me.Id.ToString());
 
 
         try
@@ -2988,7 +2983,7 @@ public class TransgressionManager : ITransgressionManager
 
             if (warningInfo is null)
             {
-                throw new InvalidOperationException( $"Warning not found. WarningId={warningId}");
+                throw new InvalidOperationException($"Warning not found. WarningId={warningId}");
             }
 
             stage =
@@ -3103,7 +3098,7 @@ public class TransgressionManager : ITransgressionManager
 
         var trimmedUserId = userId.Trim();
 
-        var user = await _graphUserDataAccess.GetUserAsync(trimmedUserId);
+        var user = await _adUsersDataAccess.GetUserAsync(trimmedUserId);
 
         if (user == null)
             return trimmedUserId;
@@ -3116,7 +3111,7 @@ public class TransgressionManager : ITransgressionManager
 
 
 
-    private static async Task<string> BuildEmailAsync( string templateFileName, IReadOnlyDictionary<string, string> values)
+    private static async Task<string> BuildEmailAsync(string templateFileName, IReadOnlyDictionary<string, string> values)
     {
         var assembly = typeof(TransgressionManager).Assembly;
         var resourceName =
@@ -3206,11 +3201,11 @@ public class TransgressionManager : ITransgressionManager
             };
         }
 
-        await _data.SaveTeamLeadEvidenceAsync(model.WarningId,evidenceToSave,note);
+        await _data.SaveTeamLeadEvidenceAsync(model.WarningId, evidenceToSave, note);
 
-        await SendMoreInformationAddedEmailAsync(model.WarningId,noteText,model.Files);
+        await SendMoreInformationAddedEmailAsync(model.WarningId, noteText, model.Files);
 
-      
+
     }
 
 
@@ -3310,7 +3305,7 @@ public class TransgressionManager : ITransgressionManager
         }
     }
 
-    public async Task<IActionResult> SaveEvidenceAttachmentAsync( SaveAttachmentsDto dto)
+    public async Task<IActionResult> SaveEvidenceAttachmentAsync(SaveAttachmentsDto dto)
     {
         foreach (var file in dto.Files)
         {

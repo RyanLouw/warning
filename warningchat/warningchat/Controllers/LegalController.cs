@@ -85,44 +85,11 @@ namespace WarningSystems.Controllers
         [HttpPost]
         public async Task<IActionResult> SaveEvidenceAttachment(SaveAttachmentsDto dto)
         {
-            if (dto.WarningId is 0) return BadRequest();
-            var savedFile = false;
-            foreach (var file in dto.Files)
-            {
-                if (file is null || file.Length is 0)
-                {
-                    continue;
-                }
+            if (dto.WarningId is 0)
+                return BadRequest();
 
-                var Mediatype = _fileStorageService.GetAttachmentType(file);
-                var type = "LegalEvidence";
-
-                var fileName = await _fileStorageService.UploadWarningFileAsync(dto.WarningId, type, file);
-                var notes = savedFile ? null : dto.Notes;
-                await _transgressionManager.SaveEvidenceAsync(dto.WarningId, fileName, Mediatype, file.Length, notes, 3, true);
-                savedFile = true;
-            }
-
-            if (!savedFile)
-            {
-                if (string.IsNullOrWhiteSpace(dto.Notes))
-                    return BadRequest(new { success = false, message = "Add a file, a note, or both." });
-
-                await _transgressionManager.SaveEvidenceAsync(
-                    dto.WarningId,
-                    null,
-                    null,
-                    null,
-                    dto.Notes,
-                    3,
-                    true);
-            }
-
-            return Ok(new { success = true });
+            return await _transgressionManager.SaveEvidenceAttachmentAsync(dto);
         }
-
-
-
 
         [Authorize(Roles = "Legal")]
         [HttpPost]
@@ -190,33 +157,13 @@ namespace WarningSystems.Controllers
         [HttpPost]
         public async Task<IActionResult> CompleteTransgression([FromForm] CompleteTransgressionDto dto)
         {
-            if (dto.WarningId is 0) return BadRequest("Invalid warningId.");
-            if (dto.IssueTypeId <= 0) return BadRequest("Issue type required.");
+            if (dto.WarningId is 0)
+                return BadRequest("Invalid warningId.");
 
-            try
-            {
-                if (dto.File is not null && dto.File.Length is > 0)
-                {
-                    var mediaType = _fileStorageService.GetAttachmentType(dto.File);
-                    var attachmentType = "LegalDecision";
+            if (dto.IssueTypeId <= 0)
+                return BadRequest("Issue type required.");
 
-                    var fileName = await _fileStorageService.UploadWarningFileAsync(
-                        dto.WarningId, attachmentType, dto.File);
-
-                    await _transgressionManager.SaveEvidenceAsync(
-                        dto.WarningId, fileName, mediaType, dto.File.Length, null, 3, true);
-                }
-
-                await _transgressionManager.ApplyLegalDecisionAsync(
-                    dto.WarningId, dto.IssueTypeId, dto.IssueSubTypeId);
-                await _transgressionManager.SendEmailToTeamLeadAsync(dto);
-
-                return Ok(new { success = true });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            return await _transgressionManager.CompleteTransgressionAsync(dto);
         }
 
         [Authorize(Roles = "Legal")]
@@ -318,36 +265,53 @@ namespace WarningSystems.Controllers
         [Authorize(Roles = "Legal")]
         [AuthorizeForScopes(Scopes = new[] { "User.Read.All", "Mail.Send" })]
         [HttpPost]
-        public async Task<IActionResult> RequestTeamLeadInformation(
-           [FromForm] RequestTeamLeadInformationVm request)
+        public async Task<IActionResult> RequestTeamLeadInformation( [FromForm] RequestTeamLeadInformationVm request)
         {
+            var errors = new List<string>();
+            var message = request.Message?.Trim();
+
             if (request.WarningId <= 0)
-                return BadRequest(new { success = false, message = "A valid warning id is required." });
+            {
+                errors.Add("A valid warning id is required.");
+            }
 
-            if (string.IsNullOrWhiteSpace(request.Message))
-                return BadRequest(new { success = false, message = "Please add a message for the team lead." });
-
-            if (request.Message.Trim().Length > 1000)
-                return BadRequest(new { success = false, message = "The message cannot be longer than 1,000 characters." });
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                errors.Add("Please add a message for the team lead.");
+            }
+            else if (message.Length > 1000)
+            {
+                errors.Add("The message cannot be longer than 1,000 characters.");
+            }
 
             if (request.File is { Length: > MaximumEmailAttachmentBytes })
+            {
+                errors.Add(
+                    "The supporting document must be 3 MB or smaller so it can be attached to the email.");
+            }
+
+            if (errors.Count > 0)
             {
                 return BadRequest(new
                 {
                     success = false,
-                    message = "The supporting document must be 3 MB or smaller so it can be attached to the email."
+                    message = string.Join(Environment.NewLine, errors),
+                    errors
                 });
             }
 
             try
             {
-               
                 await _transgressionManager.SendMoreInformationRequiredEmailAsync(
                     request.WarningId,
-                    request.Message.Trim(),
+                    message!,
                     request.File);
 
-                return Ok(new { success = true, message = "The request was sent to the team lead." });
+                return Ok(new
+                {
+                    success = true,
+                    message = "The request was sent to the team lead."
+                });
             }
             catch (MicrosoftIdentityWebChallengeUserException)
             {
@@ -355,14 +319,18 @@ namespace WarningSystems.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
+                _logger.LogError(
+                    ex,
                     "Failed to request more information from the team lead for warning {WarningId}.",
                     request.WarningId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    success = false,
-                    message = "The email could not be sent. Please try again or contact support if the problem continues."
-                });
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    new
+                    {
+                        success = false,
+                        message = "The email could not be sent. Please try again or contact support if the problem continues."
+                    });
             }
         }
 

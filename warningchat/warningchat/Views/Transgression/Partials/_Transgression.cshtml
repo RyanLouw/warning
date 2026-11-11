@@ -1,5 +1,6 @@
-﻿@using WarningSystems.Core.ViewModels
-@using Microsoft.Graph.Models
+﻿@using Microsoft.Graph.Models
+@using WarningSystems.Core.ViewModels
+@using WarningSystems.core.Models.ViewModels
 @model WarningWizardVm
 
 <form id="frmTransgression"
@@ -38,9 +39,9 @@
                 required>
             <option value="">-- Select employee --</option>
 
-            @foreach (var u in Model.UnderMe ?? new List<User>())
+            @foreach (var u in Model.UnderMe ?? new List<ADUserModel>())
             {
-                var id = (u.Id ?? string.Empty).Trim();
+                var id = (u.ID ?? string.Empty).Trim();
                 var name = (u.DisplayName
                 ?? u.UserPrincipalName
                 ?? id).Trim();

@@ -37,41 +37,48 @@
         return document.getElementById('attachmentName');
     }
 
-    function getExistingAttachmentCount() {
-        return document.querySelectorAll(".ws-attach-item").length;
-    }
+    // function getExistingAttachmentCount() {
+    //     return document.querySelectorAll(".ws-attach-item").length;
+    // }
 
-    function getSelectedFileCount() {
-        const input = getInput();
-        return input && input.files ? input.files.length : 0;
-    }
+    // function getSelectedFileCount() {
+    //     const input = getInput();
+    //     return input && input.files ? input.files.length : 0;
+    // }
 
-    function hasAnyAttachment() {
-        return getExistingAttachmentCount() > 0 || getSelectedFileCount() > 0;
-    }
+    // function hasAnyAttachment() {
+    //     return getExistingAttachmentCount() > 0 || getSelectedFileCount() > 0;
+    // }
+
+    let isSaving = false;
 
     function updateContinueButtonState() {
         const btnContinue = getContinueButton();
         if (!btnContinue) return;
 
-        const canContinue = hasAnyAttachment();
 
-        btnContinue.disabled = !canContinue;
-        btnContinue.setAttribute("aria-disabled", String(!canContinue));
+        btnContinue.disabled = isSaving;
+        btnContinue.setAttribute("aria-disabled", String(isSaving));
+        btnContinue.classList.toggle("disabled", isSaving);
+        btnContinue.title = "";
+        // const canContinue = hasAnyAttachment();
 
-        if (!canContinue) {
-            btnContinue.classList.add("disabled");
-            btnContinue.title = "Please upload at least one attachment before continuing.";
-        } else {
-            btnContinue.classList.remove("disabled");
-            btnContinue.title = "";
-        }
+        // btnContinue.disabled = !canContinue;
+        // btnContinue.setAttribute("aria-disabled", String(!canContinue));
 
-        console.log("Attachment button state:", {
-            existing: getExistingAttachmentCount(),
-            selected: getSelectedFileCount(),
-            canContinue
-        });
+        // if (!canContinue) {
+        //     btnContinue.classList.add("disabled");
+        //     btnContinue.title = "Please upload at least one attachment before continuing.";
+        // } else {
+        //     btnContinue.classList.remove("disabled");
+        //     btnContinue.title = "";
+        // }
+
+        // console.log("Attachment button state:", {
+        //     existing: getExistingAttachmentCount(),
+        //     selected: getSelectedFileCount(),
+        //     canContinue
+        // });
     }
 
     document.addEventListener("change", function (e) {
@@ -126,14 +133,14 @@
 
         updateContinueButtonState();
 
-        const btnContinue = getContinueButton();
+        // const btnContinue = getContinueButton();
 
-        if (btnContinue && files.length > 0) {
-            btnContinue.disabled = false;
-            btnContinue.setAttribute("aria-disabled", "false");
-            btnContinue.classList.remove("disabled");
-            btnContinue.title = "";
-        }
+        // if (btnContinue && files.length > 0) {
+        //     btnContinue.disabled = false;
+        //     btnContinue.setAttribute("aria-disabled", "false");
+        //     btnContinue.classList.remove("disabled");
+        //     btnContinue.title = "";
+        // }
     });
 
     document.addEventListener("click", async function (e) {
@@ -279,14 +286,18 @@
         e.preventDefault();
         e.stopPropagation();
 
-        if (!hasAnyAttachment()) {
-            alert(
-                "Please upload at least one attachment before continuing."
-            );
 
-            updateContinueButtonState();
-            return;
-        }
+        if (isSaving) return;
+        isSaving = true;
+        updateContinueButtonState();
+        // if (!hasAnyAttachment()) {
+        //     alert(
+        //         "Please upload at least one attachment before continuing."
+        //     );
+
+        //     updateContinueButtonState();
+        //     return;
+        // }
 
         const originalButtonText =
             btnContinue.textContent;
@@ -303,13 +314,11 @@
             const result = await uploadAttachments();
 
             if (!result.success) {
+                alert(result.message || "The attachments could not be saved.");
                 return;
             }
 
-            console.log(
-                "Attachments saved. Reloading and opening step 7."
-            );
-
+          
             sessionStorage.setItem(
                 "warningWizardActiveStep",
                 "6"
@@ -325,15 +334,18 @@
             alert(
                 "The attachments could not be saved."
             );
+        } finally {
+            isSaving = false;
+            btnContinue.textContent = originalButtonText;
 
-            btnContinue.disabled = false;
-            btnContinue.setAttribute(
-                "aria-disabled",
-                "false"
-            );
+            // btnContinue.disabled = false;
+            // btnContinue.setAttribute(
+            //     "aria-disabled",
+            //     "false"
+            // );
 
-            btnContinue.textContent =
-                originalButtonText;
+            // btnContinue.textContent =
+            //     originalButtonText;
 
             updateContinueButtonState();
         }
@@ -345,11 +357,11 @@
 
         e.preventDefault();
 
-        if (!hasAnyAttachment()) {
-            alert("Please upload at least one attachment before continuing.");
-            updateContinueButtonState();
-            return;
-        }
+        // if (!hasAnyAttachment()) {
+        //     alert("Please upload at least one attachment before continuing.");
+        //     updateContinueButtonState();
+        //     return;
+        // }
 
         const result = await uploadAttachments();
         if (!result.success) return;
