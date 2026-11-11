@@ -1,0 +1,6 @@
+<Project>
+  <!-- Local test setup: disable this property before normal application or deployment builds. -->
+  <PropertyGroup>
+    <WarningSystemTestingBuild>true</WarningSystemTestingBuild>
+  </PropertyGroup>
+</Project>
