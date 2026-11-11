@@ -1,3 +1,5 @@
+using WarningSystems.core.DataAccess.ADUsersDataAccess;
+using WarningSystems.core.DataAccess.ADUsersDataAccess.Context.Entities;
 using System.Security.Claims;
 using System.Collections.Concurrent;
 using WarningSystems.core.Models.DTO;
@@ -21,6 +23,8 @@ public static class TestServices
             throw new InvalidOperationException("Aspire must supply a per-run test authentication key.");
         services.RemoveAll<IGraphUserDataAccess>();
         services.AddScoped<IGraphUserDataAccess, TestGraph>();
+        services.RemoveAll<IADUsersDataAccess>();
+        services.AddScoped<IADUsersDataAccess, TestDirectory>();
         services.AddSingleton<TestOutbox>();
         services.PostConfigure<WarningSystems.Core.ViewModels.EmailSettings>(options => options.LegalRecipients = ["legal@example.test"]);
         services.AddOptions<ApplicationOptions>().Configure<IHttpContextAccessor>((options, accessor) =>
@@ -48,7 +52,7 @@ internal sealed class TestRoles(IHttpContextAccessor accessor) : IUserRoleServic
 internal sealed class TestSop : ISOPDataAccess
 {
     public Task<List<SopDocument>> GetActiveDocumentsAsync() => Task.FromResult(new List<SopDocument> {
-        new() { SOPDocumentId = 9001, SOPDocumentCategoryId = 1, DocumentName = "UI Safety SOP", DocumentNumber = "UI-001", VersionNumber = "1", Status = 1 }
+        new() { SOPDocumentId = 9001, SOPDocumentCategoryId = 1, DocumentName = "UI Safety SOP", DocumentNumber = 1, VersionNumber = "1", Status = 1 }
     });
 }
 
@@ -85,6 +89,34 @@ internal sealed class TestGraph(ICurrentUserAccessor me, TestOutbox outbox) : IG
         outbox.Add(new(request.Subject, request.BodyHtml, request.ToRecipients.ToArray(), request.Attachments.Select(attachment => attachment.FileName).ToArray()));
         return Task.CompletedTask;
     }
+}
+
+// Employee lookups moved from Graph to the local directory data access.
+// Adapt the same synthetic identities so UI records and hierarchy stay aligned.
+internal sealed class TestDirectory(ICurrentUserAccessor me, TestOutbox outbox) : IADUsersDataAccess
+{
+    private readonly TestGraph _identities = new(me, outbox);
+
+    public async Task<ADUser?> GetUserAsync(string userIdOrUpn) =>
+        Convert(await _identities.GetUserAsync(userIdOrUpn));
+
+    public async Task<ADUser?> GetManagerAsync(string userId) =>
+        Convert(await _identities.GetManagerAsync(userId));
+
+    public async Task<List<ADUser>> GetDirectReportsUsersAsync(string userId) =>
+        (await _identities.GetDirectReportsUsersAsync(userId)).Select(user => Convert(user)!).ToList();
+
+    public async Task<List<ADUser>> GetUsersBelowMyLevelAsync(string userId) =>
+        (await _identities.GetUsersBelowMyLevelAsync()).Select(user => Convert(user)!).ToList();
+
+    private static ADUser? Convert(User? user) => user is null ? null : new ADUser
+    {
+        ID = user.Id,
+        DisplayName = user.DisplayName,
+        Mail = user.Mail,
+        UserPrincipalName = user.UserPrincipalName,
+        Department = user.Department
+    };
 }
 
 public sealed record TestMail(string Subject, string Body, string[] Recipients, string[] Attachments);
