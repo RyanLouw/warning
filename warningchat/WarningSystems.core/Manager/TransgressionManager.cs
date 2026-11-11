@@ -742,16 +742,6 @@ public class TransgressionManager : ITransgressionManager
 
             var employeeName = u.DisplayName ?? "(No name)";
 
-            try
-            {
-                var user = await _adUsersDataAccess.GetUserAsync(u.ID!.Trim());
-                if (!string.IsNullOrWhiteSpace(user?.DisplayName))
-                    employeeName = user.DisplayName;
-            }
-            catch
-            {
-            }
-
             result.Add(new EmployeeRowVm
             {
                 EmployeeId = u.ID!,
@@ -1204,8 +1194,7 @@ public class TransgressionManager : ITransgressionManager
             }
         }
 
-        var user = await _adUsersDataAccess.GetUserAsync(
-            warning.EmployeeId);
+        var user = await _adUsersDataAccess.GetUserAsync(warning.EmployeeId);
 
         var categoryVms = await _wizardCache.GetAsync(_currentUser.ObjectId!, "categories", true, async () =>
             (await _data.GetAllCategoriesAsync()).Select(category => new CategoryVM(category)).ToList());
@@ -1262,9 +1251,6 @@ public class TransgressionManager : ITransgressionManager
             .ThenBy(x => x.QuestionText)
             .ToList();
 
-        // Older databases can be missing category links for the three core
-        // wizard questions. Never discard an answer that was successfully
-        // saved just because its CategoryQuestion row is absent or inactive.
         var missingAnsweredQuestionIds = answerMap.Keys
             .Where(questionId => questionVms.All(question =>
                 question.QuestionId != questionId))
@@ -1388,7 +1374,7 @@ public class TransgressionManager : ITransgressionManager
         {
             WarningId = warning.WarningId,
             EmployeeId = warning.EmployeeId,
-            EmployeeName = user.DisplayName,
+            EmployeeName = user?.DisplayName ?? "Unknown employee",
             CategoryIds = categoryIds,
             CategoryNames = categoryNames,
             Categories = categoryVms,

@@ -13,14 +13,11 @@ namespace WarningSystems.Core.DataAccess.GraphDataAccess;
 public class GraphUserDataAccess : IGraphUserDataAccess
 {
     private readonly GraphServiceClient _graph;
-    private readonly IMemoryCache _cache;
 
-    public GraphUserDataAccess(
-        IUserGraphClient userGraph,
-        IMemoryCache cache)
+
+    public GraphUserDataAccess(IUserGraphClient userGraph)
     {
         _graph = userGraph.Client;
-        _cache = cache;
     }
 
     public async Task<IReadOnlyList<string>> GetMatchedGroupIdsAsync(string userObjectId, IEnumerable<string> groupIdsToCheck)
@@ -34,8 +31,6 @@ public class GraphUserDataAccess : IGraphUserDataAccess
         {
             return Array.Empty<string>();
         }
-
-        var cacheKey = $"grpcheck:{userObjectId}:{string.Join("|", groupsToCheck)}";
 
         var body = new Microsoft.Graph.Users.Item.CheckMemberGroups.CheckMemberGroupsPostRequestBody
         {
