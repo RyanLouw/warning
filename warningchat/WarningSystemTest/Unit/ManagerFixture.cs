@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Caching.Memory;
+using WarningSystems.Core.Caching;
+using WarningSystems.core.DataAccess.ADUsersDataAccess;
 using Microsoft.Extensions.Options;
 using FakeItEasy;
 using WarningSystems.core.Models.DTO;
@@ -17,6 +20,7 @@ internal sealed class ManagerFixture
 {
     public IWarningSystemDataAccess Data { get; } = A.Fake<IWarningSystemDataAccess>(options => options.Strict());
     public IGraphUserDataAccess Graph { get; } = A.Fake<IGraphUserDataAccess>(options => options.Strict());
+    public IADUsersDataAccess Directory { get; } = A.Fake<IADUsersDataAccess>(options => options.Strict());
     public ICurrentUserAccessor Me { get; } = A.Fake<ICurrentUserAccessor>();
     public ISOPDataAccess Sop { get; } = A.Fake<ISOPDataAccess>(options => options.Strict());
     public IAzureFileStorageDataAccess Storage { get; } = A.Fake<IAzureFileStorageDataAccess>(options => options.Strict());
@@ -30,6 +34,7 @@ internal sealed class ManagerFixture
         A.CallTo(() => Me.IsAuthenticated).Returns(true);
         Manager = new(Data, Graph, Me, Sop, Storage, Roles,
             Options.Create(EmailSettings), Options.Create(new ApplicationOptions { BaseUrl = "https://example.test" }),
-            new EmbeddedEmailTemplateRenderer());
+            Directory, new EmbeddedEmailTemplateRenderer(),
+            new IssueWizardCache(new MemoryCache(new MemoryCacheOptions())));
     }
 }

@@ -1,3 +1,4 @@
+using WarningSystems.core.DataAccess.ADUsersDataAccess.Context.Entities;
 using Microsoft.Graph.Models;
 using FakeItEasy;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
@@ -86,9 +87,9 @@ public class TaskListTests
         A.CallTo(() => f.Data.GetAllWarningsForReportingAsync()).Returns(rows);
         A.CallTo(() => f.Data.GetAllCategoriesAsync()).Returns([]);
         A.CallTo(() => f.Data.GetActiveIssueTypesAsync()).Returns([]);
-        A.CallTo(() => f.Graph.GetUsersBelowMyLevelAsync()).Returns([new User { Id = "employee", DisplayName = "Employee One", Department = "Sales" }]);
+        A.CallTo(() => f.Directory.GetUsersBelowMyLevelAsync("actor")).Returns([new ADUser { ID = "employee", DisplayName = "Employee One", Department = "Sales" }]);
         A.CallTo(() => f.Graph.GetMeAsync()).Returns(new User { Id = "actor", DisplayName = "Manager" });
-        A.CallTo(() => f.Graph.GetUserAsync(A<string>._)).ReturnsLazily((string id) => new User { Id = id, DisplayName = id == "employee" ? "Employee One" : id });
+        A.CallTo(() => f.Directory.GetUserAsync(A<string>._)).ReturnsLazily((string id) => new ADUser { ID = id, DisplayName = id == "employee" ? "Employee One" : id });
         A.CallTo(() => f.Roles.GetCurrentUserRolesAsync()).Returns(roles.Split(','));
         return f;
     }

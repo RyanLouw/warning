@@ -1,3 +1,4 @@
+using WarningSystems.core.DataAccess.ADUsersDataAccess.Context.Entities;
 using Microsoft.Graph.Models;
 using FakeItEasy;
 using WarningSystems.Core.DataAccess.WarningSystemDataAccess.Context.Entities;
@@ -76,7 +77,7 @@ public class EmailTests
     public async Task Missing_creator_email_is_reported_with_context()
     {
         var f = Setup();
-        A.CallTo(() => f.Graph.GetUserAsync("actor")).Returns(new User { Id = "actor", DisplayName = "Actor" });
+        A.CallTo(() => f.Directory.GetUserAsync("actor")).Returns(new ADUser { ID = "actor", DisplayName = "Actor" });
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => f.Manager.SendEmailToTeamLeadAsync(new() { WarningId = 42 }));
         Assert.Contains("Creator has no Mail/UPN", error.Message);
         A.CallTo(() => f.Graph.SendEmailAsync(A<SendEmailRequest>._)).MustNotHaveHappened();
@@ -125,8 +126,8 @@ public class EmailTests
             new() { CategoryId = 1, Category = new() { Name = "Safety" } },
             new() { CategoryId = 2, Category = new() { Name = "Attendance" } }
         ]);
-        A.CallTo(() => f.Graph.GetUserAsync("employee")).Returns(new User { Id = "employee", DisplayName = "<Employee>" });
-        A.CallTo(() => f.Graph.GetUserAsync("actor")).Returns(new User { Id = "actor", DisplayName = "Actor", Mail = "actor@example.test" });
+        A.CallTo(() => f.Directory.GetUserAsync("employee")).Returns(new ADUser { ID = "employee", DisplayName = "<Employee>" });
+        A.CallTo(() => f.Directory.GetUserAsync("actor")).Returns(new ADUser { ID = "actor", DisplayName = "Actor", Mail = "actor@example.test" });
         return f;
     }
 }

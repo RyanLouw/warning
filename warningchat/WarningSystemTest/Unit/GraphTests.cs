@@ -2,10 +2,8 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Graph;
-using Microsoft.Identity.Web;
 using Microsoft.Kiota.Abstractions.Authentication;
 using Microsoft.Kiota.Http.HttpClientLibrary;
-using FakeItEasy;
 using WarningSystems.Core.DataAccess.GraphDataAccess;
 using WarningSystems.Core.DataAccess.GraphDataAccess.Context;
 using WarningSystems.Core.ViewModels;
@@ -28,62 +26,35 @@ public class GraphTests
     private static GraphUserDataAccess Create(Handler handler)
     {
         var adapter = new HttpClientRequestAdapter(new AnonymousAuthenticationProvider(), httpClient: new HttpClient(handler));
-        return new(new UserGraphClient(new GraphServiceClient(adapter)), A.Fake<ITokenAcquisition>());
+        return new(new UserGraphClient(new GraphServiceClient(adapter)));
     }
 
     private static HttpResponseMessage Json(object value) => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json") };
 
-    [Theory]
-    [InlineData("")]
-    [InlineData(" ")]
-    public async Task Empty_identifiers_do_not_call_Graph(string id)
+    [Fact]
+    public async Task GetMatchedGroupIdsAsync_ReturnsEmpty_WhenNoGroupsAreProvided()
     {
         var handler = new Handler(_ => throw new Xunit.Sdk.XunitException("Unexpected Graph request"));
-        var graph = Create(handler);
-        Assert.Null(await graph.GetUserAsync(id));
-        Assert.Null(await graph.GetManagerAsync(id));
-        Assert.Empty(await graph.GetDirectReportsUsersAsync(id));
+        var result = await Create(handler).GetMatchedGroupIdsAsync("actor", []);
+        Assert.Empty(result);
         Assert.Empty(handler.Calls);
     }
 
     [Fact]
-    public async Task Missing_manager_is_a_valid_404_response()
+    public async Task GetMatchedGroupIdsAsync_ReturnsGroupsMatchedByGraph()
     {
-        var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.NotFound) {
-            Content = new StringContent("{\"error\":{\"code\":\"Request_ResourceNotFound\",\"message\":\"No manager\"}}", Encoding.UTF8, "application/json")
-        });
-        Assert.Null(await Create(handler).GetManagerAsync("employee"));
+        var handler = new Handler(_ => Json(new { value = new[] { "group-one" } }));
+        var result = await Create(handler).GetMatchedGroupIdsAsync("actor", ["group-one", "group-two"]);
+        Assert.Equal(new[] { "group-one" }, result);
     }
 
     [Fact]
-    public async Task Directory_hierarchy_follows_pagination_ignores_non_users_and_stops_cycles()
+    public async Task GetMeAsync_ReturnsCurrentGraphUser()
     {
-        var handler = new Handler(request =>
-        {
-            var path = request.RequestUri!.AbsolutePath;
-            if (path == "/v1.0/me") return Json(new { id = "manager", displayName = "Manager" });
-            if (path == "/v1.0/users/manager/directReports") return Json(new Dictionary<string, object> {
-                ["@odata.nextLink"] = "https://graph.microsoft.com/v1.0/next-page",
-                ["value"] = new object[] { User("alice", "Alice"), new Dictionary<string, object> { ["@odata.type"] = "#microsoft.graph.group", ["id"] = "group" } }
-            });
-            if (path == "/v1.0/next-page") return Json(new { value = new[] { User("bob", "Bob") } });
-            if (path == "/v1.0/users/alice/directReports") return Json(new { value = new[] { User("bob", "Bob") } });
-            if (path == "/v1.0/users/bob/directReports") return Json(new { value = new[] { User("alice", "Alice") } });
-            throw new Xunit.Sdk.XunitException($"Unexpected Graph route {path}");
-        });
-        var users = await Create(handler).GetUsersUnderMeAsync();
-        Assert.Equal(new[] { "alice", "bob" }, users.Select(u => u.Id));
-        Assert.Equal(1, handler.Calls.Count(c => c.StartsWith("/v1.0/users/alice/directReports")));
-        Assert.Equal(1, handler.Calls.Count(c => c.StartsWith("/v1.0/users/bob/directReports")));
-    }
-
-    [Fact]
-    public async Task Empty_current_user_has_no_reports()
-    {
-        var handler = new Handler(_ => Json(new { displayName = "No object id" }));
-        var graph = Create(handler);
-        Assert.Empty(await graph.GetUsersUnderMeAsync());
-        Assert.Empty(await graph.GetUsersBelowMyLevelAsync());
+        var handler = new Handler(_ => Json(new { id = "actor", displayName = "Actor" }));
+        var result = await Create(handler).GetMeAsync();
+        Assert.NotNull(result);
+        Assert.Equal("actor", result.Id);
     }
 
     [Fact]
@@ -122,7 +93,4 @@ public class GraphTests
         Assert.Empty(handler.Calls);
     }
 
-    private static Dictionary<string, object> User(string id, string name) => new() {
-        ["@odata.type"] = "#microsoft.graph.user", ["id"] = id, ["displayName"] = name
-    };
 }
